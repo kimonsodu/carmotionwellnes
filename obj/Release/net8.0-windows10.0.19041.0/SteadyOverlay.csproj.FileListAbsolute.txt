@@ -1,0 +1,17 @@
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\SteadyOverlay.exe
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\SteadyOverlay.deps.json
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\SteadyOverlay.runtimeconfig.json
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\SteadyOverlay.dll
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\SteadyOverlay.pdb
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\Microsoft.Windows.SDK.NET.dll
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\WinRT.Runtime.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.AssemblyInfoInputs.cache
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.AssemblyInfo.cs
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.csproj.CoreCompileInputs.cache
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOv.9E0EF3C7.Up2Date
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\refint\SteadyOverlay.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.pdb
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.genruntimeconfig.cache
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\ref\SteadyOverlay.dll

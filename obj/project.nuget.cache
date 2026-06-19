@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "Z07JlyiajV8=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\simon\\Documents\\dev\\carsick\\SteadyOverlay.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\simon\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.56\\microsoft.windows.sdk.net.ref.10.0.19041.56.nupkg.sha512"
+  ],
+  "logs": []
+}
