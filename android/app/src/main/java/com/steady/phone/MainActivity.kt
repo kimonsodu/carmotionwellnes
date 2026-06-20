@@ -32,6 +32,12 @@ class MainActivity : Activity() {
     private lateinit var toggle: Button
     private lateinit var status: TextView
     private lateinit var readout: TextView
+    private lateinit var dotsTarget: RadioGroup
+    private lateinit var rbLaptop: View
+    private lateinit var rbPhone: View
+    private lateinit var laptopBox: View
+    private lateinit var phoneBox: View
+    private lateinit var btnPhoneDots: Button
     private val ui = Handler(Looper.getMainLooper())
 
     private fun prefs() = getSharedPreferences("steady", Context.MODE_PRIVATE)
@@ -51,6 +57,12 @@ class MainActivity : Activity() {
         toggle = findViewById(R.id.toggle)
         status = findViewById(R.id.status)
         readout = findViewById(R.id.readout)
+        dotsTarget = findViewById(R.id.dotsTarget)
+        rbLaptop = findViewById(R.id.rbLaptop)
+        rbPhone = findViewById(R.id.rbPhone)
+        laptopBox = findViewById(R.id.laptopBox)
+        phoneBox = findViewById(R.id.phoneBox)
+        btnPhoneDots = findViewById(R.id.btnPhoneDots)
 
         val p = prefs()
         host.setText(p.getString("host", ""))
@@ -60,6 +72,17 @@ class MainActivity : Activity() {
         (if (bt) findViewById<View>(R.id.rbBt) else findViewById<View>(R.id.rbWifi))
             .let { (it as android.widget.RadioButton).isChecked = true }
         applyMode(bt)
+
+        // Laptop (stream sensor to PC) vs Phone (draw dots on this phone) — Laptop is the default
+        val phoneDots = p.getString("dots", "laptop") == "phone"
+        (if (phoneDots) rbPhone else rbLaptop).let { (it as android.widget.RadioButton).isChecked = true }
+        applyDotsTarget(phoneDots)
+        dotsTarget.setOnCheckedChangeListener { _, id ->
+            val phone = id == R.id.rbPhone
+            applyDotsTarget(phone)
+            p.edit().putString("dots", if (phone) "phone" else "laptop").apply()
+        }
+        btnPhoneDots.setOnClickListener { startActivity(Intent(this, DotsActivity::class.java)) }
 
         requestPerms()
 
@@ -99,6 +122,11 @@ class MainActivity : Activity() {
     private fun applyMode(bt: Boolean) {
         wifiBox.visibility = if (bt) View.GONE else View.VISIBLE
         btBox.visibility = if (bt) View.VISIBLE else View.GONE
+    }
+
+    private fun applyDotsTarget(phone: Boolean) {
+        laptopBox.visibility = if (phone) View.GONE else View.VISIBLE
+        phoneBox.visibility = if (phone) View.VISIBLE else View.GONE
     }
 
     private fun requestPerms() {
@@ -169,6 +197,8 @@ class MainActivity : Activity() {
         // setEnabled on the RadioGroup doesn't reach its children — disable the buttons directly
         rbWifi.isEnabled = en; rbBt.isEnabled = en
         host.isEnabled = en; port.isEnabled = en; btnPick.isEnabled = en
+        // don't let the Laptop/Phone switch hide the Stop button mid-stream
+        rbLaptop.isEnabled = en; rbPhone.isEnabled = en
         ui.postDelayed({ tick() }, 200)
     }
 

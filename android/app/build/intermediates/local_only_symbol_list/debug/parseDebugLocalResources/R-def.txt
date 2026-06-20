@@ -24,11 +24,17 @@ drawable ic_steady_mark
 drawable ic_steady_notify
 drawable readout_bg
 id btBox
+id btnPhoneDots
 id btnPick
+id dotsTarget
 id host
+id laptopBox
 id modeGroup
+id phoneBox
 id port
 id rbBt
+id rbLaptop
+id rbPhone
 id rbWifi
 id readout
 id status

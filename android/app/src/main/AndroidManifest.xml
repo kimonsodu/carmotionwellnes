@@ -37,6 +37,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Phone mode: full-screen on-phone cue dots driven by the phone's own sensor -->
+        <activity
+            android:name=".DotsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Steady"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <service
             android:name=".SensorService"
             android:exported="false"

@@ -42,7 +42,7 @@
 24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:22-73
 25
 26    <application
-26-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-44:19
+26-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-51:19
 27        android:allowBackup="true"
 27-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:9-35
 28        android:debuggable="true"
@@ -98,14 +98,26 @@
 54            </intent-filter>
 55        </activity>
 56
-57        <service
-57-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:40:9-43:56
-58            android:name="com.steady.phone.SensorService"
-58-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:13-42
-59            android:exported="false"
-59-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:13-37
-60            android:foregroundServiceType="dataSync" />
-60-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:13-53
-61    </application>
-62
-63</manifest>
+57        <!-- Phone mode: full-screen on-phone cue dots driven by the phone's own sensor -->
+58        <activity
+58-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:9-45:77
+59            android:name="com.steady.phone.DotsActivity"
+59-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:13-41
+60            android:configChanges="orientation|screenSize|keyboardHidden"
+60-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:45:13-74
+61            android:exported="false"
+61-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:13-37
+62            android:theme="@style/Theme.Steady" />
+62-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:44:13-48
+63
+64        <service
+64-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:47:9-50:56
+65            android:name="com.steady.phone.SensorService"
+65-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:48:13-42
+66            android:exported="false"
+66-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:49:13-37
+67            android:foregroundServiceType="dataSync" />
+67-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:50:13-53
+68    </application>
+69
+70</manifest>

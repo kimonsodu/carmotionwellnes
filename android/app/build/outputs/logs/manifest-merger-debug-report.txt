@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-45:12
-INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-45:12
-INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-45:12
-INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-45:12
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-52:12
 	package
 		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
 	android:versionName
@@ -49,8 +49,8 @@ ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidMani
 	android:name
 		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:22-73
 application
-ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-44:19
-INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-44:19
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-51:19
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-51:19
 	android:extractNativeLibs
 		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
 	android:supportsRtl
@@ -103,14 +103,24 @@ ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidMani
 		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:36:47-69
 	android:scheme
 		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:36:23-46
-service#com.steady.phone.SensorService
-ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:40:9-43:56
+activity#com.steady.phone.DotsActivity
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:9-45:77
 	android:exported
-		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:13-37
-	android:foregroundServiceType
-		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:13-53
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:13-37
+	android:configChanges
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:45:13-74
+	android:theme
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:44:13-48
 	android:name
-		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:13-42
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:13-41
+service#com.steady.phone.SensorService
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:47:9-50:56
+	android:exported
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:49:13-37
+	android:foregroundServiceType
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:50:13-53
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:48:13-42
 uses-sdk
 INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml

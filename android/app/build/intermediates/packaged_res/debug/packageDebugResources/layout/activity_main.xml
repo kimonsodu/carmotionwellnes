@@ -40,6 +40,56 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
+        <!-- ===== where the dots go: laptop (stream) or this phone ===== -->
+        <LinearLayout
+            style="@style/Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                style="@style/SectionLabel"
+                android:text="WHERE THE DOTS GO"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <RadioGroup
+                android:id="@+id/dotsTarget"
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <RadioButton
+                    android:id="@+id/rbLaptop"
+                    android:text="The laptop"
+                    android:textColor="@color/text"
+                    android:checked="true"
+                    android:layout_marginEnd="28dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <RadioButton
+                    android:id="@+id/rbPhone"
+                    android:text="This phone"
+                    android:textColor="@color/text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </RadioGroup>
+
+            <TextView
+                android:text="Laptop: this phone is the sensor — dots show on the laptop. Phone: dots show here, driven by this phone's own motion."
+                android:textColor="@color/faint"
+                android:textSize="12sp"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginTop="10dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- ===== LAPTOP MODE: phone is the sensor, dots render on the PC ===== -->
+        <LinearLayout
+            android:id="@+id/laptopBox"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
         <!-- ===== connection card ===== -->
         <LinearLayout
             style="@style/Card"
@@ -197,5 +247,56 @@
             android:layout_marginTop="20dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
+
+        </LinearLayout>
+        <!-- /laptopBox -->
+
+        <!-- ===== PHONE MODE: dots on this phone, from the phone's own sensor ===== -->
+        <LinearLayout
+            android:id="@+id/phoneBox"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    style="@style/SectionLabel"
+                    android:text="PHONE MODE"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:text="Show drifting cue dots on this phone, driven by its own motion sensor — for reading or working on the phone in a moving vehicle. No laptop needed."
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnPhoneDots"
+                android:text="Show dots on this phone"
+                android:textColor="@color/bg"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textAllCaps="false"
+                android:background="@drawable/btn_primary"
+                android:layout_marginTop="18dp"
+                android:layout_width="match_parent"
+                android:layout_height="56dp" />
+
+            <TextView
+                android:text="Tap the button, then tap the screen to exit. Keep the screen on while you use it."
+                android:textColor="@color/faint"
+                android:textSize="12sp"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginTop="20dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
