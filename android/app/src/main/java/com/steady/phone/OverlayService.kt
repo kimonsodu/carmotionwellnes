@@ -8,9 +8,13 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.drawable.Icon
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -44,12 +48,17 @@ class OverlayService : Service(), SensorEventListener,
     }
 
     private var wm: WindowManager? = null
-    private var view: DotsView? = null
+    @Volatile private var view: DotsView? = null   // written on main, read on the sensor thread
     private var lp: WindowManager.LayoutParams? = null
     private var sm: SensorManager? = null
     private var thread: HandlerThread? = null
     private var sensorHandler: Handler? = null
     private val ui = Handler(Looper.getMainLooper())
+    private val vf = VehicleFilter()
+    private val Rmat = FloatArray(9)
+    @Volatile private var haveR = false
+    private var lm: LocationManager? = null
+    private var locListener: LocationListener? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -106,21 +115,69 @@ class OverlayService : Service(), SensorEventListener,
         thread = HandlerThread("steady-overlay-sensor").also { it.start() }
         sensorHandler = Handler(thread!!.looper)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        // Drive on the gravito-inertial resultant DIRECTION (what the inner ear senses): a car
-        // turn/brake leans this vector exactly like a hand tilt, so it's hand-demoable AND a valid
-        // car cue. TYPE_GRAVITY is the fused, pre-smoothed gravity direction; fall back to raw
-        // ACCELEROMETER (DotsView's tilt EMA low-passes it into the same estimate). NOT
-        // LINEAR_ACCELERATION: ~0 at handheld rest (dots go static) + fusion twitch on rotation.
-        val s = sm!!.getDefaultSensor(Sensor.TYPE_GRAVITY)
-            ?: sm!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        s?.let { sm!!.registerListener(this, it, 16000, sensorHandler) }   // ~62 Hz
+        val m = sm!!
+        val us = 16000   // ~62 Hz; under the Android 12 200 Hz cap (no HIGH_SAMPLING_RATE_SENSORS)
+
+        // Orientation source, best -> fallback. GAME_ROTATION_VECTOR avoids the magnetometer (immune
+        // to a car's steel body); GEOMAGNETIC is the gyro-less budget-phone fallback.
+        val rot = m.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            ?: m.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: m.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
+        rot?.let { m.registerListener(this, it, us, sensorHandler) }
+
+        // Accel source. With a rotation sensor, prefer fused LINEAR_ACCELERATION (R handles the
+        // frame). WITHOUT one, we MUST use raw ACCELEROMETER so VehicleFilter self-splits gravity
+        // and its gravity-projection fallback works (linear-accel alone can't reconstruct gravity).
+        val lin = if (rot != null) m.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) else null
+        if (lin != null) m.registerListener(this, lin, us, sensorHandler)
+        else m.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            ?.let { m.registerListener(this, it, us, sensorHandler) }
+
+        m.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let { m.registerListener(this, it, us, sensorHandler) }
+
+        startGps()
     }
 
-    // Sensor callbacks arrive on the HandlerThread; feed() just writes volatiles (single writer).
+    /** Optional GPS in-vehicle gate (framework LocationManager only — NO Play Services). No-op if
+     *  ACCESS_FINE_LOCATION isn't granted, so the overlay fully works inertial-only. */
+    private fun startGps() {
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) return
+        lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        val cb = object : LocationListener {
+            override fun onLocationChanged(loc: Location) {
+                vf.onGps(if (loc.hasSpeed()) loc.speed else -1f, loc.bearing, loc.hasBearing())
+            }
+            override fun onProviderDisabled(p: String) {}
+            override fun onProviderEnabled(p: String) {}
+            @Deprecated("kept for older API levels")
+            override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+        }
+        locListener = cb
+        try { lm!!.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, cb, thread!!.looper) }
+        catch (_: Exception) {}
+    }
+
+    // Callbacks arrive on the HandlerThread; VehicleFilter state is single-threaded here. feed() only
+    // writes volatiles (single writer), so the Choreographer thread reads them safely.
     override fun onSensorChanged(e: SensorEvent) {
-        val t = e.sensor.type
-        if (t == Sensor.TYPE_GRAVITY || t == Sensor.TYPE_ACCELEROMETER)
-            view?.feed(e.values[0], e.values[1])
+        when (e.sensor.type) {
+            Sensor.TYPE_ROTATION_VECTOR,
+            Sensor.TYPE_GAME_ROTATION_VECTOR,
+            Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR -> {
+                SensorManager.getRotationMatrixFromVector(Rmat, e.values); haveR = true
+            }
+            Sensor.TYPE_GYROSCOPE ->
+                vf.onGyro(e.values[0], e.values[1], e.values[2])
+            Sensor.TYPE_LINEAR_ACCELERATION -> {
+                val o = vf.onAccel(e.values, true, if (haveR) Rmat else null, e.timestamp)
+                view?.feed(o.lon, o.lat, o.enable)
+            }
+            Sensor.TYPE_ACCELEROMETER -> {
+                val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
+                view?.feed(o.lon, o.lat, o.enable)
+            }
+        }
     }
 
     override fun onAccuracyChanged(s: Sensor?, a: Int) {}
@@ -152,11 +209,21 @@ class OverlayService : Service(), SensorEventListener,
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(stopIcon, "Stop", stop).build())
             .build()
-        if (Build.VERSION.SDK_INT >= 34)
-            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        else
+        // On API 34 the FGS type must match held permissions: only OR in LOCATION when a location
+        // permission is actually granted, else startForeground throws SecurityException.
+        if (Build.VERSION.SDK_INT >= 34) {
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            if (hasLocationPerm()) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            startForeground(NOTIF_ID, n, type)
+        } else {
             startForeground(NOTIF_ID, n)
+        }
     }
+
+    // FINE only — must match startGps() (GPS_PROVIDER needs FINE), so the declared FGS LOCATION
+    // type can never disagree with whether location is actually used.
+    private fun hasLocationPerm(): Boolean =
+        checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -168,6 +235,7 @@ class OverlayService : Service(), SensorEventListener,
         running = false
         try { SettingsStore.prefs(this).unregisterOnSharedPreferenceChangeListener(this) } catch (_: Exception) {}
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
+        try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
         try { view?.stop() } catch (_: Exception) {}
         try { view?.let { wm?.removeView(it) } } catch (_: Exception) {}   // avoid a leaked window
         try { thread?.quitSafely() } catch (_: Exception) {}

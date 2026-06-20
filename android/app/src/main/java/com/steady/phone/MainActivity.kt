@@ -186,6 +186,11 @@ class MainActivity : Activity() {
             return
         }
         if (!android.provider.Settings.canDrawOverlays(this)) { requestOverlayPermission(); return }
+        // Lazily ask for location (Phone mode only) — enables the GPS "fade when parked" gate; the
+        // overlay works fully without it. Don't block the start on the result.
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION), 2)
         startForegroundService(Intent(this, OverlayService::class.java))
     }
 
@@ -213,6 +218,8 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 31 &&
             checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
             want.add(Manifest.permission.BLUETOOTH_CONNECT)
+        // NOTE: location is requested lazily in onOverlayToggle (Phone mode only) so laptop-streaming
+        // users are never prompted and their PC auto-hide gate is unchanged.
         if (want.isNotEmpty()) requestPermissions(want.toTypedArray(), 1)
     }
 

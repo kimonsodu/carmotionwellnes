@@ -62,6 +62,19 @@ class SensorService : Service(), SensorEventListener {
     @Volatile private var gz = 0f
     @Volatile private var haveGyro = 0
 
+    // shared vehicle-motion filter -> additive cleaned channels streamed to the laptop
+    private val vf = VehicleFilter()
+    private val Rmat = FloatArray(9)
+    @Volatile private var haveR = false
+    @Volatile private var vlong = 0f
+    @Volatile private var vlat = 0f
+    @Volatile private var yawDeg = 0f
+    @Volatile private var gateVal = 1f
+    @Volatile private var vehFlag = 0
+    @Volatile private var spdMps = -1f
+    private var lm: android.location.LocationManager? = null
+    private var locListener: android.location.LocationListener? = null
+
     private var lastSendNs = 0L
     private var rateMark = 0L
     private var sent = 0L
@@ -107,7 +120,13 @@ class SensorService : Service(), SensorEventListener {
         val us = 16000 // ~62 Hz request
         accel?.let { sm!!.registerListener(this, it, us, handler) }
         gyro?.let { sm!!.registerListener(this, it, us, handler) }
+        // Orientation for the world-frame vehicle filter (mirrors OverlayService); optional.
+        (sm!!.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            ?: sm!!.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: sm!!.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR))
+            ?.let { sm!!.registerListener(this, it, us, handler) }
         if (accel == null) statusLine = "no accelerometer on this phone"
+        startGps()
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "steady:stream").apply {
@@ -123,6 +142,29 @@ class SensorService : Service(), SensorEventListener {
         running = false
         stopSelf()
         return START_NOT_STICKY
+    }
+
+    /** Optional GPS speed for the vehicle filter + stream (framework LocationManager, no Play
+     *  Services). No-op if ACCESS_FINE_LOCATION isn't granted. */
+    private fun startGps() {
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        val cb = object : android.location.LocationListener {
+            override fun onLocationChanged(loc: android.location.Location) {
+                spdMps = if (loc.hasSpeed()) loc.speed else -1f
+                vf.onGps(spdMps, loc.bearing, loc.hasBearing())
+            }
+            override fun onProviderDisabled(p: String) {}
+            override fun onProviderEnabled(p: String) {}
+            @Deprecated("kept for older API levels")
+            override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
+        }
+        locListener = cb
+        try {
+            lm!!.requestLocationUpdates(
+                android.location.LocationManager.GPS_PROVIDER, 1000L, 0f, cb, handler!!.looper)
+        } catch (_: Exception) {}
     }
 
     private fun openUdp(host: String, port: Int): Transport {
@@ -163,22 +205,41 @@ class SensorService : Service(), SensorEventListener {
             .setSmallIcon(R.drawable.ic_steady_notify)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= 29)
+        // On API 34 only OR in LOCATION when a location permission is held, else startForeground throws.
+        if (Build.VERSION.SDK_INT >= 34) {
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            val loc = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED   // FINE only — matches startGps()
+            if (loc) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            startForeground(NOTIF_ID, n, type)
+        } else if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        else
+        } else {
             startForeground(NOTIF_ID, n)
+        }
     }
 
     // callbacks arrive on the HandlerThread, so sends never touch the main thread
     override fun onSensorChanged(e: SensorEvent) {
         when (e.sensor.type) {
+            Sensor.TYPE_ROTATION_VECTOR,
+            Sensor.TYPE_GAME_ROTATION_VECTOR,
+            Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR -> {
+                SensorManager.getRotationMatrixFromVector(Rmat, e.values); haveR = true
+            }
             Sensor.TYPE_ACCELEROMETER -> {
                 ax = e.values[0]; ay = e.values[1]; az = e.values[2]
+                // Raw accel still streamed as-is (mounted-laptop path unchanged). Also run the filter
+                // (self-splits gravity) so vlong/vlat/yaw/gate/veh mirror the on-phone overlay.
+                val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
+                vlong = o.lon; vlat = o.lat; yawDeg = o.yawDegPerSec
+                gateVal = o.gate; vehFlag = if (o.inVehicle) 1 else 0
                 maybeSend()
             }
             Sensor.TYPE_GYROSCOPE -> {
                 gx = e.values[0] * RAD2DEG; gy = e.values[1] * RAD2DEG; gz = e.values[2] * RAD2DEG
                 haveGyro = 1
+                vf.onGyro(e.values[0], e.values[1], e.values[2])   // rad/s for the filter
             }
         }
     }
@@ -192,8 +253,10 @@ class SensorService : Service(), SensorEventListener {
         // Trailing '\n' delimits frames for the Bluetooth stream; harmless for UDP datagrams.
         val json = String.format(
             Locale.US,
-            "{\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f,\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f,\"g\":%d}\n",
-            ax, ay, az, gx, gy, gz, haveGyro
+            "{\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f,\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f,\"g\":%d," +
+                "\"vlong\":%.3f,\"vlat\":%.3f,\"yaw\":%.2f,\"gate\":%.2f,\"veh\":%d,\"spd\":%.2f}\n",
+            ax, ay, az, gx, gy, gz, haveGyro,
+            vlong, vlat, yawDeg, gateVal, vehFlag, spdMps
         )
         try {
             t.send(json.toByteArray())
@@ -215,6 +278,7 @@ class SensorService : Service(), SensorEventListener {
     override fun onDestroy() {
         running = false
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
+        try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
         try { wake?.release() } catch (_: Exception) {}
         try { transport?.close() } catch (_: Exception) {}
         try { thread?.quitSafely() } catch (_: Exception) {}

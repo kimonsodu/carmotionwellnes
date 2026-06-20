@@ -21,8 +21,10 @@ import kotlin.math.sqrt
  */
 class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
-    @Volatile private var rawAx = 0f
-    @Volatile private var rawAy = 0f
+    // --- cleaned vehicle-motion drive (computed by the shared VehicleFilter in OverlayService) ---
+    @Volatile private var inLon = 0f     // longitudinal accel m/s^2: +accelerate / -brake
+    @Volatile private var inLat = 0f     // lateral cue m/s^2: +right (vehicle turning left)
+    @Volatile private var inEnable = 1f  // 0..1 in-vehicle/GPS enable (also dot fade target)
 
     // --- live params (defaults mirror the Windows app) ---
     private var strength = SettingsStore.DEF_STRENGTH
@@ -30,12 +32,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var colorMode = SettingsStore.DEF_DOT_COLOR
     private var autoHide = SettingsStore.DEF_AUTO_HIDE
 
-    // --- gravity/tilt lean-flow state ---
-    private var gX = 0f          // smoothed gravity/tilt direction (m/s^2): responsive but de-spiked
-    private var gY = 0f
-    private var bX = 0f          // slow auto-center baseline (resting orientation)
-    private var bY = 0f
-    private var haveTilt = false
+    // --- flow integrator state ---
     private var velX = 0f
     private var velY = 0f
     private var offX = 0f
@@ -66,8 +63,11 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
 
     init { setLayerType(LAYER_TYPE_HARDWARE, null) }
 
-    /** Latest sensor sample (m/s^2): fused gravity direction (or raw accel fallback). ax = lateral, ay = up. */
-    fun feed(ax: Float, ay: Float) { rawAx = ax; rawAy = ay }
+    /**
+     * Cleaned, world-frame, band-passed + gyro-gated vehicle accel from VehicleFilter (m/s^2).
+     * lon = +accelerate/-brake, lat = +right cue, enable = 0..1 in-vehicle confidence.
+     */
+    fun feed(lon: Float, lat: Float, enable: Float) { inLon = lon; inLat = lat; inEnable = enable }
 
     fun applyParams(p: SettingsStore.Params) {
         strength = p.strength
@@ -83,51 +83,38 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     fun stop() { running = false; choreographer.removeFrameCallback(frame) }
 
     private fun step() {
-        val ax = rawAx
-        val ay = rawAy
+        val lon = inLon
+        val lat = inLat
+        val enable = inEnable.coerceIn(0f, 1f)
 
-        // Seed on first sample so tilt/baseline start AT the current orientation (no startup lurch).
-        if (!haveTilt) { gX = ax; gY = ay; bX = ax; bY = ay; haveTilt = true }
-
-        // 1) Smooth tilt vector: EMA of the gravity direction. k=0.18 -> ~93 ms (~4 frames @62Hz).
-        //    Fast enough to feel responsive, slow enough that a fast rotation can't spike it.
-        gX += (ax - gX) * 0.18f
-        gY += (ay - gY) * 0.18f
-
-        // 2) Slow auto-center baseline (k=0.012 -> ~1.4 s). A HELD tilt eases back to zero over
-        //    ~1-2 s, and resting at ANY angle auto-zeros — removes the ~9.8 gravity DC, no Recenter.
-        bX += (gX - bX) * 0.012f
-        bY += (gY - bY) * 0.012f
-
-        // 3) Lean = band-passed tilt: slow baseline removes DC gravity; the tilt EMA removes fast
-        //    transients. This drives BOTH axes (left/right roll + up/down pitch), smoothly.
-        val leanX = gX - bX
-        val leanY = gY - bY
-
-        // 4) Velocity flow (mirrors the PC): vel = vel*decay - lean*gain. The integrator is fed the
-        //    SMOOTHED lean, never a raw transient, so a fast pitch can't jump velY. strength scales it.
-        val gain = 0.06f * strength             // strength default 1.8 -> effective gain 0.108
-        velX = velX * 0.92f - leanX * gain
-        velY = velY * 0.92f - leanY * gain
+        // Inputs are ALREADY world-frame, band-passed, gyro-gated, jerk-limited, deadbanded by
+        // VehicleFilter — DotsView no longer estimates tilt; it only integrates to drift. Apple
+        // mapping: accelerate (lon>0) -> dots DOWN; brake -> UP; vehicle turn-left -> dots RIGHT.
+        val gain = 0.12f * strength         // input is small clean m/s^2 (was tilt lean at 0.06)
+        val driveLat = lat * enable
+        val driveLon = lon * enable
+        velX = velX * 0.92f - driveLat * gain
+        velY = velY * 0.92f - driveLon * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
 
-        // --- auto-hide energy gate (fed by the LEAN magnitude; ~0 when held still at any angle) ---
-        val mag = sqrt(leanX * leanX + leanY * leanY)
+        // --- auto-hide energy gate (driven by the cleaned magnitude; ~0 unless real vehicle motion) ---
+        val mag = sqrt(driveLat * driveLat + driveLon * driveLon)
         val hf = abs(mag - magSlow)
         magSlow += (mag - magSlow) * 0.10f
         jitterEma += (hf - jitterEma) * 0.05f
         val energy = jitterEma * 1.5f + mag
         activityEma += (energy - activityEma) * 0.06f
         if (autoHide) {
-            if (activityEma > 0.42f) { autoStill = false; stillFrames = 0 }
-            else if (activityEma < 0.22f) { if (++stillFrames > 45) autoStill = true }
+            if (activityEma > 0.30f) { autoStill = false; stillFrames = 0 }       // thresholds lowered:
+            else if (activityEma < 0.12f) { if (++stillFrames > 45) autoStill = true } // clean signal is smaller
             else stillFrames = 0
         }
-        val targetAlpha = if (autoHide && autoStill) 0f else 1f
+        // Fade when auto-hidden OR when GPS says we're parked (enable~0).
+        val targetAlpha = if ((autoHide && autoStill) || enable < 0.05f) 0f else 1f
         dotsAlpha += (targetAlpha - dotsAlpha) * 0.06f
-        if (autoHide && autoStill) { velX *= 0.85f; velY *= 0.85f }   // settle while hidden
+        if (targetAlpha == 0f) { velX *= 0.85f; velY *= 0.85f }   // settle while hidden
 
         offX += velX
         offY += velY
