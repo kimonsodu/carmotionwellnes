@@ -33,6 +33,8 @@ namespace SteadyOverlay
         public static void Main()
         {
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            try { app.Resources.MergedDictionaries.Add((ResourceDictionary)Application.LoadComponent(new Uri("Theme.xaml", UriKind.Relative))); }
+            catch { /* styles are cosmetic — run unstyled rather than crash */ }
             var settings = Settings.Load();
             var overlay = new OverlayWindow();
             overlay.ApplySettings(settings);

@@ -30,7 +30,6 @@
         android:icon="@android:drawable/ic_menu_compass"
         android:label="Steady Phone"
         android:supportsRtl="true"
-        android:testOnly="true"
         android:theme="@android:style/Theme.Material.Light" >
         <activity
             android:name="com.steady.phone.MainActivity"

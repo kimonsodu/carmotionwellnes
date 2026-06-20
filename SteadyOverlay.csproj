@@ -13,6 +13,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- dark-theme styles for the control panel (loaded at runtime; no App.xaml) -->
+    <Resource Include="Theme.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- QR code for the phone-pairing panel (pure managed, no System.Drawing dep) -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <!-- Bluetooth RFCOMM/SPP server for the native app's Bluetooth transport -->
