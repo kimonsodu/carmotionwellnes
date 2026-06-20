@@ -14,6 +14,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Phone mode: draw the cue dots as a system overlay on top of other apps -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <!-- Bluetooth transport (RFCOMM/SPP to the paired laptop) -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -54,13 +58,15 @@
             </intent-filter>
         </activity>
 
-        <!-- Phone mode: full-screen on-phone cue dots driven by the phone's own sensor -->
-        <activity
-            android:name="com.steady.phone.DotsActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+        <!-- Phone mode: system-wide click-through dots overlay driven by the phone's own sensor -->
+        <service
+            android:name="com.steady.phone.OverlayService"
             android:exported="false"
-            android:theme="@style/Theme.Steady" />
-
+            android:foregroundServiceType="specialUse" >
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Draws a cosmetic, click-through motion-sickness cue overlay (drifting dots) on top of other apps, driven by the device accelerometer, so the user can read or browse while reducing motion sickness in a moving vehicle. Stoppable from its persistent notification." />
+        </service>
         <service
             android:name="com.steady.phone.SensorService"
             android:exported="false"

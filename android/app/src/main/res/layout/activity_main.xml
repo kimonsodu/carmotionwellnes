@@ -269,7 +269,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
                 <TextView
-                    android:text="Show drifting cue dots on this phone, driven by its own motion sensor — for reading or working on the phone in a moving vehicle. No laptop needed."
+                    android:text="Float drifting cue dots over every app — read or browse normally while they ease motion sickness, driven by this phone's own motion sensor. No laptop needed."
                     android:textColor="@color/muted"
                     android:textSize="13sp"
                     android:lineSpacingExtra="2dp"
@@ -277,9 +277,132 @@
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <!-- live overlay settings (parity with the Windows panel) -->
+            <LinearLayout
+                style="@style/Card"
+                android:layout_marginTop="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    style="@style/SectionLabel"
+                    android:text="OVERLAY SETTINGS"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="Strength"
+                        android:layout_weight="1"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/tvStrengthVal"
+                        android:text="1.8×"
+                        android:textColor="@color/accent"
+                        android:textSize="13sp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <SeekBar
+                    android:id="@+id/seekStrength"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="Dot size"
+                        android:layout_weight="1"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/tvSizeVal"
+                        android:text="1.0×"
+                        android:textColor="@color/accent"
+                        android:textSize="13sp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <SeekBar
+                    android:id="@+id/seekSize"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    style="@style/FieldLabel"
+                    android:text="Dot colour"
+                    android:layout_marginTop="12dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <RadioGroup
+                    android:id="@+id/rgDotColor"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="4dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <RadioButton
+                        android:id="@+id/rbLight"
+                        android:text="Light"
+                        android:textColor="@color/text"
+                        android:layout_marginEnd="20dp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <RadioButton
+                        android:id="@+id/rbMixed"
+                        android:text="Mixed"
+                        android:textColor="@color/text"
+                        android:checked="true"
+                        android:layout_marginEnd="20dp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                    <RadioButton
+                        android:id="@+id/rbDark"
+                        android:text="Dark"
+                        android:textColor="@color/text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </RadioGroup>
+
+                <CheckBox
+                    android:id="@+id/cbAutoHide"
+                    android:text="Auto-hide dots when stopped"
+                    android:textColor="@color/text"
+                    android:layout_marginTop="8dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:text="Light reads on dark apps, Dark on light ones, Mixed works on either. Auto-hide fades the dots when the car is stopped."
+                    android:textColor="@color/faint"
+                    android:textSize="12sp"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvOverlayPerm"
+                android:text="Steady needs permission to draw over other apps. Tap Start and allow it."
+                android:textColor="@color/danger"
+                android:textSize="12sp"
+                android:lineSpacingExtra="2dp"
+                android:visibility="gone"
+                android:layout_marginTop="16dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
             <Button
-                android:id="@+id/btnPhoneDots"
-                android:text="Show dots on this phone"
+                android:id="@+id/btnOverlay"
+                android:text="Start dots overlay"
                 android:textColor="@color/bg"
                 android:textStyle="bold"
                 android:textSize="16sp"
@@ -290,7 +413,7 @@
                 android:layout_height="56dp" />
 
             <TextView
-                android:text="Tap the button, then tap the screen to exit. Keep the screen on while you use it."
+                android:text="The dots float over every app so you can read or browse normally. Tap Stop here or in the notification to remove them."
                 android:textColor="@color/faint"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"

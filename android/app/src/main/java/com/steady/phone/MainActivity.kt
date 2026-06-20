@@ -13,8 +13,10 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 
@@ -37,7 +39,15 @@ class MainActivity : Activity() {
     private lateinit var rbPhone: View
     private lateinit var laptopBox: View
     private lateinit var phoneBox: View
-    private lateinit var btnPhoneDots: Button
+    private lateinit var btnOverlay: Button
+    private lateinit var seekStrength: SeekBar
+    private lateinit var seekSize: SeekBar
+    private lateinit var rgColor: RadioGroup
+    private lateinit var cbAutoHide: CheckBox
+    private lateinit var tvStrengthVal: TextView
+    private lateinit var tvSizeVal: TextView
+    private lateinit var tvOverlayPerm: TextView
+    private var pendingOverlayStart = false
     private val ui = Handler(Looper.getMainLooper())
 
     private fun prefs() = getSharedPreferences("steady", Context.MODE_PRIVATE)
@@ -62,7 +72,14 @@ class MainActivity : Activity() {
         rbPhone = findViewById(R.id.rbPhone)
         laptopBox = findViewById(R.id.laptopBox)
         phoneBox = findViewById(R.id.phoneBox)
-        btnPhoneDots = findViewById(R.id.btnPhoneDots)
+        btnOverlay = findViewById(R.id.btnOverlay)
+        seekStrength = findViewById(R.id.seekStrength)
+        seekSize = findViewById(R.id.seekSize)
+        rgColor = findViewById(R.id.rgDotColor)
+        cbAutoHide = findViewById(R.id.cbAutoHide)
+        tvStrengthVal = findViewById(R.id.tvStrengthVal)
+        tvSizeVal = findViewById(R.id.tvSizeVal)
+        tvOverlayPerm = findViewById(R.id.tvOverlayPerm)
 
         val p = prefs()
         host.setText(p.getString("host", ""))
@@ -82,7 +99,8 @@ class MainActivity : Activity() {
             applyDotsTarget(phone)
             p.edit().putString("dots", if (phone) "phone" else "laptop").apply()
         }
-        btnPhoneDots.setOnClickListener { startActivity(Intent(this, DotsActivity::class.java)) }
+        bindPhoneSettings()
+        btnOverlay.setOnClickListener { onOverlayToggle() }
 
         requestPerms()
 
@@ -127,6 +145,64 @@ class MainActivity : Activity() {
     private fun applyDotsTarget(phone: Boolean) {
         laptopBox.visibility = if (phone) View.GONE else View.VISIBLE
         phoneBox.visibility = if (phone) View.VISIBLE else View.GONE
+    }
+
+    // --- Phone-mode overlay settings (write through SettingsStore; running overlay updates live) ---
+    private fun bindPhoneSettings() {
+        val str = SettingsStore.strength(this)
+        val sz = SettingsStore.dotSize(this)
+        seekStrength.max = 570; seekStrength.progress = ((str - 0.3f) * 100).toInt().coerceIn(0, 570)
+        seekSize.max = 260; seekSize.progress = ((sz - 0.4f) * 100).toInt().coerceIn(0, 260)
+        tvStrengthVal.text = String.format(java.util.Locale.US, "%.1f×", str)
+        tvSizeVal.text = String.format(java.util.Locale.US, "%.1f×", sz)
+        seekStrength.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = 0.3f + prog / 100f
+            SettingsStore.setStrength(this, v)
+            tvStrengthVal.text = String.format(java.util.Locale.US, "%.1f×", v)
+        })
+        seekSize.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = 0.4f + prog / 100f
+            SettingsStore.setDotSize(this, v)
+            tvSizeVal.text = String.format(java.util.Locale.US, "%.1f×", v)
+        })
+        rgColor.check(when (SettingsStore.dotColor(this)) { 1 -> R.id.rbMixed; 2 -> R.id.rbDark; else -> R.id.rbLight })
+        rgColor.setOnCheckedChangeListener { _, id ->
+            SettingsStore.setDotColor(this, when (id) { R.id.rbMixed -> 1; R.id.rbDark -> 2; else -> 0 })
+        }
+        cbAutoHide.isChecked = SettingsStore.autoHide(this)
+        cbAutoHide.setOnCheckedChangeListener { _, on -> SettingsStore.setAutoHide(this, on) }
+    }
+
+    private inline fun simpleSeek(crossinline onChange: (Int) -> Unit) =
+        object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) onChange(p) }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        }
+
+    private fun onOverlayToggle() {
+        if (OverlayService.running) {
+            stopService(Intent(this, OverlayService::class.java))
+            return
+        }
+        if (!android.provider.Settings.canDrawOverlays(this)) { requestOverlayPermission(); return }
+        startForegroundService(Intent(this, OverlayService::class.java))
+    }
+
+    private fun requestOverlayPermission() {
+        pendingOverlayStart = true                 // auto-start on return if granted (onResume)
+        toast("Allow Steady to draw over other apps, then come back")
+        startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:$packageName")))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingOverlayStart) {
+            pendingOverlayStart = false
+            if (android.provider.Settings.canDrawOverlays(this) && !OverlayService.running)
+                startForegroundService(Intent(this, OverlayService::class.java))
+        }
     }
 
     private fun requestPerms() {
@@ -199,6 +275,15 @@ class MainActivity : Activity() {
         host.isEnabled = en; port.isEnabled = en; btnPick.isEnabled = en
         // don't let the Laptop/Phone switch hide the Stop button mid-stream
         rbLaptop.isEnabled = en; rbPhone.isEnabled = en
+
+        // phone-mode overlay button + permission notice
+        val ov = OverlayService.running
+        btnOverlay.text = if (ov) "Stop dots overlay" else "Start dots overlay"
+        btnOverlay.setBackgroundResource(if (ov) R.drawable.btn_secondary else R.drawable.btn_primary)
+        btnOverlay.setTextColor(getColor(if (ov) R.color.accent else R.color.bg))
+        tvOverlayPerm.visibility =
+            if (!ov && !android.provider.Settings.canDrawOverlays(this)) View.VISIBLE else View.GONE
+
         ui.postDelayed({ tick() }, 200)
     }
 
