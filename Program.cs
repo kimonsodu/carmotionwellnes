@@ -48,7 +48,7 @@ namespace SteadyOverlay
             else
                 panel.Show();
             server.Start();
-            app.Exit += (s, e) => Settings.Save(overlay, panel.StartMinimized);   // remember settings on exit
+            app.Exit += (s, e) => Settings.Save(overlay, panel);   // remember settings + window geometry on exit
             app.Run();
         }
     }
@@ -63,8 +63,16 @@ namespace SteadyOverlay
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
         public bool SwapAxes { get; set; } = false;
-        public bool DarkDots { get; set; } = false;        // dark cue dots instead of light
+        public int DotStyle { get; set; } = 0;             // 0 = light, 1 = mixed, 2 = dark cue dots
+        public bool DarkDots { get; set; } = false;        // legacy (pre-slider) — migrated to DotStyle on load
         public bool StartMinimized { get; set; } = false;  // launch hidden in the tray
+        public bool AutoPause { get; set; } = false;       // fade the dots out when the vehicle is stopped
+        public double? WinLeft { get; set; }               // remembered panel position + size (null = use defaults)
+        public double? WinTop { get; set; }
+        public double? WinWidth { get; set; }
+        public double? WinHeight { get; set; }
+        public bool FirstRunDone { get; set; } = false;    // welcome card dismissed
+        public bool PhoneOnly { get; set; } = false;       // Phone mode: ignore the laptop sensor, use the phone only
 
         static string ConfigDir =>
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
@@ -81,12 +89,17 @@ namespace SteadyOverlay
             return new Settings();
         }
 
-        public static void Save(OverlayWindow ov, bool startMinimized)
+        public static void Save(OverlayWindow ov, ControlWindow panel)
         {
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DarkDots = ov.DarkDots, StartMinimized = startMinimized };
+                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly };
+                var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
+                if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
+                {
+                    s.WinLeft = b.Left; s.WinTop = b.Top; s.WinWidth = b.Width; s.WinHeight = b.Height;
+                }
                 var tmp = ConfigPath + ".tmp";                          // atomic write: a kill
                 System.IO.File.WriteAllText(tmp, JsonSerializer.Serialize(s));   // mid-write can't
                 System.IO.File.Move(tmp, ConfigPath, true);             // corrupt the good file
@@ -146,7 +159,20 @@ namespace SteadyOverlay
         public bool Paused = false;
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
-        public bool DarkDots = false;            // dark cue dots (for light screens) vs the default light ones
+        public int DotStyle = 0;                 // 0 = light, 1 = mixed (both, works on any window), 2 = dark
+        public bool AutoPause = false;           // fade dots out when motion stops (parked / at a desk)
+
+        // --- motion-energy gate for AutoPause ---
+        // Key: constant-speed cruising has ~zero linear accel/turn, so the SMOOTHED
+        // maneuver signal can't tell it from parked. Road vibration can: track the
+        // high-frequency jitter of raw linear accel — it persists while driving at a
+        // steady speed and collapses when actually stopped.
+        double magSlow;                          // slow baseline of linear-accel magnitude
+        double jitterEma;                        // smoothed HF jitter (road buzz)
+        double activityEma;                      // combined motion energy fed to the gate
+        int stillFrames;                         // consecutive frames below the "still" threshold
+        bool autoStill;                          // currently judged stopped
+        double dotsOpacity = 1.0;                // eased overlay opacity (fades on auto-pause)
 
         // --- status surfaced to the control panel ---
         public string StatusText = "Starting…";
@@ -179,14 +205,23 @@ namespace SteadyOverlay
         long lastPhoneTick = long.MinValue / 2;
         bool lastPhoneActive;
         public bool PhoneActive => Environment.TickCount64 - lastPhoneTick < 1500;
+        public bool PhoneOnly { get; set; }             // Phone mode: ignore the built-in sensor entirely
+        public bool HasLaptopSensor => acc != null && !PhoneOnly;   // built-in accelerometer usable as a source
+
+        // --- GPS speed (m/s) from the phone, when its location permission is granted ---
+        double phoneSpeed = -1;                  // -1 = unknown/unavailable
+        long phoneSpeedTick = long.MinValue / 2;
+        bool SpeedFresh => phoneSpeed >= 0 && Environment.TickCount64 - phoneSpeedTick < 5000;
 
         // Called from the phone-server thread; mirrors exactly what the laptop
         // sensor handlers write (accel in m/s² incl. gravity, gyro in deg/s) so the
         // rest of the pipeline — gravity removal, axis auto-map, Flip/Swap — is unchanged.
-        public void FeedPhone(double ax, double ay, double az, double gx, double gy, double gz, bool gyroValid)
+        // speed is GPS ground speed in m/s, or <0 when the phone can't supply it.
+        public void FeedPhone(double ax, double ay, double az, double gx, double gy, double gz, double speed, bool gyroValid)
         {
             rawX = ax; rawY = ay; rawZ = az; hasReading = true;
             if (gyroValid) { rawGyroX = gx; rawGyroY = gy; rawYaw = gz; hasGyro = true; }
+            if (speed >= 0) { phoneSpeed = speed; phoneSpeedTick = Environment.TickCount64; }
             lastPhoneTick = Environment.TickCount64;
         }
 
@@ -222,7 +257,21 @@ namespace SteadyOverlay
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
             SwapAxes = s.SwapAxes;
-            DarkDots = s.DarkDots;
+            DotStyle = Math.Clamp(s.DotStyle, 0, 2);
+            if (DotStyle == 0 && s.DarkDots) DotStyle = 2;   // migrate the old bool
+            AutoPause = s.AutoPause;
+            PhoneOnly = s.PhoneOnly;
+        }
+
+        // Toggle Phone mode at runtime and refresh the status line immediately.
+        public void SetPhoneOnly(bool on)
+        {
+            PhoneOnly = on;
+            if (on)
+                SetStatus("Phone mode — connect your phone below to stream its motion.");
+            else
+                SetStatus(acc != null ? "Reading this laptop’s motion sensor."
+                                      : "No sensor on this PC — use your phone: open the link in the Phone section below.");
         }
 
         void MakeClickThrough()
@@ -253,7 +302,6 @@ namespace SteadyOverlay
             int nNear = (int)(colArea / 7000);
             int nFar = (int)(colArea / 5200);
 
-            var brush = DotBrush();
             var rnd = new Random();
 
             void Make(int n, List<Dot> arr, double rMin, double rJit, double alpha)
@@ -268,7 +316,7 @@ namespace SteadyOverlay
                         r = rMin + rnd.NextDouble() * rJit,
                         baseAlpha = alpha
                     };
-                    d.el = new Ellipse { Width = d.r * 2, Height = d.r * 2, Fill = brush };
+                    d.el = new Ellipse { Width = d.r * 2, Height = d.r * 2, Fill = DotFill(rnd) };
                     canvas.Children.Add(d.el);
                     arr.Add(d);
                 }
@@ -287,20 +335,31 @@ namespace SteadyOverlay
             Size(near); Size(far);
         }
 
-        SolidColorBrush DotBrush()
+        SolidColorBrush lightDot, darkDot;
+        void EnsureDotBrushes()
         {
-            var b = new SolidColorBrush(DarkDots ? Color.FromRgb(18, 22, 30) : Color.FromRgb(236, 231, 215));
-            b.Freeze();
-            return b;
+            if (lightDot != null) return;
+            lightDot = new SolidColorBrush(Color.FromRgb(236, 231, 215)); lightDot.Freeze();
+            darkDot = new SolidColorBrush(Color.FromRgb(18, 22, 30)); darkDot.Freeze();
         }
 
-        // recolor existing dots in place (no rebuild) when the dark-dots toggle flips
-        public void SetDarkDots(bool dark)
+        // pick a dot's colour for the current style: light, dark, or (mixed) a 50/50 split
+        // so some dots always contrast whether the window behind is light or dark
+        Brush DotFill(Random rnd)
         {
-            DarkDots = dark;
-            var b = DotBrush();
-            foreach (var d in near) d.el.Fill = b;
-            foreach (var d in far) d.el.Fill = b;
+            EnsureDotBrushes();
+            return DotStyle == 0 ? lightDot
+                 : DotStyle == 2 ? darkDot
+                 : (rnd.NextDouble() < 0.5 ? lightDot : darkDot);
+        }
+
+        // recolor existing dots in place (no rebuild) when the dot-style slider moves
+        public void SetDotStyle(int style)
+        {
+            DotStyle = Math.Clamp(style, 0, 2);
+            var rnd = new Random();
+            foreach (var d in near) d.el.Fill = DotFill(rnd);
+            foreach (var d in far) d.el.Fill = DotFill(rnd);
         }
 
         void StartSensors()
@@ -311,14 +370,16 @@ namespace SteadyOverlay
                 acc.ReportInterval = Math.Max(acc.MinimumReportInterval, 16u);
                 acc.ReadingChanged += (s, e) =>
                 {
-                    if (PhoneActive) return;                 // phone is driving — ignore the laptop sensor
+                    if (PhoneActive || PhoneOnly) return;    // phone is driving (or forced) — ignore the laptop sensor
                     var r = e.Reading;                      // AccelerationX/Y/Z in g, includes gravity
                     rawX = r.AccelerationX * 9.81;
                     rawY = r.AccelerationY * 9.81;
                     rawZ = r.AccelerationZ * 9.81;
                     hasReading = true;
                 };
-                SetStatus("Reading this laptop’s motion sensor.");
+                SetStatus(PhoneOnly
+                    ? "Phone mode — connect your phone below to stream its motion."
+                    : "Reading this laptop’s motion sensor.");
             }
             else
             {
@@ -332,7 +393,7 @@ namespace SteadyOverlay
                 gyro.ReportInterval = Math.Max(gyro.MinimumReportInterval, 16u);
                 gyro.ReadingChanged += (s, e) =>
                 {
-                    if (PhoneActive) return;            // phone is driving — ignore the laptop gyro
+                    if (PhoneActive || PhoneOnly) return;   // phone is driving (or forced) — ignore the laptop gyro
                     var g = e.Reading;                  // deg/s
                     rawGyroX = g.AngularVelocityX;
                     rawGyroY = g.AngularVelocityY;
@@ -378,6 +439,9 @@ namespace SteadyOverlay
             {
                 double rx0 = rx - gx, ry0 = ry - gy, rz0 = rz - gz;
                 mag = Math.Sqrt(rx0 * rx0 + ry0 * ry0 + rz0 * rz0);  // linear accel right now
+                double hf = Math.Abs(mag - magSlow);     // deviation from baseline = road buzz / engine vibration
+                magSlow += (mag - magSlow) * 0.10;
+                jitterEma += (hf - jitterEma) * 0.05;    // smoothed vibration energy (survives constant-speed cruise)
                 if (tiltRate > 6.0) tiltHold = 30;       // hold fast-tracking ~0.5s past the last tilt sample
                 if (tiltHold > 0) { af = 0.20; tiltHold--; }  // lid tilting -> track gravity fast, no phantom drift
                 else af = mag > 0.5 ? 0.0020 : 0.04;     // ~8s τ mid-maneuver, ~0.5s τ at rest
@@ -441,9 +505,33 @@ namespace SteadyOverlay
             double aX = (Math.Abs(rawAX) < dz ? 0 : rawAX) * InvertX;   // turns  -> horizontal
             double aY = (Math.Abs(fore) < dz ? 0 : fore) * InvertY;     // gas/brake -> vertical
 
+            // --- auto-pause: judge "useful to show" ---
+            // GPS speed is authoritative when the phone supplies it: motion sickness
+            // needs real travel speed, and nobody feels ill crawling/parked — so hide
+            // below ~7 km/h and show above ~12. No guessing about jitter.
+            if (SpeedFresh)
+            {
+                if (phoneSpeed > 3.3) { autoStill = false; stillFrames = 0; }            // >~12 km/h -> show
+                else if (phoneSpeed < 2.0) { if (++stillFrames > 30) autoStill = true; } // <~7 km/h -> hide (~0.5s)
+                else stillFrames = 0;                                                     // 7–12 km/h holds state
+            }
+            else
+            {
+                // Accel fallback (laptop sensor, or phone without location): a held device
+                // has a constant hand-tremor floor, so the bar to count as "moving" has to
+                // sit above that floor — otherwise it never hides off a table. Jitter is
+                // de-weighted now that GPS does the cruise-detection job it was invented for.
+                double energy = jitterEma * 1.5 + Math.Sqrt(lat * lat + fore * fore) + Math.Abs(yaw) * 0.03;
+                activityEma += (energy - activityEma) * 0.06;   // smoothing (gives the gate inertia)
+                if (activityEma > 0.42) { autoStill = false; stillFrames = 0; }   // clear maneuver -> wake
+                else if (activityEma < 0.22) { if (++stillFrames > 45) autoStill = true; }   // low motion -> hide (~0.75s)
+                else stillFrames = 0;                           // mid-band holds current state
+            }
+            bool freeze = Paused || (AutoPause && autoStill);
+
             const double decay = 0.94;              // how long flow persists
             const double gain = 0.105;              // accel -> velocity
-            if (Paused) { velX *= 0.85; velY *= 0.85; }
+            if (freeze) { velX *= 0.85; velY *= 0.85; }
             else
             {
                 velX = velX * decay - aX * gain * Sens;
@@ -458,6 +546,11 @@ namespace SteadyOverlay
             offX += velX;                           // keep streaming while motion lasts
             offY += velY;
 
+            // ease overlay opacity: dots fade away when auto-paused, fade back in on motion
+            double tgtOpacity = (AutoPause && autoStill) ? 0.0 : 1.0;
+            dotsOpacity += (tgtOpacity - dotsOpacity) * 0.06;
+            if (Math.Abs(dotsOpacity - Opacity) > 0.001) Opacity = dotsOpacity;
+
             if (DotScale != appliedScale) ApplyDotScale();
 
             Render(near, offX, offY, W, H);
@@ -469,7 +562,8 @@ namespace SteadyOverlay
                 $"grav :{gx,7:0.0}{gy,7:0.0}{gz,7:0.0}\n" +
                 $"gyro :{rawGyroX,7:0.0}{rawGyroY,7:0.0}{rawYaw,7:0.0}\n" +
                 $"lat:{lat,7:0.00}  fore:{fore,7:0.00}\n" +
-                $"vel:{velX,7:0.0}  {velY,7:0.0}";
+                $"vel:{velX,7:0.0}  {velY,7:0.0}\n" +
+                $"act:{activityEma,6:0.000} jit:{jitterEma,5:0.00} spd:{(SpeedFresh ? (phoneSpeed * 3.6).ToString("0.0") + "km/h" : "--")}  {(AutoPause ? (autoStill ? "HIDDEN (stopped)" : "moving") : "autohide off")}";
         }
 
         static double Wrap(double v, double m) { v %= m; return v < 0 ? v + m : v; }
@@ -498,6 +592,7 @@ namespace SteadyOverlay
             tiltHold = 0;
             lat = fore = yaw = 0;
             velX = velY = offX = offY = 0;
+            autoStill = false; stillFrames = 0; activityEma = 0.3; jitterEma = 0.05;   // wake the dots
         }
 
         // Re-arm gravity + axis-map learning when the motion source switches
@@ -512,6 +607,7 @@ namespace SteadyOverlay
             tiltHold = 0;
             lat = fore = yaw = 0;
             velX = velY = 0;
+            autoStill = false; stillFrames = 0; activityEma = 0.3;   // wake on a source switch
         }
     }
 
@@ -548,14 +644,23 @@ namespace SteadyOverlay
         System.Drawing.Icon trayIcon;
         HwndSource hwndSource;
         bool shuttingDown, teardownDone, reallyQuit;
-        CheckBox darkDots, startMin, autoStart;
+        CheckBox startMin, autoStart, autoPauseTog;
         Grid contentShell;
+        Button phoneExpander;
+        StackPanel phoneDetail;
+        CheckBox phoneOnlyTog;
+        bool phoneDetailOpen, phoneExpUserSet, phoneAutoCollapsed;
+        DispatcherTimer saveTimer;
+        Border helpOverlay;
+        bool firstRunDone;
+        public bool FirstRunDone => firstRunDone;
         public bool StartMinimized => startMin?.IsChecked == true;
 
         public ControlWindow(OverlayWindow ovIn, PhoneServer serverIn, Settings settings)
         {
             ov = ovIn;
             server = serverIn;
+            firstRunDone = settings.FirstRunDone;
             Title = "Steady";
             Width = 420; Height = 820;
             MinWidth = 360; MinHeight = 520;
@@ -563,6 +668,7 @@ namespace SteadyOverlay
             WindowStyle = WindowStyle.None;                 // custom dark caption bar instead of the OS one
             WindowStartupLocation = WindowStartupLocation.Manual;
             Left = 28; Top = 28;
+            ApplySavedGeometry(settings);                   // restore remembered position + size (clamped on-screen)
             Topmost = false;                                // not always-on-top — other windows can sit above the panel
             Background = Brush("BgBrush");
             Foreground = Brush("TextBrush");
@@ -605,24 +711,28 @@ namespace SteadyOverlay
             // ---- MOTION card ----
             var motion = new StackPanel();
             motion.Children.Add(Styled(new TextBlock { Text = "MOTION" }, "SectionHeader"));
-            motion.Children.Add(Styled(new TextBlock { Text = "Strength" }, "FieldLabel"));
+            motion.Children.Add(FieldHead("Strength", out var strengthVal));
             slider = Styled(new Slider
             {
                 Minimum = 0.3, Maximum = 6, Value = ov.Sens,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 12)
             }, "SteadySlider");
-            slider.ValueChanged += (s, e) => ov.Sens = e.NewValue;
+            slider.ToolTip = "How far the dots drift for a given motion. Higher = stronger cue.";
+            slider.ValueChanged += (s, e) => { ov.Sens = e.NewValue; strengthVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            strengthVal.Text = ov.Sens.ToString("0.0") + "×";
             motion.Children.Add(slider);
 
-            motion.Children.Add(Styled(new TextBlock { Text = "Dot size" }, "FieldLabel"));
+            motion.Children.Add(FieldHead("Dot size", out var sizeVal));
             sizeSlider = Styled(new Slider
             {
                 Minimum = 0.4, Maximum = 3.0, Value = ov.DotScale,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 0)
             }, "SteadySlider");
-            sizeSlider.ValueChanged += (s, e) => ov.DotScale = e.NewValue;
+            sizeSlider.ToolTip = "Diameter of the drifting dots.";
+            sizeSlider.ValueChanged += (s, e) => { ov.DotScale = e.NewValue; sizeVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            sizeVal.Text = ov.DotScale.ToString("0.0") + "×";
             motion.Children.Add(sizeSlider);
             root.Children.Add(CardOf(motion));
 
@@ -630,25 +740,36 @@ namespace SteadyOverlay
             var adjust = new StackPanel();
             adjust.Children.Add(Styled(new TextBlock { Text = "ADJUST" }, "SectionHeader"));
             pause = Toggle("Pause");
+            pause.ToolTip = "Freeze the dots (Ctrl+Alt+P).";
             pause.Checked += (s, e) => ov.Paused = true;
             pause.Unchecked += (s, e) => ov.Paused = false;
             adjust.Children.Add(pause);
             adjust.Children.Add(Divider());
+            autoPauseTog = Toggle("Auto-hide dots when stopped");
+            autoPauseTog.ToolTip = "Fade the dots away when the vehicle is parked, bring them back on motion.";
+            autoPauseTog.IsChecked = ov.AutoPause;
+            autoPauseTog.Checked += (s, e) => { ov.AutoPause = true; QueueSave(); };
+            autoPauseTog.Unchecked += (s, e) => { ov.AutoPause = false; QueueSave(); };
+            adjust.Children.Add(autoPauseTog);
+            adjust.Children.Add(Divider());
             flipV = Toggle("Flip vertical  ↕");
-            flipV.Checked += (s, e) => ov.InvertY = -1;
-            flipV.Unchecked += (s, e) => ov.InvertY = 1;
+            flipV.ToolTip = "Reverse up/down dot drift (Ctrl+Alt+V).";
+            flipV.Checked += (s, e) => { ov.InvertY = -1; QueueSave(); };
+            flipV.Unchecked += (s, e) => { ov.InvertY = 1; QueueSave(); };
             flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
             adjust.Children.Add(flipV);
             adjust.Children.Add(Divider());
             flipH = Toggle("Flip horizontal  ↔");
-            flipH.Checked += (s, e) => ov.InvertX = -1;
-            flipH.Unchecked += (s, e) => ov.InvertX = 1;
+            flipH.ToolTip = "Reverse left/right dot drift (Ctrl+Alt+H).";
+            flipH.Checked += (s, e) => { ov.InvertX = -1; QueueSave(); };
+            flipH.Unchecked += (s, e) => { ov.InvertX = 1; QueueSave(); };
             flipH.IsChecked = ov.InvertX == -1;
             adjust.Children.Add(flipH);
             adjust.Children.Add(Divider());
             swap = Toggle("Swap ↕↔");
-            swap.Checked += (s, e) => ov.SwapAxes = true;
-            swap.Unchecked += (s, e) => ov.SwapAxes = false;
+            swap.ToolTip = "Exchange the vertical and horizontal axes if the dots move the wrong way.";
+            swap.Checked += (s, e) => { ov.SwapAxes = true; QueueSave(); };
+            swap.Unchecked += (s, e) => { ov.SwapAxes = false; QueueSave(); };
             swap.IsChecked = ov.SwapAxes;            // reflect persisted setting
             adjust.Children.Add(swap);
             adjust.Children.Add(Styled(new TextBlock
@@ -664,9 +785,11 @@ namespace SteadyOverlay
             row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var recenter = Styled(new Button { Content = "Recenter" }, "SteadyButtonPrimary");
+            recenter.ToolTip = "Reset the dots to centre — use after settling into your seat (Ctrl+Alt+R).";
             recenter.Click += (s, e) => ov.Recenter();
             Grid.SetColumn(recenter, 0);
             var quit = Styled(new Button { Content = "Quit" }, "SteadyButton");
+            quit.ToolTip = "Exit Steady completely.";
             quit.Click += (s, e) => QuitApp();
             Grid.SetColumn(quit, 2);
             row2.Children.Add(recenter);
@@ -676,12 +799,47 @@ namespace SteadyOverlay
             // ---- PHONE SENSOR card ----
             var phone = new StackPanel();
             phone.Children.Add(Styled(new TextBlock { Text = "PHONE SENSOR" }, "SectionHeader"));
-            phoneState = Styled(new TextBlock { Text = "Starting server…" }, "BodyText");
+            phoneState = Styled(new TextBlock { Text = "Starting server…", Margin = new Thickness(0, 0, 0, 8) }, "BodyText");
             phone.Children.Add(phoneState);
-            phoneBt = Styled(new TextBlock { Margin = new Thickness(0, 8, 0, 8) }, "BodyText");   // primary path — shown first
-            phone.Children.Add(phoneBt);
-            phoneUrl = Styled(new TextBox { Margin = new Thickness(0, 0, 0, 10) }, "SteadyReadout");
-            phone.Children.Add(phoneUrl);
+
+            // Phone mode — ignore the laptop's own sensor and use the phone as the only source.
+            phoneOnlyTog = Toggle("Phone mode (use phone only)");
+            phoneOnlyTog.ToolTip = "Ignore this laptop's built-in sensor and drive the dots from your phone only.";
+            phoneOnlyTog.IsChecked = ov.PhoneOnly;
+            phoneOnlyTog.Margin = new Thickness(0, 0, 0, 4);
+            phoneOnlyTog.Checked += (s, e) =>
+            {
+                ov.SetPhoneOnly(true);
+                phoneDetailOpen = true; phoneExpUserSet = true; SetPhoneExpander();
+                QueueSave(); UpdatePhone();
+            };
+            phoneOnlyTog.Unchecked += (s, e) => { ov.SetPhoneOnly(false); QueueSave(); UpdatePhone(); };
+            phone.Children.Add(phoneOnlyTog);
+
+            // The setup detail is tall and optional, so it collapses behind an expander
+            // when the laptop's own sensor is already driving the dots.
+            phoneDetail = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+            phoneExpander = Styled(new Button { HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(11, 6, 11, 6) }, "SteadyButton");
+            phoneExpander.ToolTip = "Show or hide the phone pairing details.";
+            phoneDetailOpen = true;                         // re-evaluated by UpdatePhone once the sensor source settles
+            phoneExpander.Click += (s, e) => { phoneDetailOpen = !phoneDetailOpen; phoneExpUserSet = true; SetPhoneExpander(); };
+            phone.Children.Add(phoneExpander);
+            phone.Children.Add(phoneDetail);
+
+            // Bluetooth path (no network needed) — labelled row + a "Recommended" pill
+            var btRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            btRow.Children.Add(SubLabel("Bluetooth"));
+            btRow.Children.Add(Pill("Recommended"));
+            phoneDetail.Children.Add(btRow);
+            phoneBt = Styled(new TextBlock { Margin = new Thickness(0, 0, 0, 12) }, "BodyText");
+            phoneDetail.Children.Add(phoneBt);
+
+            phoneDetail.Children.Add(Divider());
+
+            // Wi-Fi path — labelled row, copyable address, QR
+            phoneDetail.Children.Add(SubLabel("Wi-Fi"));
+            phoneUrl = Styled(new TextBox { Margin = new Thickness(0, 4, 0, 10) }, "SteadyReadout");
+            phoneDetail.Children.Add(phoneUrl);
             var qrFrame = new Border
             {
                 Background = Brushes.White, CornerRadius = new CornerRadius(10),
@@ -695,12 +853,12 @@ namespace SteadyOverlay
             };
             RenderOptions.SetBitmapScalingMode(qrImage, BitmapScalingMode.NearestNeighbor);
             qrFrame.Child = qrImage;
-            phone.Children.Add(qrFrame);
-            phone.Children.Add(Styled(new TextBlock
+            phoneDetail.Children.Add(qrFrame);
+            phoneDetail.Children.Add(Styled(new TextBlock
             {
-                Text = "Bluetooth needs no network — just pair once. The QR opens the Steady Phone app with the " +
-                       "WiFi address pre-filled (no browser warning). Install the app once, then pick Bluetooth or WiFi in it."
+                Text = "Scan the QR to open the Steady Phone app with the address pre-filled, then pick Bluetooth or Wi-Fi in it. Install the app once."
             }, "FaintText"));
+            SetPhoneExpander();
             root.Children.Add(CardOf(phone));
 
             // ---- DEBUG card ----
@@ -729,14 +887,43 @@ namespace SteadyOverlay
             // ---- APPEARANCE & STARTUP card ----
             var prefs = new StackPanel();
             prefs.Children.Add(Styled(new TextBlock { Text = "APPEARANCE & STARTUP" }, "SectionHeader"));
-            darkDots = Toggle("Dark dots");
-            darkDots.IsChecked = ov.DarkDots;
-            darkDots.Checked += (s, e) => ov.SetDarkDots(true);
-            darkDots.Unchecked += (s, e) => ov.SetDarkDots(false);
-            prefs.Children.Add(darkDots);
+            prefs.Children.Add(FieldHead("Dot colour", out var dotColourVal));
+            string[] dotNames = { "Light", "Mixed", "Dark" };
+            var dotStyleSlider = Styled(new Slider
+            {
+                Minimum = 0, Maximum = 2, Value = ov.DotStyle,
+                TickFrequency = 1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 2)
+            }, "SteadySlider");
+            dotStyleSlider.ToolTip = "Light reads on dark windows, Dark reads on light ones, Mixed works on either.";
+            dotStyleSlider.ValueChanged += (s, e) =>
+            {
+                int v = (int)Math.Round(e.NewValue);
+                ov.SetDotStyle(v);
+                dotColourVal.Text = dotNames[Math.Clamp(v, 0, 2)];
+                QueueSave();
+            };
+            dotColourVal.Text = dotNames[Math.Clamp(ov.DotStyle, 0, 2)];
+            prefs.Children.Add(dotStyleSlider);
+            var dotLabels = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            void DotLab(string t, int col, HorizontalAlignment ha)
+            {
+                var tb = Styled(new TextBlock { Text = t, HorizontalAlignment = ha }, "FaintText");
+                Grid.SetColumn(tb, col);
+                dotLabels.Children.Add(tb);
+            }
+            DotLab("Light", 0, HorizontalAlignment.Left);
+            DotLab("Mixed", 1, HorizontalAlignment.Center);
+            DotLab("Dark", 2, HorizontalAlignment.Right);
+            prefs.Children.Add(dotLabels);
             prefs.Children.Add(Divider());
             startMin = Toggle("Start minimized to tray");
             startMin.IsChecked = settings.StartMinimized;
+            startMin.Checked += (s, e) => QueueSave();
+            startMin.Unchecked += (s, e) => QueueSave();
             prefs.Children.Add(startMin);
             prefs.Children.Add(Divider());
             autoStart = Toggle("Start with Windows");
@@ -746,15 +933,24 @@ namespace SteadyOverlay
             prefs.Children.Add(autoStart);
             root.Children.Add(CardOf(prefs));
 
+            // The full shortcut list lives in the About flyout now; build it here so
+            // RegisterHotKeys can still append any "key in use" warnings to it.
             hotkeyHint = Styled(new TextBlock
             {
                 Text = "Hotkeys (work anywhere)\n" +
-                       "Ctrl+Alt+P  pause/resume      Ctrl+Alt+R  recenter\n" +
-                       "Ctrl+Alt+[ / ]  strength − / +      Ctrl+Alt+V / H  flip ↕ / ↔\n" +
-                       "Minimize → taskbar · Close [X] → tray · Quit to exit",
-                Margin = new Thickness(2, 2, 2, 0)
+                       "Ctrl+Alt+P  pause / resume\n" +
+                       "Ctrl+Alt+R  recenter\n" +
+                       "Ctrl+Alt+[ / ]  strength − / +\n" +
+                       "Ctrl+Alt+V / H  flip ↕ / ↔\n" +
+                       "Minimize → taskbar · Close [X] → tray",
+                Margin = new Thickness(0, 0, 0, 0)
             }, "FaintText");
-            root.Children.Add(hotkeyHint);
+
+            var aboutLink = Styled(new Button { Content = "Keyboard shortcuts & about", HorizontalAlignment = HorizontalAlignment.Center }, "SteadyButton");
+            aboutLink.ToolTip = "How Steady works, shortcuts, and version.";
+            aboutLink.Click += (s, e) => ShowHelp(true);
+            aboutLink.Margin = new Thickness(0, 2, 0, 0);
+            root.Children.Add(aboutLink);
 
             var scroller = new ScrollViewer
             {
@@ -770,8 +966,17 @@ namespace SteadyOverlay
             Grid.SetRow(scroller, 1);
             shell.Children.Add(caption);
             shell.Children.Add(scroller);
+
+            helpOverlay = BuildHelpOverlay();               // modal About/help, hidden until opened
+            Panel.SetZIndex(helpOverlay, 50);
+            Grid.SetRow(helpOverlay, 0);
+            Grid.SetRowSpan(helpOverlay, 2);
+            shell.Children.Add(helpOverlay);
+
             Content = shell;
             contentShell = shell;
+
+            if (!firstRunDone) ShowWelcome();               // first-launch onboarding card
 
             // refresh URL/QR/connection state (IPs can appear after launch via USB tether)
             var phoneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -781,17 +986,40 @@ namespace SteadyOverlay
             UpdatePhone();
 
             SetupTray();
+
+            // Persist settings on change (debounced) — not only on a clean Quit, so closing
+            // to the tray or a later shutdown can't lose the latest tweaks.
+            saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+            saveTimer.Tick += (s, e) => { saveTimer.Stop(); Settings.Save(ov, this); };
+            LocationChanged += (s, e) => QueueSave();
+            SizeChanged += (s, e) => QueueSave();
+
             SourceInitialized += (s, e) => RegisterHotKeys();
             // minimize (—) goes to the taskbar like a normal window; [X] hides to the tray
             Loaded += (s, e) => contentShell?.BeginAnimation(OpacityProperty,
                 new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
                 { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
-            Closing += (s, e) => { if (!reallyQuit) { e.Cancel = true; Hide(); } };           // [X] -> tray
+            Closing += (s, e) => { if (!reallyQuit) { e.Cancel = true; Settings.Save(ov, this); Hide(); } };   // [X] -> tray (flush settings first)
             Dispatcher.ShutdownStarted += (s, e) => Teardown();                               // belt-and-suspenders
             if (Application.Current != null)
                 Application.Current.SessionEnding += (s, e) => reallyQuit = true;             // let Windows log off / shut down
             AppDomain.CurrentDomain.ProcessExit += (s, e) => Teardown();                      // clear tray even on abnormal exit
             Closed += OnClosed;
+        }
+
+        // restore remembered window position+size, clamped so it can't open off-screen
+        void ApplySavedGeometry(Settings s)
+        {
+            if (s?.WinWidth is not double w || s.WinHeight is not double h) return;
+            w = Math.Max(MinWidth, w); h = Math.Max(MinHeight, h);
+            var va = SystemParameters.VirtualScreenWidth > 0
+                ? new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+                           SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight)
+                : new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+            double l = s.WinLeft ?? Left, t = s.WinTop ?? Top;
+            l = Math.Min(Math.Max(l, va.Left), va.Right - Math.Min(w, va.Width));   // keep the title bar reachable
+            t = Math.Min(Math.Max(t, va.Top), va.Bottom - Math.Min(h, va.Height));
+            Width = w; Height = h; Left = l; Top = t;
         }
 
         // --- styling helpers (resolve Theme.xaml resources; no-op if it failed to load) ---
@@ -817,10 +1045,46 @@ namespace SteadyOverlay
             var c = new CheckBox { Content = label };
             return Styled(c, "SteadyToggle");
         }
+        // a "Label …………… value" header row above a slider; value updates live
+        static Grid FieldHead(string label, out TextBlock val)
+        {
+            var g = new Grid { Margin = new Thickness(0, 0, 0, 3) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var l = Styled(new TextBlock { Text = label }, "FieldLabel");
+            l.Margin = new Thickness(0);
+            Grid.SetColumn(l, 0);
+            val = new TextBlock
+            {
+                FontSize = 12, FontWeight = FontWeights.SemiBold,
+                Foreground = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Bottom
+            };
+            Grid.SetColumn(val, 1);
+            g.Children.Add(l);
+            g.Children.Add(val);
+            return g;
+        }
         static Border Divider() => new Border
         {
             Height = 1, Background = Brush("BorderBrush2"),
             Margin = new Thickness(0, 2, 0, 2), Opacity = 0.6
+        };
+        static TextBlock SubLabel(string t) => new TextBlock
+        {
+            Text = t, FontSize = 13, FontWeight = FontWeights.SemiBold,
+            Foreground = Brush("TextBrush"), VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 6, 8, 0)
+        };
+        static Border Pill(string t) => new Border
+        {
+            Background = Brush("CardHiBrush"),
+            BorderBrush = Brush("AccentBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(7, 1, 7, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 0),
+            Child = new TextBlock { Text = t, FontSize = 10, Foreground = Brush("AccentBrush") }
         };
         static Border MakeChip(out System.Windows.Shapes.Ellipse dot, out TextBlock text)
         {
@@ -838,6 +1102,141 @@ namespace SteadyOverlay
                 Padding = new Thickness(10, 4, 11, 4),
                 Child = sp
             };
+        }
+        // debounce a settings write; many of these fire rapidly (slider drag, window move)
+        void QueueSave()
+        {
+            if (saveTimer == null) return;
+            saveTimer.Stop();
+            saveTimer.Start();
+        }
+        void SetPhoneExpander()
+        {
+            if (phoneExpander == null) return;
+            phoneDetail.Visibility = phoneDetailOpen ? Visibility.Visible : Visibility.Collapsed;
+            phoneExpander.Content = phoneDetailOpen ? "Hide phone setup  ▴" : "Set up phone  ▾";
+        }
+
+        static string AppVersion()
+        {
+            try { var v = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version; return v == null ? "1.0" : $"{v.Major}.{v.Minor}"; }
+            catch { return "1.0"; }
+        }
+
+        // dark scrim wrapping a centred card; clicking the scrim (not the card) closes it
+        static Border ModalScrim(UIElement card, Action onClose)
+        {
+            var scrim = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0xCC, 0x06, 0x09, 0x0F)),
+                Visibility = Visibility.Collapsed
+            };
+            scrim.MouseDown += (s, e) => onClose?.Invoke();
+            if (card is FrameworkElement fe) fe.MouseDown += (s, e) => e.Handled = true;   // swallow clicks on the card
+            scrim.Child = card;
+            return scrim;
+        }
+
+        Border BuildHelpOverlay()
+        {
+            var col = new StackPanel();
+            var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
+            titleRow.Children.Add(new System.Windows.Shapes.Ellipse { Width = 12, Height = 12, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            titleRow.Children.Add(Styled(new TextBlock { Text = "Steady", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            col.Children.Add(titleRow);
+            col.Children.Add(Styled(new TextBlock { Text = "Version " + AppVersion() + " · early access", Margin = new Thickness(0, 0, 0, 12) }, "FaintText"));
+
+            col.Children.Add(Styled(new TextBlock
+            {
+                Text = "Steady eases motion sickness by drifting faint cue dots along your screen edges, matching the motion your inner ear feels — so your eyes and your balance agree.",
+                Margin = new Thickness(0, 0, 0, 12)
+            }, "BodyText"));
+
+            col.Children.Add(Styled(new TextBlock { Text = "GETTING STARTED" }, "SectionHeader"));
+            col.Children.Add(Styled(new TextBlock
+            {
+                Text = "1.  Settle into your seat, then press Recenter.\n" +
+                       "2.  Tune Strength until the dots feel right — not distracting.\n" +
+                       "3.  For stronger or remote motion, pair a phone in Phone Sensor.",
+                Margin = new Thickness(0, 0, 0, 14)
+            }, "BodyText"));
+
+            col.Children.Add(Styled(new TextBlock { Text = "KEYBOARD SHORTCUTS" }, "SectionHeader"));
+            col.Children.Add(hotkeyHint);                   // built earlier; conflict warnings append here
+
+            var done = Styled(new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 16, 0, 0) }, "SteadyButtonPrimary");
+            done.Click += (s, e) => ShowHelp(false);
+            col.Children.Add(done);
+
+            var card = new Border
+            {
+                Background = Brush("CardBrush"),
+                BorderBrush = Brush("BorderBrush2"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(18),
+                MaxWidth = 360,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(20),
+                Child = new ScrollViewer { Content = col, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 640 }
+            };
+            return ModalScrim(card, () => ShowHelp(false));
+        }
+
+        void ShowHelp(bool on)
+        {
+            if (helpOverlay == null) return;
+            helpOverlay.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            if (on)
+                helpOverlay.BeginAnimation(OpacityProperty,
+                    new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        }
+
+        // first-launch onboarding — a one-time welcome card over the panel
+        void ShowWelcome()
+        {
+            var col = new StackPanel();
+            col.Children.Add(Styled(new TextBlock { Text = "Welcome to Steady", Margin = new Thickness(0, 0, 0, 8) }, "Wordmark"));
+            col.Children.Add(Styled(new TextBlock
+            {
+                Text = "Steady drifts faint dots along your screen edges to match the motion your body feels, easing car and motion sickness while you work.",
+                Margin = new Thickness(0, 0, 0, 10)
+            }, "BodyText"));
+            col.Children.Add(Styled(new TextBlock
+            {
+                Text = "It's already reading motion. Press Recenter once you're settled, then tune Strength to taste. A phone can stream stronger motion — see Phone Sensor.",
+                Margin = new Thickness(0, 0, 0, 16)
+            }, "BodyText"));
+
+            Border scrim = null;
+            var go = Styled(new Button { Content = "Get started", HorizontalAlignment = HorizontalAlignment.Stretch }, "SteadyButtonPrimary");
+            go.Click += (s, e) =>
+            {
+                firstRunDone = true;
+                QueueSave();
+                if (scrim != null) contentShell.Children.Remove(scrim);
+            };
+            col.Children.Add(go);
+
+            var card = new Border
+            {
+                Background = Brush("CardBrush"),
+                BorderBrush = Brush("BorderBrush2"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(18),
+                MaxWidth = 340,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(20),
+                Child = col
+            };
+            scrim = ModalScrim(card, null);                 // no click-out; must press Get started
+            scrim.Visibility = Visibility.Visible;
+            Grid.SetRow(scrim, 0);
+            Grid.SetRowSpan(scrim, 2);
+            contentShell.Children.Add(scrim);
         }
         void SetChip(string label, Brush color)
         {
@@ -861,6 +1260,10 @@ namespace SteadyOverlay
             bar.Children.Add(left);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal };
+            var help = CaptionBtn(0xE897, "CaptionButton");     // (?) help glyph
+            help.ToolTip = "About & keyboard shortcuts";
+            help.Click += (s, e) => ShowHelp(true);
+            btns.Children.Add(help);
             var min = CaptionBtn(0xE921, "CaptionButton");
             min.Click += (s, e) => WindowState = WindowState.Minimized;
             var close = CaptionBtn(0xE8BB, "CaptionClose");
@@ -946,30 +1349,48 @@ namespace SteadyOverlay
             }
             if (server.Connected || ov.PhoneActive)          // WS client OR fresh UDP frames
             {
-                phoneState.Text = "Phone connected ✓ — streaming.";
+                phoneState.Text = "Phone connected ✓ — streaming its motion.";
                 phoneState.Foreground = Brush("AccentBrush");
-                SetChip("Connected", Brush("AccentBrush"));
+                SetChip("Phone sensor", Brush("AccentBrush"));
+            }
+            else if (ov.PhoneOnly)                           // Phone mode, no phone connected yet
+            {
+                phoneState.Text = "Phone mode — waiting for your phone. Connect it below.";
+                phoneState.Foreground = Brush("MutedBrush");
+                SetChip("Phone mode", Brush("MutedBrush"));
+            }
+            else if (ov.HasLaptopSensor)                     // laptop's own accelerometer is feeding motion
+            {
+                phoneState.Text = "Using this laptop's built-in sensor. Connect a phone below for stronger or remote motion.";
+                phoneState.Foreground = Brush("MutedBrush");
+                SetChip("Laptop sensor", Brush("AccentBrush"));
+                if (!phoneAutoCollapsed && !phoneExpUserSet)   // sensor settled after launch — fold the optional setup away once
+                {
+                    phoneAutoCollapsed = true;
+                    phoneDetailOpen = false;
+                    SetPhoneExpander();
+                }
             }
             else if (server.Urls.Count > 0)
             {
-                phoneState.Text = "Waiting for phone…";
+                phoneState.Text = "No sensor on this PC — connect a phone to stream motion.";
                 phoneState.Foreground = Brush("MutedBrush");
                 SetChip("Waiting", Brush("MutedBrush"));
             }
             else
             {
-                phoneState.Text = "Waiting for phone… (use Bluetooth below, or a hotspot/tether for WiFi)";
+                phoneState.Text = "No sensor on this PC — connect a phone (Bluetooth below, or a hotspot/tether for WiFi).";
                 phoneState.Foreground = Brush("MutedBrush");
                 SetChip("Waiting", Brush("MutedBrush"));
             }
 
             phoneBt.Text = server.BtListening
-                ? $"① Bluetooth (recommended, no network) — pair this PC (\"{server.BtName}\") in the phone's Bluetooth settings, then in the app pick Bluetooth ▸ this PC."
-                : "① Bluetooth — " + (string.IsNullOrEmpty(server.BtError) ? "starting…" : server.BtError);
+                ? $"Pair this PC (\"{server.BtName}\") in your phone's Bluetooth settings, then pick Bluetooth in the app. No network needed."
+                : "Starting… " + (string.IsNullOrEmpty(server.BtError) ? "" : server.BtError);
             string appLink = string.IsNullOrEmpty(server.PrimaryIp) ? ""
                 : $"steady://connect?host={server.PrimaryIp}&port={server.Port}";
-            phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryIp) ? ""
-                : $"② WiFi — same hotspot, same WiFi, or USB tether.\n   Scan the QR to open the app pre-filled, or enter  {server.PrimaryIp} : {server.Port}\n   Browser fallback: {server.PrimaryUrl}  (warns 'not secure' → Advanced ▸ proceed)";
+            phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryIp) ? "Waiting for a network address…"
+                : $"{server.PrimaryIp} : {server.Port}   ·   same Wi-Fi, hotspot, or USB tether\nBrowser fallback: {server.PrimaryUrl}  (shows a 'not secure' warning → Advanced ▸ proceed)";
             if (appLink != shownUrl)               // re-render the QR only when the target changes
             {
                 shownUrl = appLink;
@@ -1097,7 +1518,7 @@ namespace SteadyOverlay
     // ---------------------------------------------------------------
     public class PhoneServer
     {
-        readonly Action<double, double, double, double, double, double, bool> onFrame;
+        readonly Action<double, double, double, double, double, double, double, bool> onFrame;
         public event Action StateChanged;
         public bool Connected { get; private set; }
         public int Port { get; private set; }
@@ -1122,7 +1543,7 @@ namespace SteadyOverlay
         static string Dir => System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
 
-        public PhoneServer(Action<double, double, double, double, double, double, bool> onFrame)
+        public PhoneServer(Action<double, double, double, double, double, double, double, bool> onFrame)
         {
             this.onFrame = onFrame;
         }
@@ -1471,7 +1892,7 @@ namespace SteadyOverlay
         void HandleText(byte[] payload) => Parse(Encoding.UTF8.GetString(payload), onFrame);
 
         // Shared JSON-frame parser for every transport (WS, UDP, Bluetooth).
-        static void Parse(string json, Action<double, double, double, double, double, double, bool> onFrame)
+        static void Parse(string json, Action<double, double, double, double, double, double, double, bool> onFrame)
         {
             try
             {
@@ -1479,7 +1900,8 @@ namespace SteadyOverlay
                 var r = doc.RootElement;
                 double G(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
                 bool gValid = r.TryGetProperty("g", out var gv) && gv.ValueKind == JsonValueKind.Number && gv.GetDouble() != 0;
-                onFrame(G("ax"), G("ay"), G("az"), G("gx"), G("gy"), G("gz"), gValid);
+                double spd = r.TryGetProperty("spd", out var sv) && sv.ValueKind == JsonValueKind.Number ? sv.GetDouble() : -1;
+                onFrame(G("ax"), G("ay"), G("az"), G("gx"), G("gy"), G("gz"), spd, gValid);
             }
             catch { /* ignore malformed frame */ }
         }
@@ -1592,7 +2014,7 @@ namespace SteadyOverlay
 </div>
 <script>
 (function(){
-  var ws=null, wsReady=false, lastSend=0, frames=0, lastHz=0, wake=null;
+  var ws=null, wsReady=false, lastSend=0, frames=0, lastHz=0, wake=null, curSpd=-1;
   var stateEl=document.getElementById('state');
   var outEl=document.getElementById('out');
   var hzEl=document.getElementById('hz');
@@ -1616,7 +2038,7 @@ namespace SteadyOverlay
     var now=(window.performance&&performance.now)?performance.now():Date.now();
     if(wsReady && now-lastSend>=14){
       lastSend=now;
-      try{ ws.send(JSON.stringify({ax:ax,ay:ay,az:az,gx:gx,gy:gy,gz:gz,g:gValid,grav:useIG?1:0})); }catch(e){}
+      try{ ws.send(JSON.stringify({ax:ax,ay:ay,az:az,gx:gx,gy:gy,gz:gz,spd:curSpd,g:gValid,grav:useIG?1:0})); }catch(e){}
     }
     if(now-lastHz>=400){
       var hz=Math.round(frames*1000/(now-lastHz)); frames=0; lastHz=now;
@@ -1629,6 +2051,17 @@ namespace SteadyOverlay
   }
   async function reqWake(){
     try{ if('wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); } }catch(e){}
+  }
+  function startGps(){
+    // GPS ground speed lets the laptop hide the dots at low speed (no sickness when crawling/parked).
+    // Optional: if permission is denied or unavailable, curSpd stays -1 and the PC falls back to motion energy.
+    try{
+      if(!('geolocation' in navigator)) return;
+      navigator.geolocation.watchPosition(
+        function(p){ curSpd=(p.coords && p.coords.speed!=null && p.coords.speed>=0)?p.coords.speed:-1; },
+        function(e){ curSpd=-1; },
+        { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
+    }catch(e){}
   }
   async function start(){
     var err=document.getElementById('err');
@@ -1643,6 +2076,7 @@ namespace SteadyOverlay
     document.getElementById('setup').style.display='none';
     document.getElementById('live').style.display='block';
     reqWake();
+    startGps();
     connect();
   }
   document.getElementById('startbtn').addEventListener('click', start);
