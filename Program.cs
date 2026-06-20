@@ -40,6 +40,9 @@ namespace SteadyOverlay
             var settings = Settings.Load();
             var overlay = new OverlayWindow();
             overlay.ApplySettings(settings);
+            // Launched by the Windows Run key (auto-start) -> don't flash the dots at a desk boot;
+            // they reveal on real motion or a manual Recenter. Manual launches show them right away.
+            if (Environment.CommandLine.Contains("--autostart")) overlay.SuppressDotsOnStartup();
             var server = new PhoneServer(overlay.FeedPhone);   // phone sensor bridge
             var panel = new ControlWindow(overlay, server, settings);
             overlay.Show();
@@ -132,7 +135,7 @@ namespace SteadyOverlay
             try
             {
                 using var k = Registry.CurrentUser.OpenSubKey(RunKey, true) ?? Registry.CurrentUser.CreateSubKey(RunKey);
-                if (on) { var p = ExePath(); if (!string.IsNullOrEmpty(p)) k.SetValue(Name, "\"" + p + "\""); }
+                if (on) { var p = ExePath(); if (!string.IsNullOrEmpty(p)) k.SetValue(Name, "\"" + p + "\" --autostart"); }
                 else k.DeleteValue(Name, false);
             }
             catch { /* best effort — registry may be locked down */ }
@@ -173,6 +176,7 @@ namespace SteadyOverlay
         int stillFrames;                         // consecutive frames below the "still" threshold
         bool autoStill;                          // currently judged stopped
         double dotsOpacity = 1.0;                // eased overlay opacity (fades on auto-pause)
+        bool startupSuppress;                    // hide dots until first motion (set on Windows auto-start)
 
         // --- status surfaced to the control panel ---
         public string StatusText = "Starting…";
@@ -527,7 +531,11 @@ namespace SteadyOverlay
                 else if (activityEma < 0.22) { if (++stillFrames > 45) autoStill = true; }   // low motion -> hide (~0.75s)
                 else stillFrames = 0;                           // mid-band holds current state
             }
-            bool freeze = Paused || (AutoPause && autoStill);
+            // Launched by Windows auto-start: keep the dots invisible until the car
+            // actually moves (or a manual Recenter), so a desk/boot doesn't flash them.
+            if (startupSuppress && !autoStill) startupSuppress = false;   // first real motion reveals them
+            bool hide = startupSuppress || (AutoPause && autoStill);
+            bool freeze = Paused || hide;
 
             const double decay = 0.94;              // how long flow persists
             const double gain = 0.105;              // accel -> velocity
@@ -546,8 +554,8 @@ namespace SteadyOverlay
             offX += velX;                           // keep streaming while motion lasts
             offY += velY;
 
-            // ease overlay opacity: dots fade away when auto-paused, fade back in on motion
-            double tgtOpacity = (AutoPause && autoStill) ? 0.0 : 1.0;
+            // ease overlay opacity: dots fade away when auto-paused / startup-suppressed, fade back on motion
+            double tgtOpacity = hide ? 0.0 : 1.0;
             dotsOpacity += (tgtOpacity - dotsOpacity) * 0.06;
             if (Math.Abs(dotsOpacity - Opacity) > 0.001) Opacity = dotsOpacity;
 
@@ -592,7 +600,18 @@ namespace SteadyOverlay
             tiltHold = 0;
             lat = fore = yaw = 0;
             velX = velY = offX = offY = 0;
+            startupSuppress = false;                // an explicit recenter means "show me the dots now"
             autoStill = false; stillFrames = 0; activityEma = 0.3; jitterEma = 0.05;   // wake the dots
+        }
+
+        // Windows auto-start launch: start with the dots invisible (autoStill=true so the gate
+        // only reveals them on real motion), avoiding a flash of dots at a desk boot.
+        public void SuppressDotsOnStartup()
+        {
+            startupSuppress = true;
+            autoStill = true;
+            dotsOpacity = 0.0;
+            Opacity = 0.0;
         }
 
         // Re-arm gravity + axis-map learning when the motion source switches
