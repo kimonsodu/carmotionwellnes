@@ -300,15 +300,15 @@ namespace SteadyOverlay
             // for many seconds. A tilt shows up as gyro rotation *perpendicular* to
             // gravity; a car turn (yaw about vertical) is parallel to gravity, and
             // gas/brake has no rotation — so neither trips this.
-            double tiltRate = 0;
+            double tiltRate = 0, yawRate = 0;        // yawRate = spin about gravity = true car yaw (mount-independent)
             if (hasGyro && gReady)
             {
                 double gm = Math.Sqrt(gx * gx + gy * gy + gz * gz);
                 if (gm > 1e-3)
                 {
                     double ux = gx / gm, uy = gy / gm, uz = gz / gm;
-                    double wpar = rawGyroX * ux + rawGyroY * uy + rawYaw * uz;       // spin about gravity (yaw)
-                    double px = rawGyroX - wpar * ux, py = rawGyroY - wpar * uy, pz = rawYaw - wpar * uz;
+                    yawRate = rawGyroX * ux + rawGyroY * uy + rawYaw * uz;           // spin about gravity (yaw)
+                    double px = rawGyroX - yawRate * ux, py = rawGyroY - yawRate * uy, pz = rawYaw - yawRate * uz;
                     tiltRate = Math.Sqrt(px * px + py * py + pz * pz);               // gravity-direction rotation
                 }
             }
@@ -346,7 +346,7 @@ namespace SteadyOverlay
 
             lat += (nlat - lat) * 0.35;
             fore += (nfore - fore) * 0.35;
-            yaw += (rawYaw - yaw) * 0.3;
+            yaw += (yawRate - yaw) * 0.3;            // yaw about gravity, not raw device-Z
         }
 
         void Frame()
@@ -376,7 +376,9 @@ namespace SteadyOverlay
             if (hasReading) Ingest(rawX, rawY, rawZ);
 
             const double dz = 0.10;                 // dead-zone kills jitter when still
-            double rawAX = lat + yaw * 0.05;
+            // Turns are driven mainly by yaw rate about gravity (works in ANY mount orientation —
+            // flat, upright, on-side) plus the felt lateral g. yaw is deg/s; lat is m/s².
+            double rawAX = lat + yaw * 0.15;
             double aX = (Math.Abs(rawAX) < dz ? 0 : rawAX) * InvertX;   // turns  -> horizontal
             double aY = (Math.Abs(fore) < dz ? 0 : fore) * InvertY;     // gas/brake -> vertical
 

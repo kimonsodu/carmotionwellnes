@@ -94,7 +94,10 @@ with the phone as the source; use them to match the phone's mounting orientation
 
 Two independent channels:
 
-- **Left ↔ right** dots flow with **lateral** acceleration — i.e. **turns**.
+- **Left ↔ right** dots flow with **turns** — driven mainly by **yaw rate about gravity** (the
+  gyro), plus the felt lateral g. Because it keys off rotation-about-down, it works in **any
+  mount orientation** (phone flat, upright, or on its side) and you can test it at a desk by
+  yawing the device — no real sideways g needed.
 - **Up ↕ down** dots flow with **fore/aft** acceleration: **accelerating** sends them
   **down**, **braking** sends them **up** (flip ↕ if reversed, or **Swap ↕↔** if gas/brake
   ends up on the *sideways* channel instead — see below).

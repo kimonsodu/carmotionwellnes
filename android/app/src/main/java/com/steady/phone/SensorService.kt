@@ -66,8 +66,21 @@ class SensorService : Service(), SensorEventListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val host = intent?.getStringExtra("host")?.trim() ?: ""
-        port = intent?.getIntExtra("port", 8443) ?: 8443
+        // On a START_STICKY restart the system passes a null intent, so recover the
+        // last target from SharedPreferences instead of defaulting host to "" — which
+        // InetAddress.getByName() would silently resolve to localhost (laptop gets nothing).
+        val prefs = getSharedPreferences("steady", Context.MODE_PRIVATE)
+        var host = (intent?.getStringExtra("host")?.trim()).orEmpty()
+        if (host.isEmpty()) host = (prefs.getString("host", "") ?: "").trim()
+        port = intent?.getIntExtra("port", 0)?.takeIf { it > 0 }
+            ?: (prefs.getString("port", "8443")?.toIntOrNull() ?: 8443)
+
+        if (host.isEmpty()) {                       // nothing to stream to — fail loudly, never to localhost
+            statusLine = "no PC address — open the app and enter it"
+            running = false
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         startForegroundNotification()
 
@@ -77,7 +90,10 @@ class SensorService : Service(), SensorEventListener {
         // resolve + open socket on the worker thread (off the main thread)
         handler!!.post {
             try {
-                addr = InetAddress.getByName(host)
+                val a = InetAddress.getByName(host)
+                if (a.isLoopbackAddress || a.isAnyLocalAddress)
+                    throw java.net.UnknownHostException("\"$host\" is localhost, not the laptop")
+                addr = a
                 socket = DatagramSocket()
                 statusLine = "streaming to $host:$port"
             } catch (e: Exception) {
