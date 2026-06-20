@@ -752,7 +752,7 @@ namespace SteadyOverlay
                 phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
                 return;
             }
-            if (server.Connected)
+            if (server.Connected || ov.PhoneActive)          // WS client OR fresh UDP frames
             {
                 phoneState.Text = "Phone connected ✓ — streaming.";
                 phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6));
@@ -768,7 +768,8 @@ namespace SteadyOverlay
                 phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
             }
 
-            phoneUrl.Text = server.Urls.Count > 1 ? string.Join("\n", server.Urls) : server.PrimaryUrl;
+            phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryUrl) ? ""
+                : $"App (UDP):  {server.PrimaryIp} : {server.Port}\nBrowser:  {server.PrimaryUrl}";
             if (server.PrimaryUrl != shownUrl)               // only re-render the QR when the URL changes
             {
                 shownUrl = server.PrimaryUrl;
@@ -901,10 +902,12 @@ namespace SteadyOverlay
         public bool Connected { get; private set; }
         public int Port { get; private set; }
         public string PrimaryUrl { get; private set; } = "";
+        public string PrimaryIp { get; private set; } = "";
         public List<string> Urls { get; private set; } = new List<string>();
         public string Error { get; private set; }
 
         TcpListener listener;
+        UdpClient udp;                      // plain UDP ingest for the native app (no TLS needed off-browser)
         volatile X509Certificate2 cert;     // swapped at runtime when link IPs change; read per-connection
         string certIps = "";
         int clients;
@@ -928,6 +931,12 @@ namespace SteadyOverlay
                 RefreshUrls();
                 TryOpenFirewall();
                 new Thread(AcceptLoop) { IsBackground = true, Name = "PhoneServer" }.Start();
+                try
+                {
+                    udp = new UdpClient(new IPEndPoint(IPAddress.Any, Port));  // same port, UDP namespace
+                    new Thread(UdpLoop) { IsBackground = true, Name = "PhoneUDP" }.Start();
+                }
+                catch { /* UDP optional; the browser WS path still works */ }
             }
             catch (Exception ex)
             {
@@ -988,7 +997,12 @@ namespace SteadyOverlay
             foreach (var ip in ips) urls.Add($"https://{ip}:{Port}/");
             bool changed = urls.Count != Urls.Count;
             if (!changed) for (int i = 0; i < urls.Count; i++) if (urls[i] != Urls[i]) { changed = true; break; }
-            if (changed) { Urls = urls; PrimaryUrl = urls.Count > 0 ? urls[0] : ""; }
+            if (changed)
+            {
+                Urls = urls;
+                PrimaryUrl = urls.Count > 0 ? urls[0] : "";
+                PrimaryIp = ips.Count > 0 ? ips[0].ToString() : "";
+            }
             return changed;
         }
 
@@ -1056,18 +1070,23 @@ namespace SteadyOverlay
         void TryOpenFirewall()
         {
             // best-effort; silently no-ops without admin (Windows then prompts on first connect)
+            FirewallRule("TCP");   // browser WS
+            FirewallRule("UDP");   // native app
+        }
+
+        void FirewallRule(string proto)
+        {
             try
             {
-                var psi = new System.Diagnostics.ProcessStartInfo
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "netsh",
-                    Arguments = $"advfirewall firewall add rule name=\"Steady Phone {Port}\" " +
-                                $"dir=in action=allow protocol=TCP localport={Port}",
+                    Arguments = $"advfirewall firewall add rule name=\"Steady Phone {proto} {Port}\" " +
+                                $"dir=in action=allow protocol={proto} localport={Port}",
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-                };
-                System.Diagnostics.Process.Start(psi);
+                });
             }
             catch { }
         }
@@ -1080,6 +1099,19 @@ namespace SteadyOverlay
                 try { client = listener.AcceptTcpClient(); }
                 catch { break; }       // listener stopped
                 ThreadPool.QueueUserWorkItem(_ => Handle(client));
+            }
+        }
+
+        // Native-app ingest: one JSON datagram per sample, same shape as the WS frame.
+        void UdpLoop()
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            while (true)
+            {
+                byte[] data;
+                try { data = udp.Receive(ref ep); }
+                catch { break; }       // socket closed
+                if (data != null && data.Length > 0) HandleText(data);
             }
         }
 
