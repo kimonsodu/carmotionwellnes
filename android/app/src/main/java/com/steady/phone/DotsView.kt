@@ -7,10 +7,8 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.Choreographer
 import android.view.View
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.floor
-import kotlin.math.sin
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
@@ -46,11 +44,24 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var autoStill = false
     private var dotsAlpha = 1f          // eased 0..1, multiplies dot opacity
 
-    private val dots = 28
     private val d = resources.displayMetrics.density
     private val light = Color.argb(217, 0xEC, 0xE7, 0xD7)   // warm off-white (matches PC light dot)
     private val dark = Color.argb(217, 0x12, 0x16, 0x1E)    // near-bg dark (matches PC dark dot)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    // --- scattered two-strip dot field (mirrors the Windows overlay) ---
+    // Each dot has its own colour pick so Mixed mode is stable as it wraps. offX flows the dots
+    // HORIZONTALLY within their side strip (wraps -> continuous turn sweep); offY flows them
+    // VERTICALLY (wraps -> continuous accel/brake). near/far layers give parallax depth.
+    private class Dot(
+        val side: Int, val lx: Float, val y: Float, val r: Float,
+        val alpha: Float, val depth: Float, val pick: Int
+    )
+    private val field = ArrayList<Dot>()
+    private var bandW = 0f
+    private var builtW = 0
+    private var builtH = 0
+    private val rnd = java.util.Random()
 
     private var running = false
     private val choreographer = Choreographer.getInstance()
@@ -120,11 +131,27 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         offY += velY
     }
 
-    // deterministic per-dot colour for Mixed mode (stable across frames so fades look right)
-    private fun dotColorFor(i: Int): Int = when (colorMode) {
+    private fun colorOf(pick: Int): Int = when (colorMode) {
         0 -> light
         2 -> dark
-        else -> if (i and 1 == 0) light else dark   // Mixed: alternate so some dots always contrast
+        else -> if (pick == 0) light else dark   // Mixed: each dot keeps its own pick (stable on wrap)
+    }
+
+    private fun wrap(v: Float, m: Float): Float { var x = v % m; if (x < 0f) x += m; return x }
+
+    private fun buildField(w: Float, h: Float) {
+        field.clear()
+        bandW = (w * 0.22f).coerceIn(56f * d, 130f * d)         // width of each side strip
+        val colArea = bandW * h * 2f
+        val nNear = (colArea / (7000f * d * d)).toInt().coerceIn(8, 200)
+        val nFar = (colArea / (5200f * d * d)).toInt().coerceIn(8, 260)
+        fun make(n: Int, rMin: Float, rJit: Float, alpha: Float, depth: Float) {
+            for (i in 0 until n) field.add(Dot(
+                i and 1, rnd.nextFloat() * bandW, rnd.nextFloat() * h,
+                (rMin + rnd.nextFloat() * rJit) * d, alpha, depth, if (rnd.nextBoolean()) 0 else 1))
+        }
+        make(nFar, 0.9f, 0.8f, 0.18f, 0.55f)                   // faint far layer
+        make(nNear, 1.9f, 1.3f, 0.9f, 1.0f)                    // bold near layer
     }
 
     override fun onDraw(c: Canvas) {
@@ -134,31 +161,23 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         if (w <= 0f || h <= 0f) return
         val a = dotsAlpha.coerceIn(0f, 1f)
         if (a <= 0.01f) return
-        val span = h + 120f * d
-        val spacing = span / dots
-        // Two flows, both continuous (each wraps through the top/bottom "portal"):
-        //  - longitudinal (accel/brake) scrolls BOTH columns together,
-        //  - turn scrolls the columns OPPOSITE ways (a counter-sweep) so a sustained turn keeps
-        //    animating instead of holding a static sideways lean.
-        val lonScroll = offY * 0.6f * d / spacing
-        val turnScroll = offX * 0.6f * d / spacing
-        drawColumn(c, 18f * d, lonScroll - turnScroll, spacing, a)
-        drawColumn(c, w - 18f * d, lonScroll + turnScroll, spacing, a)
-    }
-
-    // One edge column at x=cx, scrolled vertically by scrollUnits (dot-units). Colour by the stable
-    // per-dot identity (i - k) so a dot keeps its colour as it wraps; size fades fat-in-the-middle.
-    private fun drawColumn(c: Canvas, cx: Float, scrollUnits: Float, spacing: Float, a: Float) {
-        val k = floor(scrollUnits).toInt()
-        val driftY = (scrollUnits - k) * spacing
-        for (i in 0 until dots) {
-            val y = i * spacing + driftY - 60f * d
-            val t = i.toFloat() / dots
-            val r = (3.2f + 2.6f * sin(t * PI).toFloat()) * d * sizeScale
-            val col = dotColorFor(i - k)
+        if (field.isEmpty() || builtW != width || builtH != height) {
+            buildField(w, h); builtW = width; builtH = height
+        }
+        val kFlow = 0.6f * d
+        val sX = offX * kFlow      // turn -> horizontal flow within the strip
+        val sY = offY * kFlow      // accel/brake -> vertical flow
+        for (dot in field) {
+            val local = wrap(dot.lx + sX * dot.depth, bandW)
+            val x = if (dot.side == 0) local else (w - bandW + local)
+            val y = wrap(dot.y + sY * dot.depth, h)
+            val t = min(1f, min(y, h - y) / (h * 0.14f))
+            val fade = 0.35f + 0.65f * t                       // dim toward the top/bottom corners
+            val col = colorOf(dot.pick)
             paint.color = col
-            paint.alpha = (Color.alpha(col) * a).toInt()
-            c.drawCircle(cx, y, r, paint)
+            paint.alpha = (Color.alpha(col) * a * dot.alpha * fade).toInt().coerceIn(0, 255)
+            val rr = dot.r * sizeScale
+            c.drawCircle(x, y, rr, paint)
         }
     }
 }
