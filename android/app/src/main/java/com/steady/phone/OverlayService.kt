@@ -106,14 +106,19 @@ class OverlayService : Service(), SensorEventListener,
         thread = HandlerThread("steady-overlay-sensor").also { it.start() }
         sensorHandler = Handler(thread!!.looper)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        sm!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
-            sm!!.registerListener(this, it, 16000, sensorHandler)   // ~62 Hz, mirrors SensorService
-        }
+        // Prefer LINEAR_ACCELERATION (gravity removed by sensor fusion) so TILTING the phone up/down
+        // doesn't swing ~9.8 m/s^2 onto an axis and jump the dots — only real translational motion
+        // (the car accelerating/braking/turning) drives them. Fall back to raw accel if unavailable.
+        val s = sm!!.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+            ?: sm!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        s?.let { sm!!.registerListener(this, it, 16000, sensorHandler) }   // ~62 Hz
     }
 
     // Sensor callbacks arrive on the HandlerThread; feed() just writes volatiles (single writer).
     override fun onSensorChanged(e: SensorEvent) {
-        if (e.sensor.type == Sensor.TYPE_ACCELEROMETER) view?.feed(e.values[0], e.values[1])
+        val t = e.sensor.type
+        if (t == Sensor.TYPE_LINEAR_ACCELERATION || t == Sensor.TYPE_ACCELEROMETER)
+            view?.feed(e.values[0], e.values[1])
     }
 
     override fun onAccuracyChanged(s: Sensor?, a: Int) {}
