@@ -136,24 +136,29 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         if (a <= 0.01f) return
         val span = h + 120f * d
         val spacing = span / dots
-        // Vertical scroll in dot-units. k = how many dots have wrapped through the top/bottom
-        // "portal"; colouring by (i - k) gives each physical dot a STABLE identity, so a dot keeps
-        // its colour as it wraps (Mixed mode no longer flips colour at the seam).
-        val scrollDots = offY * 0.6f * d / spacing
-        val k = floor(scrollDots).toInt()
-        val driftY = (scrollDots - k) * spacing            // fractional part * spacing, in [0, spacing)
-        val driftX = (offX * 0.5f * d).coerceIn(-22f * d, 22f * d)
-        val lx = 18f * d + driftX
-        val rx = w - 18f * d + driftX
+        // Two flows, both continuous (each wraps through the top/bottom "portal"):
+        //  - longitudinal (accel/brake) scrolls BOTH columns together,
+        //  - turn scrolls the columns OPPOSITE ways (a counter-sweep) so a sustained turn keeps
+        //    animating instead of holding a static sideways lean.
+        val lonScroll = offY * 0.6f * d / spacing
+        val turnScroll = offX * 0.6f * d / spacing
+        drawColumn(c, 18f * d, lonScroll - turnScroll, spacing, a)
+        drawColumn(c, w - 18f * d, lonScroll + turnScroll, spacing, a)
+    }
+
+    // One edge column at x=cx, scrolled vertically by scrollUnits (dot-units). Colour by the stable
+    // per-dot identity (i - k) so a dot keeps its colour as it wraps; size fades fat-in-the-middle.
+    private fun drawColumn(c: Canvas, cx: Float, scrollUnits: Float, spacing: Float, a: Float) {
+        val k = floor(scrollUnits).toInt()
+        val driftY = (scrollUnits - k) * spacing
         for (i in 0 until dots) {
             val y = i * spacing + driftY - 60f * d
             val t = i.toFloat() / dots
-            val r = (3.2f + 2.6f * sin(t * PI).toFloat()) * d * sizeScale   // size by screen slot (fade fat-in-middle)
-            val col = dotColorFor(i - k)                                    // colour by stable per-dot identity
+            val r = (3.2f + 2.6f * sin(t * PI).toFloat()) * d * sizeScale
+            val col = dotColorFor(i - k)
             paint.color = col
             paint.alpha = (Color.alpha(col) * a).toInt()
-            c.drawCircle(lx, y, r, paint)
-            c.drawCircle(rx, y, r, paint)
+            c.drawCircle(cx, y, r, paint)
         }
     }
 }
