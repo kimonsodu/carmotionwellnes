@@ -4,21 +4,25 @@ A transparent, always-on-top, **click-through** overlay that floats drifting dot
 left and right edges of your screen to reduce car sickness while you work. It reads your
 laptop's **built-in accelerometer** through Windows' native sensor API on a 2-in-1 like the
 HP Spectre x360 — or, on laptops without a sensor, it streams motion from **your phone**
-(see *Use your phone as the sensor* below).
+over a local link with no internet or cell signal (see *Use your phone as the sensor* below).
 
 Clicks pass straight through the dots to whatever app is underneath — keep working normally.
 
 ## Run it
 
-You need the **.NET 8 SDK** (free): https://dotnet.microsoft.com/download
+**Easiest — the installer.** Download `Steady-Setup.exe` and run it. It's a per-user install
+(no admin prompt) and **bundles the .NET runtime**, so nothing else to install. Steady lands in
+Start and in Settings → Apps. First run shows a SmartScreen *"Windows protected your PC"* notice
+because the app is new/unsigned — click **More info → Run anyway**.
 
-Then, from this folder:
+**From source.** You need the **.NET 8 SDK** (free): https://dotnet.microsoft.com/download —
+then from this folder:
 
 ```
 dotnet run
 ```
 
-Two windows appear: the full-screen cue overlay, and a small **Steady** control panel.
+Either way, two windows appear: the full-screen cue overlay, and a small **Steady** control panel.
 
 > Tip: this is fastest to build, run, and tweak inside **Claude Code** — it runs on your
 > machine, so if the first build complains about anything it can fix and re-run immediately.
@@ -37,6 +41,8 @@ Two windows appear: the full-screen cue overlay, and a small **Steady** control 
 - **Pause** — freeze the dots.
 - **Recenter** — re-zero everything after you've settled into your seat. Hold still for a
   moment after pressing it so it re-learns which way is down.
+- **Start with Windows** — launch Steady automatically at sign-in (per-user, no admin). Starts
+  with the dots suppressed until there's motion.
 - **Quit** — really exit (both windows). The window's **[X]** only hides to the tray.
 
 Strength, dot size, both flips and swap are **remembered between runs** (saved to
@@ -64,31 +70,48 @@ tray menu) to actually exit.
 ## Use your phone as the sensor
 
 Most laptops have no motion sensor. So Steady can take its motion from a phone mounted in the
-car instead — no app to install, and **no internet / no cell signal needed**. The link between
-phone and laptop is local radio (or a cable); it works in the woods, in a dead zone, with
-mobile data off.
+car instead — **no internet / no cell signal needed**. The link between phone and laptop is
+local radio (or a cable); it works in the woods, in a dead zone, with mobile data off.
 
-The panel has a **PHONE SENSOR** section with a link and a **QR code**.
+The panel's **PHONE SENSOR** section shows both connection paths plus a **QR code**. There are
+two ways to stream:
 
-1. **Put the phone and laptop on the same local link** (either one):
-   - **WiFi hotspot** — turn on the phone's hotspot and join it from the laptop (or vice-versa).
-     The hotspot is just a local radio between the two devices; it needs no internet to share.
-   - **USB tether** — plug the phone into the laptop and enable USB tethering. Works with mobile
-     data **off**, it's rock-solid, and the phone charges at the same time. (Most reliable.)
-2. **Scan the QR code** with the phone's camera (or type the link into its browser).
-3. The browser will warn about the connection being **not secure** — that's the self-signed
-   certificate. Choose **Advanced → proceed anyway**. (Browsers only allow motion sensors over
-   HTTPS, so the overlay serves one; it's local-only, nothing leaves your devices.)
-4. Tap **Start**. On iPhone, allow the motion-sensor prompt. The page shows live numbers when
-   it's streaming, and the panel flips to **Phone connected ✓**.
+### The Steady Phone app (recommended)
 
-Keep the phone screen on (it stays awake on its own while the page is open) and leave it mounted
-and charging. Everything below — Strength, Flip, **Swap ↕↔**, Recenter — works exactly the same
-with the phone as the source; use them to match the phone's mounting orientation to the car.
+A small **Android app** (`android/` folder). Unlike the browser page it **keeps streaming with
+the screen off** — it runs as a foreground service — so the phone can sleep, mounted and
+charging, while it feeds motion to the laptop. Install it once, then pick a transport in the app:
 
-> The phone overrides the laptop sensor while it's streaming and the laptop takes back over if
-> the phone drops. The QR/link updates automatically when you bring a hotspot or tether up after
-> launch, so you can start Steady first and connect the phone afterward.
+- **Bluetooth** — needs **no network at all**, the simplest setup. Pair the laptop and phone
+  once in **Android Settings → Bluetooth** (accept on the PC too). The panel shows
+  `Pair this PC ("<name>") …`. Then in the app: **Bluetooth → choose the paired PC → Start**.
+- **WiFi** — when both devices share a link: same **WiFi router**, a **phone/laptop hotspot**, or
+  **USB tether** (works with mobile data off and charges the phone). The panel shows
+  `<ip> : 8443` and a QR. **Scan the QR** with the phone camera — it opens the app with the
+  address pre-filled — or type the address in the app. Then **Start**.
+
+To get the app: open the `android/` folder in **Android Studio** and **Run ▶** to your phone
+(or **Build → Build APK** and sideload). See `android/README.md` for the one-time build steps.
+
+### Browser fallback (no install)
+
+No app needed — works on any phone, but the **screen must stay on**. Put both devices on the same
+local link (WiFi hotspot or USB tether), then **scan the QR / open the link** shown in the panel.
+The browser warns the connection is **not secure** — that's the self-signed certificate; choose
+**Advanced → proceed anyway**. (Browsers only allow motion sensors over HTTPS, so the overlay
+serves one; it's local-only, nothing leaves your devices.) Tap **Start**; on iPhone, allow the
+motion-sensor prompt.
+
+### Either way
+
+The page/app shows live numbers when it's streaming and the panel flips to **Phone connected ✓**.
+Everything else — Strength, Flip, **Swap ↕↔**, Recenter — works exactly the same with the phone
+as the source; use them to match the phone's mounting orientation to the car.
+
+> The phone overrides the laptop sensor while it's streaming, and the laptop takes back over if
+> the phone drops. The QR/address updates automatically when a hotspot or tether comes up after
+> launch, so you can start Steady first and connect the phone afterward. All three transports
+> (Bluetooth, WiFi app, browser) send the same JSON frames — the laptop treats them identically.
 
 ## How the motion works
 
@@ -124,9 +147,15 @@ slide the laptop **forward/back** on the table — the dots should move **up/dow
 - If the dots don't move at all, the panel will say no sensor was found — either confirm
   Windows shows the accelerometer under Settings → Privacy → Motion, or use the phone instead
   (see *Use your phone as the sensor*).
-- Phone won't connect? Windows Firewall may be blocking the port — allow **SteadyOverlay**
-  through the firewall when prompted (or once via an elevated run). Confirm both devices are on
-  the same hotspot/tether, and that you tapped *proceed anyway* past the certificate warning.
+- Phone won't connect over **WiFi/browser**? Windows Firewall may be blocking the port — allow
+  **SteadyOverlay** through the firewall when prompted (or once via an elevated run). Confirm both
+  devices are on the same hotspot/tether, and (browser only) that you tapped *proceed anyway* past
+  the certificate warning.
+- **Bluetooth** won't connect? Make sure the PC has a Bluetooth radio and the two are **paired**
+  in Windows/Android settings first; then pick the PC in the app.
+- App stops streaming with the **screen off**? Some phones aggressively kill background apps —
+  exclude **Steady Phone** from battery optimization (Settings → Apps → Steady Phone → Battery →
+  Unrestricted).
 - Tuning constants live near the top of `OverlayWindow` in `Program.cs`
   (`Sens`, `decay`, `gain`, `vmax`, dead-zone `dz`) and match the web prototype, so any feel
   you dialed in there transfers directly.

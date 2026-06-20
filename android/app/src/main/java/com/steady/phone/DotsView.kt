@@ -105,7 +105,9 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val driveLat = lat * enable
         val driveLon = lon * enable
         velX = velX * 0.92f - driveLat * gain
-        velY = velY * 0.92f - driveLon * gain
+        // +driveLon: accelerate (lon>0) -> offY up -> y grows -> dots DOWN; brake -> UP. Matches the
+        // laptop/Apple convention. onDraw maps increasing offY to increasing y (downward).
+        velY = velY * 0.92f + driveLon * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
