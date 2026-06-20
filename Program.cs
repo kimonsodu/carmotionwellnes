@@ -10,6 +10,18 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Interop;
 using Windows.Devices.Sensors;
+using System.Linq;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Net.NetworkInformation;
+using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading;
+using System.Windows.Media.Imaging;
+using QRCoder;
 
 namespace SteadyOverlay
 {
@@ -22,9 +34,11 @@ namespace SteadyOverlay
             var settings = Settings.Load();
             var overlay = new OverlayWindow();
             overlay.ApplySettings(settings);
-            var panel = new ControlWindow(overlay);
+            var server = new PhoneServer(overlay.FeedPhone);   // phone sensor bridge
+            var panel = new ControlWindow(overlay, server);
             overlay.Show();
             panel.Show();
+            server.Start();
             app.Exit += (s, e) => Settings.Save(overlay);   // remember strength + flips on exit
             app.Run();
         }
@@ -104,15 +118,33 @@ namespace SteadyOverlay
         double gx, gy, gz; bool gReady;          // gravity estimate
         int oriMode = -1;                        // locked axis mapping (-1 = not yet detected)
         int settleFrames;                        // frames since (re)arm — gates the lock
+        int tiltHold;                            // frames left of fast gravity-tracking after a tilt
         double bandW;
         double appliedScale = -1;                // last dot size pushed to the ellipses
 
         // raw sensor values written by sensor threads, read on the UI tick
         volatile bool hasReading;
-        double rawX, rawY, rawZ, rawYaw;
+        double rawX, rawY, rawZ;
+        double rawGyroX, rawGyroY, rawYaw;       // gyro deg/s (rawYaw = Z)
+        bool hasGyro;
 
         Accelerometer acc;
         Gyrometer gyro;
+
+        // --- phone bridge: while a phone frame is fresh it overrides the laptop sensor ---
+        long lastPhoneTick = long.MinValue / 2;
+        bool lastPhoneActive;
+        public bool PhoneActive => Environment.TickCount64 - lastPhoneTick < 1500;
+
+        // Called from the phone-server thread; mirrors exactly what the laptop
+        // sensor handlers write (accel in m/s² incl. gravity, gyro in deg/s) so the
+        // rest of the pipeline — gravity removal, axis auto-map, Flip/Swap — is unchanged.
+        public void FeedPhone(double ax, double ay, double az, double gx, double gy, double gz, bool gyroValid)
+        {
+            rawX = ax; rawY = ay; rawZ = az; hasReading = true;
+            if (gyroValid) { rawGyroX = gx; rawGyroY = gy; rawYaw = gz; hasGyro = true; }
+            lastPhoneTick = Environment.TickCount64;
+        }
 
         class Dot { public int side; public double lx, y, r, baseAlpha; public Ellipse el; }
 
@@ -199,7 +231,9 @@ namespace SteadyOverlay
             }
             Make(nFar, far, 0.9, 0.8, 0.18);
             Make(nNear, near, 1.9, 1.3, 0.9);
-            appliedScale = -1;                  // force the next frame to (re)apply dot size
+            ApplyDotScale();                    // size + place dots now so the first paint is correct
+            Render(near, offX, offY, W, H);
+            Render(far, offX * 0.55, offY * 0.55, W, H);
         }
 
         void ApplyDotScale()
@@ -217,6 +251,7 @@ namespace SteadyOverlay
                 acc.ReportInterval = Math.Max(acc.MinimumReportInterval, 16u);
                 acc.ReadingChanged += (s, e) =>
                 {
+                    if (PhoneActive) return;                 // phone is driving — ignore the laptop sensor
                     var r = e.Reading;                      // AccelerationX/Y/Z in g, includes gravity
                     rawX = r.AccelerationX * 9.81;
                     rawY = r.AccelerationY * 9.81;
@@ -227,14 +262,22 @@ namespace SteadyOverlay
             }
             else
             {
-                SetStatus("No accelerometer found on this PC. The dots won’t move — pair a phone, or check this is the 2-in-1.");
+                SetStatus("No sensor on this PC — use your phone: open the link in the Phone section below.");
             }
 
             gyro = Gyrometer.GetDefault();
             if (gyro != null)
             {
+                hasGyro = true;
                 gyro.ReportInterval = Math.Max(gyro.MinimumReportInterval, 16u);
-                gyro.ReadingChanged += (s, e) => { rawYaw = e.Reading.AngularVelocityZ; };  // deg/s
+                gyro.ReadingChanged += (s, e) =>
+                {
+                    if (PhoneActive) return;            // phone is driving — ignore the laptop gyro
+                    var g = e.Reading;                  // deg/s
+                    rawGyroX = g.AngularVelocityX;
+                    rawGyroY = g.AngularVelocityY;
+                    rawYaw = g.AngularVelocityZ;
+                };
             }
         }
 
@@ -250,13 +293,34 @@ namespace SteadyOverlay
             // fraction of a second and the dots stop streaming mid-turn (you only
             // see the onset). So freeze the gravity estimate while real motion is
             // present and only re-learn it when the device is near rest.
-            double af, mag;
-            if (!gReady) { af = 1.0; mag = 0; }         // snap to the first reading
+            // Is the device being *tilted* (e.g. opening/closing the lid)? That rotates
+            // the gravity direction in the sensor frame, which the freeze below would
+            // otherwise mistake for a sustained linear acceleration and keep streaming
+            // for many seconds. A tilt shows up as gyro rotation *perpendicular* to
+            // gravity; a car turn (yaw about vertical) is parallel to gravity, and
+            // gas/brake has no rotation — so neither trips this.
+            double tiltRate = 0;
+            if (hasGyro && gReady)
+            {
+                double gm = Math.Sqrt(gx * gx + gy * gy + gz * gz);
+                if (gm > 1e-3)
+                {
+                    double ux = gx / gm, uy = gy / gm, uz = gz / gm;
+                    double wpar = rawGyroX * ux + rawGyroY * uy + rawYaw * uz;       // spin about gravity (yaw)
+                    double px = rawGyroX - wpar * ux, py = rawGyroY - wpar * uy, pz = rawYaw - wpar * uz;
+                    tiltRate = Math.Sqrt(px * px + py * py + pz * pz);               // gravity-direction rotation
+                }
+            }
+
+            double af, mag = 0;
+            if (!gReady) { af = 1.0; }                  // snap to the first reading
             else
             {
                 double rx0 = rx - gx, ry0 = ry - gy, rz0 = rz - gz;
                 mag = Math.Sqrt(rx0 * rx0 + ry0 * ry0 + rz0 * rz0);  // linear accel right now
-                af = mag > 0.5 ? 0.0020 : 0.04;          // ~8s τ mid-maneuver, ~0.5s τ at rest
+                if (tiltRate > 6.0) tiltHold = 30;       // hold fast-tracking ~0.5s past the last tilt sample
+                if (tiltHold > 0) { af = 0.20; tiltHold--; }  // lid tilting -> track gravity fast, no phantom drift
+                else af = mag > 0.5 ? 0.0020 : 0.04;     // ~8s τ mid-maneuver, ~0.5s τ at rest
             }
             gx += (rx - gx) * af; gy += (ry - gy) * af; gz += (rz - gz) * af; gReady = true;
             double dx = rx - gx, dy = ry - gy, dz = rz - gz;
@@ -269,7 +333,7 @@ namespace SteadyOverlay
             double agx = Math.Abs(gx), agy = Math.Abs(gy), agz = Math.Abs(gz);
             int candidate = (agz >= agx && agz >= agy) ? 0 : (agy >= agx ? 1 : 2);
             settleFrames++;
-            if (oriMode < 0 && mag < 0.5 && settleFrames > 30) oriMode = candidate;
+            if (oriMode < 0 && mag < 0.5 && tiltHold == 0 && settleFrames > 30) oriMode = candidate;
             int mode = oriMode < 0 ? candidate : oriMode;
 
             double nlat, nfore;
@@ -287,6 +351,27 @@ namespace SteadyOverlay
         void Frame()
         {
             double W = Width, H = Height;
+
+            bool pa = PhoneActive;
+            if (pa != lastPhoneActive)
+            {
+                lastPhoneActive = pa;
+                ArmForNewSource();                       // re-learn gravity + axis map for the new source
+                if (!pa)                                 // phone stream lost
+                {
+                    // No live laptop accel? Stop ingesting the phone's last (frozen) frame —
+                    // otherwise its stale yaw keeps streaming the dots sideways forever.
+                    if (acc == null) hasReading = false;
+                    // No real laptop gyro? Drop the stale phone gyro so it can't drive yaw/tilt.
+                    if (gyro == null) { hasGyro = false; rawGyroX = rawGyroY = rawYaw = 0; }
+                }
+                SetStatus(pa
+                    ? "Phone connected — streaming its motion."
+                    : (acc != null
+                        ? "Phone disconnected — using this laptop’s sensor."
+                        : "Phone disconnected — reopen the page on your phone to stream motion."));
+            }
+
             if (hasReading) Ingest(rawX, rawY, rawZ);
 
             const double dz = 0.10;                 // dead-zone kills jitter when still
@@ -340,8 +425,23 @@ namespace SteadyOverlay
             gReady = false;
             oriMode = -1;                           // re-detect mounting orientation
             settleFrames = 0;                       // re-arm the warm-up gate before re-locking
+            tiltHold = 0;
             lat = fore = yaw = 0;
             velX = velY = offX = offY = 0;
+        }
+
+        // Re-arm gravity + axis-map learning when the motion source switches
+        // (laptop<->phone): their gravity vectors/orientations differ, so a carried-over
+        // estimate would read as seconds of phantom linear accel and lock the wrong axes.
+        // Unlike Recenter it leaves offX/offY, so the dots don't visibly snap.
+        void ArmForNewSource()
+        {
+            gReady = false;
+            oriMode = -1;
+            settleFrames = 0;
+            tiltHold = 0;
+            lat = fore = yaw = 0;
+            velX = velY = 0;
         }
     }
 
@@ -354,27 +454,33 @@ namespace SteadyOverlay
         // --- global hotkeys ---
         const int WM_HOTKEY = 0x0312;
         const uint MOD_ALT = 0x0001, MOD_CONTROL = 0x0002, MOD_NOREPEAT = 0x4000;
-        const uint VK_S = 0x53, VK_R = 0x52, VK_V = 0x56, VK_H = 0x48, VK_OEM4 = 0xDB, VK_OEM6 = 0xDD;
+        const uint VK_P = 0x50, VK_R = 0x52, VK_V = 0x56, VK_H = 0x48, VK_OEM4 = 0xDB, VK_OEM6 = 0xDD;
         const int HK_PAUSE = 1, HK_RECENTER = 2, HK_DOWN = 3, HK_UP = 4, HK_FLIPV = 5, HK_FLIPH = 6;
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr handle);
 
         readonly OverlayWindow ov;
+        readonly PhoneServer server;
         Slider slider, sizeSlider;
         CheckBox pause, flipV, flipH, swap;
         TextBlock hotkeyHint;
+        TextBlock phoneState;
+        TextBox phoneUrl;
+        System.Windows.Controls.Image qrImage;
+        string shownUrl;
         System.Windows.Forms.NotifyIcon notify;
         System.Windows.Forms.ContextMenuStrip trayMenu;
         System.Drawing.Icon trayIcon;
         HwndSource hwndSource;
         bool shuttingDown, teardownDone, reallyQuit;
 
-        public ControlWindow(OverlayWindow ovIn)
+        public ControlWindow(OverlayWindow ovIn, PhoneServer serverIn)
         {
             ov = ovIn;
+            server = serverIn;
             Title = "Steady";
-            Width = 300; Height = 446;
+            Width = 320; Height = 680;
             ResizeMode = ResizeMode.NoResize;
             WindowStartupLocation = WindowStartupLocation.Manual;
             Left = 28; Top = 28;
@@ -467,10 +573,59 @@ namespace SteadyOverlay
             row2.Children.Add(quit);
             root.Children.Add(row2);
 
+            // --- phone sensor pairing ---
+            root.Children.Add(new TextBlock
+            {
+                Text = "PHONE SENSOR",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6)),
+                Margin = new Thickness(0, 18, 0, 4)
+            });
+            phoneState = new TextBlock
+            {
+                Text = "Starting server…",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6))
+            };
+            root.Children.Add(phoneState);
+            phoneUrl = new TextBox
+            {
+                IsReadOnly = true,
+                Background = new SolidColorBrush(Color.FromRgb(0x18, 0x1F, 0x2B)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                FontSize = 12,
+                Padding = new Thickness(6, 4, 6, 4),
+                Margin = new Thickness(0, 6, 0, 8),
+                TextWrapping = TextWrapping.Wrap
+            };
+            root.Children.Add(phoneUrl);
+            qrImage = new System.Windows.Controls.Image
+            {
+                Width = 184,
+                Height = 184,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 8),
+                Stretch = Stretch.Fill,
+                SnapsToDevicePixels = true
+            };
+            RenderOptions.SetBitmapScalingMode(qrImage, BitmapScalingMode.NearestNeighbor);
+            root.Children.Add(qrImage);
+            root.Children.Add(new TextBlock
+            {
+                Text = "Put phone + PC on one WiFi hotspot, or USB-tether the phone (works with mobile data off). " +
+                       "Scan the code (or type the link), tap Start, accept the security warning. No internet needed.",
+                FontSize = 10,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x74, 0x86))
+            });
+
             hotkeyHint = new TextBlock
             {
                 Text = "Hotkeys (work anywhere):\n" +
-                       "Ctrl+Alt+S  pause/resume\n" +
+                       "Ctrl+Alt+P  pause/resume\n" +
                        "Ctrl+Alt+R  recenter\n" +
                        "Ctrl+Alt+[ / ]  strength − / +\n" +
                        "Ctrl+Alt+V / H  flip ↕ / ↔\n" +
@@ -481,13 +636,28 @@ namespace SteadyOverlay
             };
             root.Children.Add(hotkeyHint);
 
-            Content = root;
+            Content = new ScrollViewer
+            {
+                Content = root,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+
+            // refresh URL/QR/connection state (IPs can appear after launch via USB tether)
+            var phoneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            phoneTimer.Tick += (s, e) => UpdatePhone();
+            phoneTimer.Start();
+            if (server != null) server.StateChanged += () => Dispatcher.Invoke(UpdatePhone);
+            UpdatePhone();
 
             SetupTray();
             SourceInitialized += (s, e) => RegisterHotKeys();
             StateChanged += (s, e) => { if (WindowState == WindowState.Minimized) Hide(); };  // minimize -> tray
             Closing += (s, e) => { if (!reallyQuit) { e.Cancel = true; Hide(); } };           // [X] -> tray
             Dispatcher.ShutdownStarted += (s, e) => Teardown();                               // belt-and-suspenders
+            if (Application.Current != null)
+                Application.Current.SessionEnding += (s, e) => reallyQuit = true;             // let Windows log off / shut down
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => Teardown();                      // clear tray even on abnormal exit
             Closed += OnClosed;
         }
 
@@ -506,7 +676,7 @@ namespace SteadyOverlay
             uint cm = MOD_CONTROL | MOD_ALT;
             var fails = new List<string>();
             void Reg(int id, uint mod, uint vk, string name) { if (!RegisterHotKey(h, id, mod, vk)) fails.Add(name); }
-            Reg(HK_PAUSE, cm | MOD_NOREPEAT, VK_S, "S");
+            Reg(HK_PAUSE, cm | MOD_NOREPEAT, VK_P, "P");
             Reg(HK_RECENTER, cm | MOD_NOREPEAT, VK_R, "R");
             Reg(HK_DOWN, cm, VK_OEM4, "[");                     // repeatable: hold to ramp
             Reg(HK_UP, cm, VK_OEM6, "]");
@@ -537,6 +707,58 @@ namespace SteadyOverlay
         {
             double v = Math.Round((ov.Sens + d) * 10) / 10.0;   // snap to 0.1
             slider.Value = Math.Clamp(v, slider.Minimum, slider.Maximum);
+        }
+
+        // --- phone pairing panel refresh ---
+        void UpdatePhone()
+        {
+            if (server == null || phoneState == null) return;
+            server.RefreshUrls();
+            if (!string.IsNullOrEmpty(server.Error))
+            {
+                phoneState.Text = "Phone server error: " + server.Error;
+                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
+                return;
+            }
+            if (server.Connected)
+            {
+                phoneState.Text = "Phone connected ✓ — streaming.";
+                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6));
+            }
+            else if (server.Urls.Count > 0)
+            {
+                phoneState.Text = "Waiting for phone…";
+                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6));
+            }
+            else
+            {
+                phoneState.Text = "No network — turn on a WiFi hotspot or USB-tether the phone.";
+                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
+            }
+
+            phoneUrl.Text = server.Urls.Count > 1 ? string.Join("\n", server.Urls) : server.PrimaryUrl;
+            if (server.PrimaryUrl != shownUrl)               // only re-render the QR when the URL changes
+            {
+                shownUrl = server.PrimaryUrl;
+                qrImage.Source = LoadPng(string.IsNullOrEmpty(shownUrl) ? null : PhoneServer.QrPng(shownUrl));
+            }
+        }
+
+        static BitmapImage LoadPng(byte[] png)
+        {
+            if (png == null) return null;
+            try
+            {
+                var img = new BitmapImage();
+                using var ms = new MemoryStream(png);
+                img.BeginInit();
+                img.CacheOption = BitmapCacheOption.OnLoad;
+                img.StreamSource = ms;
+                img.EndInit();
+                img.Freeze();
+                return img;
+            }
+            catch { return null; }
         }
 
         // --- system tray ---
@@ -617,11 +839,491 @@ namespace SteadyOverlay
                 var h = new WindowInteropHelper(this).Handle;
                 for (int id = HK_PAUSE; id <= HK_FLIPH; id++) UnregisterHotKey(h, id);
                 hwndSource?.RemoveHook(WndProc);
+                if (notify != null) { notify.Visible = false; notify.Dispose(); notify = null; }
+                trayMenu?.Dispose();
+                trayIcon?.Dispose();
             }
             catch { }
-            if (notify != null) { notify.Visible = false; notify.Dispose(); notify = null; }
-            trayMenu?.Dispose();
-            trayIcon?.Dispose();
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Phone sensor bridge: a tiny self-signed HTTPS + WebSocket server.
+    //
+    // Why HTTPS at all on a LAN? Browsers block the motion-sensor APIs on
+    // insecure origins (no http://<lan-ip>), so a self-signed cert — which the
+    // user accepts once on the phone — is the price of a zero-install page.
+    //
+    // The phone opens the page over any *local* link (WiFi hotspot or USB
+    // tether — no internet/cell needed), streams DeviceMotion (accel in m/s²
+    // incl. gravity + gyro in deg/s) over a WebSocket, and we feed each frame
+    // into the same pipeline the laptop sensor uses.
+    //
+    // Self-contained: raw TcpListener + SslStream (no http.sys/netsh binding,
+    // so no admin needed) with a minimal HTTP + RFC 6455 WebSocket reader.
+    // ---------------------------------------------------------------
+    public class PhoneServer
+    {
+        readonly Action<double, double, double, double, double, double, bool> onFrame;
+        public event Action StateChanged;
+        public bool Connected { get; private set; }
+        public int Port { get; private set; }
+        public string PrimaryUrl { get; private set; } = "";
+        public List<string> Urls { get; private set; } = new List<string>();
+        public string Error { get; private set; }
+
+        TcpListener listener;
+        volatile X509Certificate2 cert;     // swapped at runtime when link IPs change; read per-connection
+        string certIps = "";
+        int clients;
+
+        static string Dir => System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
+
+        public PhoneServer(Action<double, double, double, double, double, double, bool> onFrame)
+        {
+            this.onFrame = onFrame;
+        }
+
+        public void Start()
+        {
+            try
+            {
+                var ips = LocalIPs();
+                cert = LoadOrCreateCert(ips);
+                certIps = IpsKey(ips);
+                Port = Bind();
+                RefreshUrls();
+                TryOpenFirewall();
+                new Thread(AcceptLoop) { IsBackground = true, Name = "PhoneServer" }.Start();
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+                StateChanged?.Invoke();
+            }
+        }
+
+        int Bind()
+        {
+            for (int p = 8443; p < 8443 + 20; p++)
+            {
+                try { listener = new TcpListener(IPAddress.Any, p); listener.Start(); return p; }
+                catch (SocketException) { /* in use — try next */ }
+            }
+            throw new Exception("no free TCP port in 8443–8462");
+        }
+
+        static List<IPAddress> LocalIPs()
+        {
+            var list = new List<IPAddress>();
+            try
+            {
+                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
+                    if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                    foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        var a = ua.Address;
+                        if (a.AddressFamily != AddressFamily.InterNetwork) continue;  // IPv4 only
+                        if (IPAddress.IsLoopback(a)) continue;
+                        if (!list.Contains(a)) list.Add(a);
+                    }
+                }
+            }
+            catch { }
+            list.Sort((x, y) => Rank(x).CompareTo(Rank(y)));   // hotspot/tether ranges first
+            return list;
+        }
+
+        // 192.168.* (typical hotspot / Android USB tether) is most likely the link
+        static int Rank(IPAddress a)
+        {
+            var b = a.GetAddressBytes();
+            if (b[0] == 192 && b[1] == 168) return 0;
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return 1;
+            if (b[0] == 10) return 2;
+            return 3;
+        }
+
+        public bool RefreshUrls()
+        {
+            if (Port == 0) return false;
+            var ips = LocalIPs();
+            EnsureCert(ips);                                 // keep cert SAN matching the live link IP(s)
+            var urls = new List<string>();
+            foreach (var ip in ips) urls.Add($"https://{ip}:{Port}/");
+            bool changed = urls.Count != Urls.Count;
+            if (!changed) for (int i = 0; i < urls.Count; i++) if (urls[i] != Urls[i]) { changed = true; break; }
+            if (changed) { Urls = urls; PrimaryUrl = urls.Count > 0 ? urls[0] : ""; }
+            return changed;
+        }
+
+        static string IpsKey(List<IPAddress> ips) => string.Join(",", ips.Select(i => i.ToString()));
+
+        // Rebuild (or reload from cache) the cert when the live IP set changes, so its SAN
+        // matches the URL the phone actually opens. Without this the launch-time cert (often
+        // localhost-only, before the hotspot/tether is up) triggers a name-mismatch warning on
+        // top of the self-signed one — the hard-fail case on iOS Safari. The on-disk cache is
+        // keyed by IP set, so a given network is regenerated once then reused across launches.
+        void EnsureCert(List<IPAddress> ips)
+        {
+            string want = IpsKey(ips);
+            if (want == certIps) return;
+            try { cert = LoadOrCreateCert(ips); certIps = want; }
+            catch { /* keep the previous cert */ }
+        }
+
+        // --- TLS cert: cache one keyed by the current IP set; regenerate when IPs change ---
+        X509Certificate2 LoadOrCreateCert(List<IPAddress> ips)
+        {
+            string pfx = System.IO.Path.Combine(Dir, "cert.pfx");
+            string ipsFile = System.IO.Path.Combine(Dir, "cert.ips");
+            string want = string.Join(",", ips.Select(i => i.ToString()));
+            try
+            {
+                if (System.IO.File.Exists(pfx) && System.IO.File.Exists(ipsFile)
+                    && System.IO.File.ReadAllText(ipsFile) == want)
+                {
+                    var c = new X509Certificate2(System.IO.File.ReadAllBytes(pfx), "steady",
+                        X509KeyStorageFlags.Exportable);
+                    if (c.NotAfter > DateTime.Now.AddDays(1)) return c;
+                }
+            }
+            catch { /* corrupt/stale -> regenerate */ }
+            return CreateCert(ips, pfx, ipsFile, want);
+        }
+
+        static X509Certificate2 CreateCert(List<IPAddress> ips, string pfx, string ipsFile, string want)
+        {
+            using var rsa = RSA.Create(2048);
+            var req = new CertificateRequest("CN=Steady Overlay", rsa,
+                HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var san = new SubjectAlternativeNameBuilder();
+            san.AddDnsName("localhost");
+            foreach (var ip in ips) san.AddIpAddress(ip);
+            req.CertificateExtensions.Add(san.Build());
+            req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+            req.CertificateExtensions.Add(new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
+            var now = DateTimeOffset.UtcNow;
+            using var made = req.CreateSelfSigned(now.AddDays(-1), now.AddYears(5));
+            var bytes = made.Export(X509ContentType.Pfx, "steady");
+            try
+            {
+                Directory.CreateDirectory(Dir);
+                System.IO.File.WriteAllBytes(pfx, bytes);
+                System.IO.File.WriteAllText(ipsFile, want);
+            }
+            catch { /* best effort cache */ }
+            // re-import from PFX so SChannel can use the key (ephemeral keys can't auth a server)
+            return new X509Certificate2(bytes, "steady", X509KeyStorageFlags.Exportable);
+        }
+
+        void TryOpenFirewall()
+        {
+            // best-effort; silently no-ops without admin (Windows then prompts on first connect)
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "netsh",
+                    Arguments = $"advfirewall firewall add rule name=\"Steady Phone {Port}\" " +
+                                $"dir=in action=allow protocol=TCP localport={Port}",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                };
+                System.Diagnostics.Process.Start(psi);
+            }
+            catch { }
+        }
+
+        void AcceptLoop()
+        {
+            while (true)
+            {
+                TcpClient client;
+                try { client = listener.AcceptTcpClient(); }
+                catch { break; }       // listener stopped
+                ThreadPool.QueueUserWorkItem(_ => Handle(client));
+            }
+        }
+
+        void Handle(TcpClient client)
+        {
+            try
+            {
+                client.ReceiveTimeout = 30000;
+                client.NoDelay = true;
+                using (client)
+                using (var net = client.GetStream())
+                using (var ssl = new SslStream(net, false))
+                {
+                    ssl.AuthenticateAsServer(cert, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
+                    var (reqLine, headers) = ReadHeaders(ssl);
+                    if (reqLine == null) return;
+                    if (headers.TryGetValue("upgrade", out var up) &&
+                        up.IndexOf("websocket", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                        headers.TryGetValue("sec-websocket-key", out var key))
+                        ServeWebSocket(ssl, key);
+                    else
+                        ServeHttp(ssl);
+                }
+            }
+            catch { /* drop the connection */ }
+        }
+
+        static (string, Dictionary<string, string>) ReadHeaders(Stream s)
+        {
+            var buf = new byte[8192];
+            int n = 0;
+            while (n < buf.Length)
+            {
+                int r = s.Read(buf, n, 1);
+                if (r <= 0) return (null, null);
+                n += r;
+                if (n >= 4 && buf[n - 4] == 13 && buf[n - 3] == 10 && buf[n - 2] == 13 && buf[n - 1] == 10) break;
+            }
+            var lines = Encoding.ASCII.GetString(buf, 0, n).Split(new[] { "\r\n" }, StringSplitOptions.None);
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 1; i < lines.Length; i++)
+            {
+                int c = lines[i].IndexOf(':');
+                if (c > 0) headers[lines[i].Substring(0, c).Trim().ToLowerInvariant()] = lines[i].Substring(c + 1).Trim();
+            }
+            return (lines.Length > 0 ? lines[0] : null, headers);
+        }
+
+        void ServeHttp(Stream s)
+        {
+            byte[] body = Encoding.UTF8.GetBytes(PAGE);
+            string head =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: text/html; charset=utf-8\r\n" +
+                "Content-Length: " + body.Length + "\r\n" +
+                "Cache-Control: no-store\r\n" +
+                "Connection: close\r\n\r\n";
+            s.Write(Encoding.ASCII.GetBytes(head));
+            s.Write(body, 0, body.Length);
+            s.Flush();
+        }
+
+        void ServeWebSocket(Stream s, string key)
+        {
+            string accept = Convert.ToBase64String(SHA1.HashData(
+                Encoding.ASCII.GetBytes(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+            string resp =
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+                "Sec-WebSocket-Accept: " + accept + "\r\n\r\n";
+            s.Write(Encoding.ASCII.GetBytes(resp));
+            s.Flush();
+
+            Interlocked.Increment(ref clients);
+            SetConnected(true);
+            try
+            {
+                while (true)
+                {
+                    var (op, payload) = ReadFrame(s);
+                    if (op < 0 || op == 0x8) break;                       // error / close
+                    if (op == 0x9) { SendFrame(s, 0xA, payload); continue; }  // ping -> pong
+                    if (op == 0x1 && payload != null) HandleText(payload);    // text -> sensor frame
+                }
+            }
+            catch { }
+            finally
+            {
+                if (Interlocked.Decrement(ref clients) <= 0) SetConnected(false);
+            }
+        }
+
+        void SetConnected(bool c)
+        {
+            if (Connected == c) return;
+            Connected = c;
+            StateChanged?.Invoke();
+        }
+
+        void HandleText(byte[] payload)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(payload));
+                var r = doc.RootElement;
+                double G(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+                bool gValid = r.TryGetProperty("g", out var gv) && gv.ValueKind == JsonValueKind.Number && gv.GetDouble() != 0;
+                onFrame(G("ax"), G("ay"), G("az"), G("gx"), G("gy"), G("gz"), gValid);
+            }
+            catch { /* ignore malformed frame */ }
+        }
+
+        // minimal RFC 6455 reader; client->server frames are always masked
+        static (int, byte[]) ReadFrame(Stream s)
+        {
+            var h = new byte[2];
+            if (!ReadExact(s, h, 0, 2)) return (-1, null);
+            int op = h[0] & 0x0F;
+            bool masked = (h[1] & 0x80) != 0;
+            long len = h[1] & 0x7F;
+            if (len == 126)
+            {
+                var e = new byte[2];
+                if (!ReadExact(s, e, 0, 2)) return (-1, null);
+                len = (e[0] << 8) | e[1];
+            }
+            else if (len == 127)
+            {
+                var e = new byte[8];
+                if (!ReadExact(s, e, 0, 8)) return (-1, null);
+                len = 0; for (int i = 0; i < 8; i++) len = (len << 8) | e[i];
+            }
+            if (len < 0 || len > (1 << 20)) return (-1, null);    // 1 MB sanity cap
+            var mask = new byte[4];
+            if (masked && !ReadExact(s, mask, 0, 4)) return (-1, null);
+            var pay = new byte[len];
+            if (len > 0 && !ReadExact(s, pay, 0, (int)len)) return (-1, null);
+            if (masked) for (int i = 0; i < len; i++) pay[i] ^= mask[i & 3];
+            return (op, pay);
+        }
+
+        static void SendFrame(Stream s, int opcode, byte[] payload)
+        {
+            payload ??= Array.Empty<byte>();
+            if (payload.Length > 125) return;        // we only ever send tiny control frames
+            var f = new byte[2 + payload.Length];
+            f[0] = (byte)(0x80 | opcode);
+            f[1] = (byte)payload.Length;
+            Array.Copy(payload, 0, f, 2, payload.Length);
+            s.Write(f, 0, f.Length);
+            s.Flush();
+        }
+
+        static bool ReadExact(Stream s, byte[] buf, int off, int len)
+        {
+            int got = 0;
+            while (got < len)
+            {
+                int n = s.Read(buf, off + got, len - got);
+                if (n <= 0) return false;
+                got += n;
+            }
+            return true;
+        }
+
+        public static byte[] QrPng(string text)
+        {
+            try
+            {
+                var gen = new QRCodeGenerator();
+                var data = gen.CreateQrCode(text, QRCodeGenerator.ECCLevel.M);
+                return new PngByteQRCode(data).GetGraphic(8);
+            }
+            catch { return null; }
+        }
+
+        // Self-contained phone page (no external assets — works fully offline).
+        // accelerationIncludingGravity -> ax/ay/az (m/s²); rotationRate -> gx/gy/gz (deg/s).
+        const string PAGE =
+"""
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Steady - phone sensor</title>
+<style>
+  html,body{margin:0;height:100%;background:#10151e;color:#e8ecf2;
+    font-family:-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100%;text-align:center;padding:24px;box-sizing:border-box}
+  h1{font-size:20px;margin:0 0 6px;color:#6fd8c6;letter-spacing:3px}
+  p{color:#8a94a6;font-size:14px;margin:6px 0;line-height:1.4}
+  button{margin-top:26px;font-size:21px;padding:18px 40px;border:0;border-radius:14px;
+    background:#6fd8c6;color:#06231e;font-weight:700}
+  button:active{background:#5bc4b2}
+  #live{display:none}
+  .big{font-size:22px;font-weight:700;margin-top:8px}
+  .ok{color:#6fd8c6}.bad{color:#e08a8a}
+  #out{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#8a94a6;margin-top:16px}
+  .hz{font-size:12px;color:#6a7486;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>STEADY</h1>
+  <div id="setup">
+    <p>Mount the phone in the car.<br>Tap to stream its motion to the laptop.</p>
+    <button id="startbtn">Start</button>
+    <p class="hz" id="err"></p>
+  </div>
+  <div id="live">
+    <div class="big"><span id="state" class="bad">connecting...</span></div>
+    <p>Keep this screen on.<br>Phone can stay mounted &amp; charging.</p>
+    <div id="out">-</div>
+    <div class="hz" id="hz"></div>
+  </div>
+</div>
+<script>
+(function(){
+  var ws=null, wsReady=false, lastSend=0, frames=0, lastHz=0, wake=null;
+  var stateEl=document.getElementById('state');
+  var outEl=document.getElementById('out');
+  var hzEl=document.getElementById('hz');
+  function setState(t,ok){ stateEl.textContent=t; stateEl.className=ok?'ok':'bad'; }
+  function connect(){
+    try{ ws=new WebSocket('wss://'+location.host+'/ws'); }
+    catch(e){ setState('ws error',false); setTimeout(connect,1500); return; }
+    ws.onopen=function(){ wsReady=true; setState('streaming',true); };
+    ws.onclose=function(){ wsReady=false; setState('reconnecting...',false); setTimeout(connect,1200); };
+    ws.onerror=function(){ try{ ws.close(); }catch(e){} };
+  }
+  function onMotion(e){
+    var a=e.accelerationIncludingGravity||{}, r=e.rotationRate||{};
+    var ax=a.x||0, ay=a.y||0, az=a.z||0;
+    var gx=(r.beta==null?0:r.beta), gy=(r.gamma==null?0:r.gamma), gz=(r.alpha==null?0:r.alpha);
+    var gValid=(r.alpha!=null||r.beta!=null||r.gamma!=null)?1:0;
+    frames++;
+    var now=(window.performance&&performance.now)?performance.now():Date.now();
+    if(wsReady && now-lastSend>=14){
+      lastSend=now;
+      try{ ws.send(JSON.stringify({ax:ax,ay:ay,az:az,gx:gx,gy:gy,gz:gz,g:gValid})); }catch(e){}
+    }
+    if(now-lastHz>=500){
+      var hz=Math.round(frames*1000/(now-lastHz)); frames=0; lastHz=now;
+      hzEl.textContent=hz+' Hz';
+      outEl.textContent='accel '+ax.toFixed(1)+' '+ay.toFixed(1)+' '+az.toFixed(1)+
+        '   gyro '+gx.toFixed(0)+' '+gy.toFixed(0)+' '+gz.toFixed(0);
+    }
+  }
+  async function reqWake(){
+    try{ if('wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); } }catch(e){}
+  }
+  async function start(){
+    var err=document.getElementById('err');
+    if(typeof DeviceMotionEvent==='undefined'){ err.textContent='This browser has no motion sensor API.'; return; }
+    try{
+      if(typeof DeviceMotionEvent.requestPermission==='function'){   // iOS
+        var p=await DeviceMotionEvent.requestPermission();
+        if(p!=='granted'){ err.textContent='Motion permission denied.'; return; }
+      }
+    }catch(e){ err.textContent='Permission error: '+e; }
+    window.addEventListener('devicemotion', onMotion);
+    document.getElementById('setup').style.display='none';
+    document.getElementById('live').style.display='block';
+    reqWake();
+    connect();
+  }
+  document.getElementById('startbtn').addEventListener('click', start);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') reqWake();
+  });
+})();
+</script>
+</body>
+</html>
+""";
     }
 }

@@ -15,3 +15,6 @@ C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\refi
 C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.pdb
 C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.genruntimeconfig.cache
 C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\ref\SteadyOverlay.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.sourcelink.json
+C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\QRCoder.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.csproj.AssemblyReference.cache
