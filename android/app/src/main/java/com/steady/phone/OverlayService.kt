@@ -106,10 +106,12 @@ class OverlayService : Service(), SensorEventListener,
         thread = HandlerThread("steady-overlay-sensor").also { it.start() }
         sensorHandler = Handler(thread!!.looper)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        // Prefer LINEAR_ACCELERATION (gravity removed by sensor fusion) so TILTING the phone up/down
-        // doesn't swing ~9.8 m/s^2 onto an axis and jump the dots — only real translational motion
-        // (the car accelerating/braking/turning) drives them. Fall back to raw accel if unavailable.
-        val s = sm!!.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        // Drive on the gravito-inertial resultant DIRECTION (what the inner ear senses): a car
+        // turn/brake leans this vector exactly like a hand tilt, so it's hand-demoable AND a valid
+        // car cue. TYPE_GRAVITY is the fused, pre-smoothed gravity direction; fall back to raw
+        // ACCELEROMETER (DotsView's tilt EMA low-passes it into the same estimate). NOT
+        // LINEAR_ACCELERATION: ~0 at handheld rest (dots go static) + fusion twitch on rotation.
+        val s = sm!!.getDefaultSensor(Sensor.TYPE_GRAVITY)
             ?: sm!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         s?.let { sm!!.registerListener(this, it, 16000, sensorHandler) }   // ~62 Hz
     }
@@ -117,7 +119,7 @@ class OverlayService : Service(), SensorEventListener,
     // Sensor callbacks arrive on the HandlerThread; feed() just writes volatiles (single writer).
     override fun onSensorChanged(e: SensorEvent) {
         val t = e.sensor.type
-        if (t == Sensor.TYPE_LINEAR_ACCELERATION || t == Sensor.TYPE_ACCELEROMETER)
+        if (t == Sensor.TYPE_GRAVITY || t == Sensor.TYPE_ACCELEROMETER)
             view?.feed(e.values[0], e.values[1])
     }
 

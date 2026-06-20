@@ -29,11 +29,12 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var colorMode = SettingsStore.DEF_DOT_COLOR
     private var autoHide = SettingsStore.DEF_AUTO_HIDE
 
-    private var lpX = 0f
-    private var lpY = 0f
-    private var haveLp = false
-    private var smX = 0f         // smoothed motion signal (takes the edge off jolts/tilt transients)
-    private var smY = 0f
+    // --- gravity/tilt lean-flow state ---
+    private var gX = 0f          // smoothed gravity/tilt direction (m/s^2): responsive but de-spiked
+    private var gY = 0f
+    private var bX = 0f          // slow auto-center baseline (resting orientation)
+    private var bY = 0f
+    private var haveTilt = false
     private var velX = 0f
     private var velY = 0f
     private var offX = 0f
@@ -64,7 +65,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
 
     init { setLayerType(LAYER_TYPE_HARDWARE, null) }
 
-    /** Latest accelerometer sample (m/s^2, incl. gravity). ax = lateral, ay = up the screen. */
+    /** Latest sensor sample (m/s^2): fused gravity direction (or raw accel fallback). ax = lateral, ay = up. */
     fun feed(ax: Float, ay: Float) { rawAx = ax; rawAy = ay }
 
     fun applyParams(p: SettingsStore.Params) {
@@ -83,22 +84,36 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private fun step() {
         val ax = rawAx
         val ay = rawAy
-        if (!haveLp) { lpX = ax; lpY = ay; haveLp = true }
-        lpX += (ax - lpX) * 0.04f
-        lpY += (ay - lpY) * 0.04f
-        val hx = ax - lpX
-        val hy = ay - lpY
-        smX += (hx - smX) * 0.4f                // smooth before integrating -> less jumpy on jolts/tilt
-        smY += (hy - smY) * 0.4f
-        val gain = 0.10f * strength             // strength scales accel->velocity (mirrors PC gain*Sens)
-        velX = velX * 0.94f - smX * gain
-        velY = velY * 0.94f - smY * gain
+
+        // Seed on first sample so tilt/baseline start AT the current orientation (no startup lurch).
+        if (!haveTilt) { gX = ax; gY = ay; bX = ax; bY = ay; haveTilt = true }
+
+        // 1) Smooth tilt vector: EMA of the gravity direction. k=0.18 -> ~93 ms (~4 frames @62Hz).
+        //    Fast enough to feel responsive, slow enough that a fast rotation can't spike it.
+        gX += (ax - gX) * 0.18f
+        gY += (ay - gY) * 0.18f
+
+        // 2) Slow auto-center baseline (k=0.012 -> ~1.4 s). A HELD tilt eases back to zero over
+        //    ~1-2 s, and resting at ANY angle auto-zeros — removes the ~9.8 gravity DC, no Recenter.
+        bX += (gX - bX) * 0.012f
+        bY += (gY - bY) * 0.012f
+
+        // 3) Lean = band-passed tilt: slow baseline removes DC gravity; the tilt EMA removes fast
+        //    transients. This drives BOTH axes (left/right roll + up/down pitch), smoothly.
+        val leanX = gX - bX
+        val leanY = gY - bY
+
+        // 4) Velocity flow (mirrors the PC): vel = vel*decay - lean*gain. The integrator is fed the
+        //    SMOOTHED lean, never a raw transient, so a fast pitch can't jump velY. strength scales it.
+        val gain = 0.06f * strength             // strength default 1.8 -> effective gain 0.108
+        velX = velX * 0.92f - leanX * gain
+        velY = velY * 0.92f - leanY * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
 
-        // --- auto-hide energy gate (accel-only; no GPS / Play Services) ---
-        val mag = sqrt(hx * hx + hy * hy)
+        // --- auto-hide energy gate (fed by the LEAN magnitude; ~0 when held still at any angle) ---
+        val mag = sqrt(leanX * leanX + leanY * leanY)
         val hf = abs(mag - magSlow)
         magSlow += (mag - magSlow) * 0.10f
         jitterEma += (hf - jitterEma) * 0.05f
