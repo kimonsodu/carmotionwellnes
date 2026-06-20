@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SteadyOverlay")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+17b31d5cd68b98238fc7a416c2ee831771fd1e16")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+686d86bce70f88c5767d1bae8d29a743747547ac")]
 [assembly: System.Reflection.AssemblyProductAttribute("SteadyOverlay")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SteadyOverlay")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

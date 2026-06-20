@@ -107,6 +107,7 @@ namespace SteadyOverlay
 
         // --- status surfaced to the control panel ---
         public string StatusText = "Starting…";
+        public string DebugText = "";            // live pipeline state for the panel's debug readout
         public event Action<string> StatusChanged;
         void SetStatus(string t) { StatusText = t; StatusChanged?.Invoke(t); }
 
@@ -400,6 +401,14 @@ namespace SteadyOverlay
 
             Render(near, offX, offY, W, H);
             Render(far, offX * 0.55, offY * 0.55, W, H);
+
+            DebugText =
+                $"src:{(PhoneActive ? "PHONE" : (acc != null ? "laptop" : "none"))}  mode:{oriMode}  gReady:{(gReady ? 1 : 0)}\n" +
+                $"in  a:{rawX,7:0.0}{rawY,7:0.0}{rawZ,7:0.0}   |a|:{Math.Sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ),5:0.0}\n" +
+                $"grav :{gx,7:0.0}{gy,7:0.0}{gz,7:0.0}\n" +
+                $"gyro :{rawGyroX,7:0.0}{rawGyroY,7:0.0}{rawYaw,7:0.0}\n" +
+                $"lat:{lat,7:0.00}  fore:{fore,7:0.00}\n" +
+                $"vel:{velX,7:0.0}  {velY,7:0.0}";
         }
 
         static double Wrap(double v, double m) { v %= m; return v < 0 ? v + m : v; }
@@ -463,8 +472,8 @@ namespace SteadyOverlay
         readonly OverlayWindow ov;
         readonly PhoneServer server;
         Slider slider, sizeSlider;
-        CheckBox pause, flipV, flipH, swap;
-        TextBlock hotkeyHint;
+        CheckBox pause, flipV, flipH, swap, dbg;
+        TextBlock hotkeyHint, dbgText;
         TextBlock phoneState;
         TextBox phoneUrl;
         System.Windows.Controls.Image qrImage;
@@ -621,6 +630,29 @@ namespace SteadyOverlay
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x74, 0x86))
             });
+
+            // --- debug readout (diagnose what the pipeline actually sees) ---
+            dbg = new CheckBox
+            {
+                Content = "Debug readout",
+                Foreground = Brushes.White,
+                FontSize = 11,
+                Margin = new Thickness(0, 16, 0, 6)
+            };
+            root.Children.Add(dbg);
+            dbgText = new TextBlock
+            {
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xE6, 0xD8)),
+                Visibility = Visibility.Collapsed
+            };
+            dbg.Checked += (s, e) => dbgText.Visibility = Visibility.Visible;
+            dbg.Unchecked += (s, e) => dbgText.Visibility = Visibility.Collapsed;
+            root.Children.Add(dbgText);
+            var dbgTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            dbgTimer.Tick += (s, e) => { if (dbg.IsChecked == true) dbgText.Text = ov.DebugText; };
+            dbgTimer.Start();
 
             hotkeyHint = new TextBlock
             {
@@ -1281,20 +1313,25 @@ namespace SteadyOverlay
     ws.onerror=function(){ try{ ws.close(); }catch(e){} };
   }
   function onMotion(e){
-    var a=e.accelerationIncludingGravity||{}, r=e.rotationRate||{};
-    var ax=a.x||0, ay=a.y||0, az=a.z||0;
+    var aig=e.accelerationIncludingGravity, al=e.acceleration, r=e.rotationRate||{};
+    var useIG=(aig && aig.x!=null);                 // prefer gravity-inclusive (lets PC learn orientation)
+    var src=useIG?aig:(al||{});                      // fall back to linear accel if IG is missing
+    var ax=src.x||0, ay=src.y||0, az=src.z||0;
     var gx=(r.beta==null?0:r.beta), gy=(r.gamma==null?0:r.gamma), gz=(r.alpha==null?0:r.alpha);
     var gValid=(r.alpha!=null||r.beta!=null||r.gamma!=null)?1:0;
+    var haveAccel=(useIG||(al&&al.x!=null))?1:0;
     frames++;
     var now=(window.performance&&performance.now)?performance.now():Date.now();
     if(wsReady && now-lastSend>=14){
       lastSend=now;
-      try{ ws.send(JSON.stringify({ax:ax,ay:ay,az:az,gx:gx,gy:gy,gz:gz,g:gValid})); }catch(e){}
+      try{ ws.send(JSON.stringify({ax:ax,ay:ay,az:az,gx:gx,gy:gy,gz:gz,g:gValid,grav:useIG?1:0})); }catch(e){}
     }
-    if(now-lastHz>=500){
+    if(now-lastHz>=400){
       var hz=Math.round(frames*1000/(now-lastHz)); frames=0; lastHz=now;
-      hzEl.textContent=hz+' Hz';
-      outEl.textContent='accel '+ax.toFixed(1)+' '+ay.toFixed(1)+' '+az.toFixed(1)+
+      var mag=Math.sqrt(ax*ax+ay*ay+az*az);
+      var label=useIG?'accel+g':(al&&al.x!=null?'accel(lin)':'NO ACCEL');
+      hzEl.textContent=hz+' Hz   |a| '+mag.toFixed(1)+(haveAccel?'':'   (no accelerometer!)');
+      outEl.textContent=label+' '+ax.toFixed(1)+' '+ay.toFixed(1)+' '+az.toFixed(1)+
         '   gyro '+gx.toFixed(0)+' '+gy.toFixed(0)+' '+gz.toFixed(0);
     }
   }
