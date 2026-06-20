@@ -798,6 +798,7 @@ namespace SteadyOverlay
             {
                 ov.AutoPause = false;
                 if (autoHideStatusRow != null) autoHideStatusRow.Visibility = Visibility.Collapsed;
+                if (autoHideTip != null) autoHideTip.Visibility = Visibility.Collapsed;
                 QueueSave();
             };
             adjust.Children.Add(autoPauseTog);
@@ -818,6 +819,10 @@ namespace SteadyOverlay
                 Visibility = (ov.AutoPause && !autoHideTipSeen) ? Visibility.Visible : Visibility.Collapsed
             }, "FaintText");
             adjust.Children.Add(autoHideTip);
+            // Auto-hide already on from a prior session: the Checked handler never fired for the
+            // construction-time IsChecked assignment, so consume the one-time flag here (else the
+            // tip nags on every launch).
+            if (ov.AutoPause && !autoHideTipSeen) { autoHideTipSeen = true; QueueSave(); }
 
             adjust.Children.Add(Divider());
             flipV = Toggle("Flip vertical  ↕");
@@ -1465,6 +1470,11 @@ namespace SteadyOverlay
                 phoneState.Text = "Phone server error: " + server.Error;
                 phoneState.Foreground = Brush("DangerBrush");
                 SetChip("Error", Brush("DangerBrush"));
+                // show the placeholder instead of a blank white QR box (this branch returns
+                // before the layer-visibility block below ever runs)
+                if (qrConnected != null) qrConnected.Visibility = Visibility.Collapsed;
+                if (qrImage != null) qrImage.Visibility = Visibility.Collapsed;
+                if (qrPlaceholder != null) qrPlaceholder.Visibility = Visibility.Visible;
                 return;
             }
             if (server.Connected || ov.PhoneActive)          // WS client OR fresh UDP frames
@@ -2216,9 +2226,12 @@ namespace SteadyOverlay
   #dots{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:none;background:#10151e;
     touch-action:none;pointer-events:none}
   .wrap{position:relative;z-index:1}
-  #dotsbtn{margin-top:18px;font-size:15px;padding:11px 22px;border:1px solid #2a3343;border-radius:11px;
-    background:#1a2230;color:#8a94a6;font-weight:600}
-  #dotsbtn.on{background:#6fd8c6;color:#06231e;border-color:#6fd8c6}
+  /* mode selector: where the cue dots are drawn -- on the laptop (phone = sensor) or on this phone */
+  .seglabel{font-size:13px;color:#8a94a6;margin-top:20px}
+  #modeseg{display:inline-flex;margin-top:8px;border:1px solid #2a3343;border-radius:11px;overflow:hidden}
+  .seg{font-size:14px;padding:11px 18px;background:#1a2230;color:#8a94a6;border:none;font-weight:600}
+  .seg.on{background:#6fd8c6;color:#06231e}
+  .seghint{font-size:12px;color:#6a7486;margin-top:8px;max-width:320px}
 </style>
 </head>
 <body>
@@ -2235,7 +2248,12 @@ namespace SteadyOverlay
     <p>Keep this screen on.<br>Phone can stay mounted &amp; charging.</p>
     <div id="out">-</div>
     <div class="hz" id="hz"></div>
-    <button id="dotsbtn">Show dots here</button>
+    <div class="seglabel">Show the cue dots on</div>
+    <div id="modeseg">
+      <button id="modeLaptop" class="seg on">The laptop</button>
+      <button id="modePhone" class="seg">This phone</button>
+    </div>
+    <div class="seghint" id="seghint">Laptop mode: this phone is the sensor — dots appear on the laptop. Phone mode: dots appear here, over whatever you're doing on the phone.</div>
   </div>
 </div>
 <script>
@@ -2352,20 +2370,26 @@ namespace SteadyOverlay
       dCtx.beginPath(); dCtx.arc(rx,y,r,0,6.2832); dCtx.fill();
     }
   }
-  function setDots(on){
+  function setDots(on){            // on = Phone mode (draw dots on this phone)
     dotsOn=on;
-    var b=document.getElementById('dotsbtn');
-    b.classList.toggle('on',on); b.textContent=on?'Hide dots':'Show dots here';
     if(on){
       if(!dCanvas){ dCanvas=document.getElementById('dots'); dCtx=dCanvas.getContext('2d'); }
       dCanvas.style.display='block'; sizeDots();
       if(!dotsRAF) dotsRAF=requestAnimationFrame(drawDots);
     }else{
-      dCanvas.style.display='none';
+      if(dCanvas) dCanvas.style.display='none';
       if(dotsRAF){ cancelAnimationFrame(dotsRAF); dotsRAF=0; }
     }
   }
-  document.getElementById('dotsbtn').addEventListener('click', function(){ setDots(!dotsOn); });
+  // Mode = where the dots are drawn. Laptop: phone stays the sensor, PC shows the dots.
+  // Phone: dots render here over the phone. Streaming to the PC continues either way.
+  function setMode(phone){
+    setDots(phone);
+    document.getElementById('modePhone').classList.toggle('on',phone);
+    document.getElementById('modeLaptop').classList.toggle('on',!phone);
+  }
+  document.getElementById('modeLaptop').addEventListener('click', function(){ setMode(false); });
+  document.getElementById('modePhone').addEventListener('click', function(){ setMode(true); });
   window.addEventListener('resize', function(){ if(dotsOn) sizeDots(); });
 })();
 </script>
