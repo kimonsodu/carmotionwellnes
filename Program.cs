@@ -1004,14 +1004,18 @@ namespace SteadyOverlay
             return list;
         }
 
-        // 192.168.* (typical hotspot / Android USB tether) is most likely the link
+        // Prefer direct-link subnets so the QR/primary auto-targets a USB tether or hotspot
+        // over the laptop's home-WiFi address.
         static int Rank(IPAddress a)
         {
             var b = a.GetAddressBytes();
-            if (b[0] == 192 && b[1] == 168) return 0;
-            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return 1;
-            if (b[0] == 10) return 2;
-            return 3;
+            if (b[0] == 192 && b[1] == 168 && b[2] == 42) return 0;   // Android USB tether
+            if (b[0] == 192 && b[1] == 168 && b[2] == 43) return 0;   // Android hotspot (legacy)
+            if (b[0] == 172 && b[1] == 20 && b[2] == 10) return 0;    // iPhone hotspot
+            if (b[0] == 192 && b[1] == 168) return 1;
+            if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return 2;
+            if (b[0] == 10) return 3;
+            return 4;
         }
 
         public bool RefreshUrls()

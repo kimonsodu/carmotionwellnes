@@ -42,7 +42,7 @@
 24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:22-73
 25
 26    <application
-26-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-35:19
+26-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-43:19
 27        android:allowBackup="true"
 27-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:9-35
 28        android:debuggable="true"
@@ -57,31 +57,54 @@
 34        android:theme="@android:style/Theme.Material.Light" >
 34-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:9-60
 35        <activity
-35-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:9-29:20
+35-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:9-37:20
 36            android:name="com.steady.phone.MainActivity"
 36-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:23:13-41
-37            android:exported="true" >
-37-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:24:13-36
-38            <intent-filter>
-38-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:25:13-28:29
-39                <action android:name="android.intent.action.MAIN" />
-39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:17-69
-39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:25-66
-40
-41                <category android:name="android.intent.category.LAUNCHER" />
-41-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:17-77
-41-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:27-74
-42            </intent-filter>
-43        </activity>
-44
-45        <service
-45-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:31:9-34:56
-46            android:name="com.steady.phone.SensorService"
-46-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:13-42
-47            android:exported="false"
-47-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:13-37
-48            android:foregroundServiceType="dataSync" />
-48-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:13-53
-49    </application>
+37            android:exported="true"
+37-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:25:13-36
+38            android:launchMode="singleTop" >
+38-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:24:13-43
+39            <intent-filter>
+39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:13-29:29
+40                <action android:name="android.intent.action.MAIN" />
+40-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:17-69
+40-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:25-66
+41
+42                <category android:name="android.intent.category.LAUNCHER" />
+42-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:28:17-77
+42-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:28:27-74
+43            </intent-filter>
+44            <!-- QR/link deep link: steady://connect?host=<ip>&port=<port> opens the app pre-filled -->
+45            <intent-filter>
+45-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:31:13-36:29
+46                <action android:name="android.intent.action.VIEW" />
+46-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:17-69
+46-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:25-66
+47
+48                <category android:name="android.intent.category.DEFAULT" />
+48-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:17-76
+48-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:27-73
+49                <category android:name="android.intent.category.BROWSABLE" />
+49-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:17-78
+49-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:27-75
 50
-51</manifest>
+51                <data
+51-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:35:17-72
+52                    android:host="connect"
+52-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:35:47-69
+53                    android:scheme="steady" />
+53-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:35:23-46
+54            </intent-filter>
+55        </activity>
+56
+57        <service
+57-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:39:9-42:56
+58            android:name="com.steady.phone.SensorService"
+58-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:40:13-42
+59            android:exported="false"
+59-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:13-37
+60            android:foregroundServiceType="dataSync" />
+60-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:13-53
+61    </application>
+62
+63</manifest>

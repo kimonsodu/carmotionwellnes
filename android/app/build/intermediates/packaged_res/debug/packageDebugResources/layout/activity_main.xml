@@ -36,15 +36,15 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <RadioButton
-                android:id="@+id/rbWifi"
-                android:text="WiFi"
+                android:id="@+id/rbBt"
+                android:text="Bluetooth"
                 android:checked="true"
                 android:layout_marginEnd="24dp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
             <RadioButton
-                android:id="@+id/rbBt"
-                android:text="Bluetooth"
+                android:id="@+id/rbWifi"
+                android:text="WiFi"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </RadioGroup>
@@ -53,6 +53,7 @@
         <LinearLayout
             android:id="@+id/wifiBox"
             android:orientation="vertical"
+            android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <TextView
@@ -83,7 +84,6 @@
         <LinearLayout
             android:id="@+id/btBox"
             android:orientation="vertical"
-            android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <TextView
