@@ -76,6 +76,7 @@ namespace SteadyOverlay
         public double? WinHeight { get; set; }
         public bool FirstRunDone { get; set; } = false;    // welcome card dismissed
         public bool PhoneOnly { get; set; } = false;       // Phone mode: ignore the laptop sensor, use the phone only
+        public bool AutoHideTipSeen { get; set; } = false; // one-time "watch this on your first drive" tip shown
 
         static string ConfigDir =>
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
@@ -97,7 +98,7 @@ namespace SteadyOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly };
+                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -216,6 +217,12 @@ namespace SteadyOverlay
         double phoneSpeed = -1;                  // -1 = unknown/unavailable
         long phoneSpeedTick = long.MinValue / 2;
         bool SpeedFresh => phoneSpeed >= 0 && Environment.TickCount64 - phoneSpeedTick < 5000;
+
+        // --- live gate state surfaced to the control panel's drive-test indicator ---
+        public bool AutoHidden => AutoPause && autoStill;            // dots currently hidden by the stopped-gate
+        public bool SpeedKnown => SpeedFresh;                        // GPS ground speed is fresh enough to show
+        public double SpeedKmh => SpeedFresh ? phoneSpeed * 3.6 : -1;   // km/h, or -1 when unknown
+        public bool MotionLive => PhoneActive || HasLaptopSensor;   // a source is actually feeding the gate
 
         // Called from the phone-server thread; mirrors exactly what the laptop
         // sensor handlers write (accel in m/s² incl. gravity, gyro in deg/s) so the
@@ -650,6 +657,9 @@ namespace SteadyOverlay
         Slider slider, sizeSlider;
         CheckBox pause, flipV, flipH, swap, dbg;
         TextBlock hotkeyHint, dbgText;
+        StackPanel autoHideStatusRow;            // live gate indicator under the auto-hide toggle
+        System.Windows.Shapes.Ellipse autoHideDot;
+        TextBlock autoHideStatusText, autoHideTip;
         TextBlock phoneState;
         TextBox phoneUrl;
         TextBlock phoneBt;
@@ -657,6 +667,7 @@ namespace SteadyOverlay
         System.Windows.Shapes.Ellipse statusChipDot;
         TextBlock statusChipText;
         System.Windows.Controls.Image qrImage;
+        UIElement qrPlaceholder, qrConnected;    // shown inside the white frame: no address yet / phone streaming
         string shownUrl;
         System.Windows.Forms.NotifyIcon notify;
         System.Windows.Forms.ContextMenuStrip trayMenu;
@@ -673,6 +684,8 @@ namespace SteadyOverlay
         Border helpOverlay;
         bool firstRunDone;
         public bool FirstRunDone => firstRunDone;
+        bool autoHideTipSeen;
+        public bool AutoHideTipSeen => autoHideTipSeen;
         public bool StartMinimized => startMin?.IsChecked == true;
 
         public ControlWindow(OverlayWindow ovIn, PhoneServer serverIn, Settings settings)
@@ -680,6 +693,7 @@ namespace SteadyOverlay
             ov = ovIn;
             server = serverIn;
             firstRunDone = settings.FirstRunDone;
+            autoHideTipSeen = settings.AutoHideTipSeen;
             Title = "Steady";
             try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
@@ -768,9 +782,43 @@ namespace SteadyOverlay
             autoPauseTog = Toggle("Auto-hide dots when stopped");
             autoPauseTog.ToolTip = "Fade the dots away when the vehicle is parked, bring them back on motion.";
             autoPauseTog.IsChecked = ov.AutoPause;
-            autoPauseTog.Checked += (s, e) => { ov.AutoPause = true; QueueSave(); };
-            autoPauseTog.Unchecked += (s, e) => { ov.AutoPause = false; QueueSave(); };
+            autoPauseTog.Checked += (s, e) =>
+            {
+                ov.AutoPause = true;
+                if (!autoHideTipSeen)
+                {
+                    autoHideTipSeen = true;
+                    if (autoHideTip != null) autoHideTip.Visibility = Visibility.Visible;
+                }
+                if (autoHideStatusRow != null) autoHideStatusRow.Visibility = Visibility.Visible;
+                UpdateAutoHideStatus();
+                QueueSave();
+            };
+            autoPauseTog.Unchecked += (s, e) =>
+            {
+                ov.AutoPause = false;
+                if (autoHideStatusRow != null) autoHideStatusRow.Visibility = Visibility.Collapsed;
+                QueueSave();
+            };
             adjust.Children.Add(autoPauseTog);
+
+            // live drive-test indicator (plain-language gate state), only visible while auto-hide is on
+            autoHideDot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
+            autoHideStatusText = new TextBlock { Text = "Waiting for motion…", FontSize = 11, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center };
+            autoHideStatusRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 6, 0, 0) };
+            autoHideStatusRow.Children.Add(autoHideDot);
+            autoHideStatusRow.Children.Add(autoHideStatusText);
+            autoHideStatusRow.Visibility = ov.AutoPause ? Visibility.Visible : Visibility.Collapsed;
+            adjust.Children.Add(autoHideStatusRow);
+
+            autoHideTip = Styled(new TextBlock
+            {
+                Text = "Watch this on your first drive — it should hide when you stop and reappear as you pull away.",
+                Margin = new Thickness(2, 4, 0, 0),
+                Visibility = (ov.AutoPause && !autoHideTipSeen) ? Visibility.Visible : Visibility.Collapsed
+            }, "FaintText");
+            adjust.Children.Add(autoHideTip);
+
             adjust.Children.Add(Divider());
             flipV = Toggle("Flip vertical  ↕");
             flipV.ToolTip = "Reverse up/down dot drift (Ctrl+Alt+V).";
@@ -866,13 +914,19 @@ namespace SteadyOverlay
                 Padding = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 10)
             };
+            // The white frame stacks three mutually-exclusive layers, all centered:
+            // the QR itself, a "connecting / no network" placeholder, and a "connected" affirmation.
+            var qrStack = new Grid { Width = 184, Height = 184 };
             qrImage = new System.Windows.Controls.Image
             {
                 Width = 184, Height = 184,
                 Stretch = Stretch.Fill, SnapsToDevicePixels = true
             };
             RenderOptions.SetBitmapScalingMode(qrImage, BitmapScalingMode.NearestNeighbor);
-            qrFrame.Child = qrImage;
+            qrStack.Children.Add(qrImage);
+            qrStack.Children.Add(qrPlaceholder = BuildQrPlaceholder());
+            qrStack.Children.Add(qrConnected = BuildQrConnected());
+            qrFrame.Child = qrStack;
             phoneDetail.Children.Add(qrFrame);
             phoneDetail.Children.Add(Styled(new TextBlock
             {
@@ -901,7 +955,11 @@ namespace SteadyOverlay
             debug.Children.Add(dbgText);
             root.Children.Add(CardOf(debug));
             var dbgTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-            dbgTimer.Tick += (s, e) => { if (dbg.IsChecked == true) dbgText.Text = ov.DebugText; };
+            dbgTimer.Tick += (s, e) =>
+            {
+                if (dbg.IsChecked == true) dbgText.Text = ov.DebugText;
+                if (ov.AutoPause) UpdateAutoHideStatus();
+            };
             dbgTimer.Start();
 
             // ---- APPEARANCE & STARTUP card ----
@@ -1282,6 +1340,32 @@ namespace SteadyOverlay
             statusChipDot.Fill = color;
         }
 
+        // live drive-test label: plain-language gate state + colored dot + speed when GPS is fresh
+        void UpdateAutoHideStatus()
+        {
+            if (autoHideStatusText == null) return;
+            if (!ov.MotionLive)
+            {
+                autoHideDot.Fill = Brush("MutedBrush");
+                autoHideStatusText.Foreground = Brush("MutedBrush");
+                autoHideStatusText.Text = "Waiting for motion…";
+                return;
+            }
+            string speed = ov.SpeedKnown ? "  ·  " + ov.SpeedKmh.ToString("0") + " km/h" : "";
+            if (ov.AutoHidden)
+            {
+                autoHideDot.Fill = Brush("MutedBrush");
+                autoHideStatusText.Foreground = Brush("MutedBrush");
+                autoHideStatusText.Text = "Stopped — dots hidden" + speed;
+            }
+            else
+            {
+                autoHideDot.Fill = Brush("AccentBrush");
+                autoHideStatusText.Foreground = Brush("TextBrush");
+                autoHideStatusText.Text = "Moving — dots showing" + speed;
+            }
+        }
+
         // --- custom dark title bar (replaces the OS caption) ---
         FrameworkElement BuildCaption()
         {
@@ -1432,6 +1516,18 @@ namespace SteadyOverlay
                 shownUrl = appLink;
                 qrImage.Source = LoadPng(string.IsNullOrEmpty(appLink) ? null : PhoneServer.QrPng(appLink));
             }
+
+            // Pick which layer of the white frame shows: connected affirmation > no-address
+            // placeholder > the live QR. Connected wins so a Bluetooth-only phone (no Wi-Fi IP)
+            // still shows the green check instead of "Waiting for network".
+            bool phoneConnected = server.Connected || ov.PhoneActive;
+            bool noAddress = string.IsNullOrEmpty(appLink);
+            if (qrConnected != null)
+                qrConnected.Visibility = phoneConnected ? Visibility.Visible : Visibility.Collapsed;
+            if (qrPlaceholder != null)
+                qrPlaceholder.Visibility = (!phoneConnected && noAddress) ? Visibility.Visible : Visibility.Collapsed;
+            if (qrImage != null)
+                qrImage.Visibility = (!phoneConnected && !noAddress) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         static BitmapImage LoadPng(byte[] png)
@@ -1449,6 +1545,84 @@ namespace SteadyOverlay
                 return img;
             }
             catch { return null; }
+        }
+
+        // Centered "waiting for a network address" placeholder shown inside the white QR frame
+        // before any Wi-Fi address exists — a dashed teal ring around a Steady dot reads as
+        // "getting ready" rather than a blank/garbage QR. Dark-on-white (frame is white).
+        UIElement BuildQrPlaceholder()
+        {
+            var col = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            var ringHost = new Grid { Width = 64, Height = 64, HorizontalAlignment = HorizontalAlignment.Center };
+            ringHost.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 64, Height = 64,
+                Stroke = Brush("AccentBrush"), StrokeThickness = 2,
+                StrokeDashArray = new DoubleCollection { 3, 3 }
+            });
+            ringHost.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 14, Height = 14, Fill = Brush("AccentBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            col.Children.Add(ringHost);
+            col.Children.Add(new TextBlock
+            {
+                Text = "Waiting for network…",
+                Foreground = Brush("BgBrush"),
+                FontWeight = FontWeights.SemiBold, FontSize = 13,
+                Margin = new Thickness(0, 14, 0, 2),
+                HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center
+            });
+            col.Children.Add(new TextBlock
+            {
+                Text = "A QR appears once Wi-Fi,\nhotspot or tether is up.",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x74, 0x84)),
+                FontSize = 11,
+                HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center
+            });
+            return col;
+        }
+
+        // Centered "phone connected" affirmation that collapses the QR once a phone is streaming.
+        UIElement BuildQrConnected()
+        {
+            var green = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99));
+            var col = new StackPanel
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            var ringHost = new Grid { Width = 64, Height = 64, HorizontalAlignment = HorizontalAlignment.Center };
+            ringHost.Children.Add(new System.Windows.Shapes.Ellipse { Width = 64, Height = 64, Stroke = green, StrokeThickness = 3 });
+            ringHost.Children.Add(new TextBlock
+            {
+                Text = "✓", Foreground = green, FontSize = 34, FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            });
+            col.Children.Add(ringHost);
+            col.Children.Add(new TextBlock
+            {
+                Text = "Phone connected",
+                Foreground = Brush("BgBrush"),
+                FontWeight = FontWeights.SemiBold, FontSize = 13,
+                Margin = new Thickness(0, 14, 0, 2),
+                HorizontalAlignment = HorizontalAlignment.Center
+            });
+            col.Children.Add(new TextBlock
+            {
+                Text = "Streaming its motion.",
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x74, 0x84)),
+                FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center
+            });
+            return col;
         }
 
         // --- system tray ---
@@ -2038,9 +2212,17 @@ namespace SteadyOverlay
   .ok{color:#6fd8c6}.bad{color:#e08a8a}
   #out{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#8a94a6;margin-top:16px}
   .hz{font-size:12px;color:#6a7486;margin-top:6px}
+  /* on-phone cue dots: full-screen canvas BEHIND the readout (passenger view / motion check) */
+  #dots{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:none;background:#10151e;
+    touch-action:none;pointer-events:none}
+  .wrap{position:relative;z-index:1}
+  #dotsbtn{margin-top:18px;font-size:15px;padding:11px 22px;border:1px solid #2a3343;border-radius:11px;
+    background:#1a2230;color:#8a94a6;font-weight:600}
+  #dotsbtn.on{background:#6fd8c6;color:#06231e;border-color:#6fd8c6}
 </style>
 </head>
 <body>
+<canvas id="dots"></canvas>
 <div class="wrap">
   <h1>STEADY</h1>
   <div id="setup">
@@ -2053,6 +2235,7 @@ namespace SteadyOverlay
     <p>Keep this screen on.<br>Phone can stay mounted &amp; charging.</p>
     <div id="out">-</div>
     <div class="hz" id="hz"></div>
+    <button id="dotsbtn">Show dots here</button>
   </div>
 </div>
 <script>
@@ -2091,6 +2274,7 @@ namespace SteadyOverlay
       outEl.textContent=label+' '+ax.toFixed(1)+' '+ay.toFixed(1)+' '+az.toFixed(1)+
         '   gyro '+gx.toFixed(0)+' '+gy.toFixed(0)+' '+gz.toFixed(0);
     }
+    if(dotsOn) feedDots(ax,ay);   // local on-phone cue dots (cheap; off by default)
   }
   async function reqWake(){
     try{ if('wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); } }catch(e){}
@@ -2126,6 +2310,63 @@ namespace SteadyOverlay
   document.addEventListener('visibilitychange', function(){
     if(document.visibilityState==='visible') reqWake();
   });
+
+  // ---- optional on-phone cue dots (passenger view / visual motion check) -----------------
+  // Self-contained: driven by the SAME devicemotion onMotion() already reads. Off by default,
+  // and streaming to the PC continues regardless. Cheap: requestAnimationFrame + ~28 dots.
+  var dotsOn=false, dotsRAF=0, dCanvas=null, dCtx=null, dW=0, dH=0, dDpr=1;
+  // high-pass state (strips the slow gravity component so only real motion drifts the dots)
+  var lpX=0, lpY=0, velX=0, velY=0, offX=0, offY=0, haveLp=false;
+  var DOTS=28;
+  function feedDots(ax,ay){            // ax=lateral, ay=fore/aft (m/s^2, gravity-inclusive)
+    if(!haveLp){ lpX=ax; lpY=ay; haveLp=true; }
+    lpX+=(ax-lpX)*0.04; lpY+=(ay-lpY)*0.04;   // slow low-pass ~= estimated gravity bias
+    var hx=ax-lpX, hy=ay-lpY;                  // high-pass: motion only
+    // mirror the PC pipeline feel: vel = vel*decay - a*gain ; off += vel
+    velX=velX*0.94 - hx*0.10;
+    velY=velY*0.94 - hy*0.10;
+    var vmax=22; if(velX>vmax)velX=vmax; else if(velX<-vmax)velX=-vmax;
+    if(velY>vmax)velY=vmax; else if(velY<-vmax)velY=-vmax;
+    offX+=velX; offY+=velY;
+  }
+  function sizeDots(){
+    dDpr=Math.min(window.devicePixelRatio||1,2);
+    dW=window.innerWidth; dH=window.innerHeight;
+    dCanvas.width=Math.round(dW*dDpr); dCanvas.height=Math.round(dH*dDpr);
+    dCtx.setTransform(dDpr,0,0,dDpr,0,0);
+  }
+  function drawDots(){
+    if(!dotsOn) return;
+    dotsRAF=requestAnimationFrame(drawDots);
+    dCtx.clearRect(0,0,dW,dH);
+    var span=dH+120, spacing=span/DOTS;
+    var driftY=((offY*0.6)%spacing+spacing)%spacing;   // wrap fore/aft drift -> dots roll down/up
+    var driftX=offX*0.5;                                // lateral lean shifts the columns
+    var lx=18+ (driftX>22?22:(driftX<-22?-22:driftX));
+    var rx=dW-18 + (driftX>22?22:(driftX<-22?-22:driftX));
+    for(var i=0;i<DOTS;i++){
+      var y=(i*spacing+driftY)-60;
+      var t=i/DOTS, r=3.2+2.6*Math.sin(t*Math.PI);     // fatter in the middle of the run
+      dCtx.fillStyle='rgba(111,216,198,0.85)';
+      dCtx.beginPath(); dCtx.arc(lx,y,r,0,6.2832); dCtx.fill();
+      dCtx.beginPath(); dCtx.arc(rx,y,r,0,6.2832); dCtx.fill();
+    }
+  }
+  function setDots(on){
+    dotsOn=on;
+    var b=document.getElementById('dotsbtn');
+    b.classList.toggle('on',on); b.textContent=on?'Hide dots':'Show dots here';
+    if(on){
+      if(!dCanvas){ dCanvas=document.getElementById('dots'); dCtx=dCanvas.getContext('2d'); }
+      dCanvas.style.display='block'; sizeDots();
+      if(!dotsRAF) dotsRAF=requestAnimationFrame(drawDots);
+    }else{
+      dCanvas.style.display='none';
+      if(dotsRAF){ cancelAnimationFrame(dotsRAF); dotsRAF=0; }
+    }
+  }
+  document.getElementById('dotsbtn').addEventListener('click', function(){ setDots(!dotsOn); });
+  window.addEventListener('resize', function(){ if(dotsOn) sizeDots(); });
 })();
 </script>
 </body>
