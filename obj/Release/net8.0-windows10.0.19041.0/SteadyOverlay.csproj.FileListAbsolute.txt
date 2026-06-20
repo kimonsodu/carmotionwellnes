@@ -19,3 +19,4 @@ C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\Stea
 C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\QRCoder.dll
 C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.csproj.AssemblyReference.cache
 C:\Users\simon\Documents\dev\carsick\bin\Release\net8.0-windows10.0.19041.0\InTheHand.Net.Bluetooth.dll
+C:\Users\simon\Documents\dev\carsick\obj\Release\net8.0-windows10.0.19041.0\SteadyOverlay.g.resources

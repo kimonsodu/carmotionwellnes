@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,11 +41,14 @@ namespace SteadyOverlay
             var overlay = new OverlayWindow();
             overlay.ApplySettings(settings);
             var server = new PhoneServer(overlay.FeedPhone);   // phone sensor bridge
-            var panel = new ControlWindow(overlay, server);
+            var panel = new ControlWindow(overlay, server, settings);
             overlay.Show();
-            panel.Show();
+            if (settings.StartMinimized)
+                new WindowInteropHelper(panel).EnsureHandle();   // create hwnd (registers hotkeys) but stay in tray
+            else
+                panel.Show();
             server.Start();
-            app.Exit += (s, e) => Settings.Save(overlay);   // remember strength + flips on exit
+            app.Exit += (s, e) => Settings.Save(overlay, panel.StartMinimized);   // remember settings on exit
             app.Run();
         }
     }
@@ -58,6 +63,8 @@ namespace SteadyOverlay
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
         public bool SwapAxes { get; set; } = false;
+        public bool DarkDots { get; set; } = false;        // dark cue dots instead of light
+        public bool StartMinimized { get; set; } = false;  // launch hidden in the tray
 
         static string ConfigDir =>
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
@@ -74,17 +81,48 @@ namespace SteadyOverlay
             return new Settings();
         }
 
-        public static void Save(OverlayWindow ov)
+        public static void Save(OverlayWindow ov, bool startMinimized)
         {
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes };
+                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DarkDots = ov.DarkDots, StartMinimized = startMinimized };
                 var tmp = ConfigPath + ".tmp";                          // atomic write: a kill
                 System.IO.File.WriteAllText(tmp, JsonSerializer.Serialize(s));   // mid-write can't
                 System.IO.File.Move(tmp, ConfigPath, true);             // corrupt the good file
             }
             catch { /* best effort */ }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // "Start with Windows" — a HKCU Run-key entry (per-user, no admin).
+    // ---------------------------------------------------------------
+    public static class AutoStart
+    {
+        const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        const string Name = "Steady";
+
+        static string ExePath()
+        {
+            try { return Process.GetCurrentProcess().MainModule?.FileName; } catch { return null; }
+        }
+
+        public static bool IsEnabled()
+        {
+            try { using var k = Registry.CurrentUser.OpenSubKey(RunKey); return k?.GetValue(Name) != null; }
+            catch { return false; }
+        }
+
+        public static void Set(bool on)
+        {
+            try
+            {
+                using var k = Registry.CurrentUser.OpenSubKey(RunKey, true) ?? Registry.CurrentUser.CreateSubKey(RunKey);
+                if (on) { var p = ExePath(); if (!string.IsNullOrEmpty(p)) k.SetValue(Name, "\"" + p + "\""); }
+                else k.DeleteValue(Name, false);
+            }
+            catch { /* best effort — registry may be locked down */ }
         }
     }
 
@@ -108,6 +146,7 @@ namespace SteadyOverlay
         public bool Paused = false;
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
+        public bool DarkDots = false;            // dark cue dots (for light screens) vs the default light ones
 
         // --- status surfaced to the control panel ---
         public string StatusText = "Starting…";
@@ -183,6 +222,7 @@ namespace SteadyOverlay
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
             SwapAxes = s.SwapAxes;
+            DarkDots = s.DarkDots;
         }
 
         void MakeClickThrough()
@@ -213,8 +253,7 @@ namespace SteadyOverlay
             int nNear = (int)(colArea / 7000);
             int nFar = (int)(colArea / 5200);
 
-            var brush = new SolidColorBrush(Color.FromRgb(236, 231, 215));
-            brush.Freeze();
+            var brush = DotBrush();
             var rnd = new Random();
 
             void Make(int n, List<Dot> arr, double rMin, double rJit, double alpha)
@@ -246,6 +285,22 @@ namespace SteadyOverlay
             appliedScale = DotScale;
             void Size(List<Dot> arr) { foreach (var d in arr) { d.el.Width = d.el.Height = d.r * 2 * DotScale; } }
             Size(near); Size(far);
+        }
+
+        SolidColorBrush DotBrush()
+        {
+            var b = new SolidColorBrush(DarkDots ? Color.FromRgb(18, 22, 30) : Color.FromRgb(236, 231, 215));
+            b.Freeze();
+            return b;
+        }
+
+        // recolor existing dots in place (no rebuild) when the dark-dots toggle flips
+        public void SetDarkDots(bool dark)
+        {
+            DarkDots = dark;
+            var b = DotBrush();
+            foreach (var d in near) d.el.Fill = b;
+            foreach (var d in far) d.el.Fill = b;
         }
 
         void StartSensors()
@@ -483,6 +538,9 @@ namespace SteadyOverlay
         TextBlock phoneState;
         TextBox phoneUrl;
         TextBlock phoneBt;
+        Border statusChip;
+        System.Windows.Shapes.Ellipse statusChipDot;
+        TextBlock statusChipText;
         System.Windows.Controls.Image qrImage;
         string shownUrl;
         System.Windows.Forms.NotifyIcon notify;
@@ -490,205 +548,230 @@ namespace SteadyOverlay
         System.Drawing.Icon trayIcon;
         HwndSource hwndSource;
         bool shuttingDown, teardownDone, reallyQuit;
+        CheckBox darkDots, startMin, autoStart;
+        Grid contentShell;
+        public bool StartMinimized => startMin?.IsChecked == true;
 
-        public ControlWindow(OverlayWindow ovIn, PhoneServer serverIn)
+        public ControlWindow(OverlayWindow ovIn, PhoneServer serverIn, Settings settings)
         {
             ov = ovIn;
             server = serverIn;
             Title = "Steady";
-            Width = 320; Height = 680;
-            ResizeMode = ResizeMode.NoResize;
+            Width = 420; Height = 820;
+            MinWidth = 360; MinHeight = 520;
+            ResizeMode = ResizeMode.CanResize;
+            WindowStyle = WindowStyle.None;                 // custom dark caption bar instead of the OS one
             WindowStartupLocation = WindowStartupLocation.Manual;
             Left = 28; Top = 28;
-            Topmost = true;
-            Background = new SolidColorBrush(Color.FromRgb(0x10, 0x15, 0x1E));
-            Foreground = Brushes.White;
-
-            var root = new StackPanel { Margin = new Thickness(16) };
-
-            root.Children.Add(new TextBlock
+            Topmost = false;                                // not always-on-top — other windows can sit above the panel
+            Background = Brush("BgBrush");
+            Foreground = Brush("TextBrush");
+            System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
             {
-                Text = "STEADY",
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6))
+                CaptionHeight = 36,                         // top strip is draggable
+                ResizeBorderThickness = new Thickness(6),   // thin resize grips on every edge
+                GlassFrameThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(0),
+                UseAeroCaptionButtons = false
             });
 
-            var status = new TextBlock
+            var root = new StackPanel { Margin = new Thickness(16, 16, 16, 18) };
+
+            // ---- header: wordmark + live status chip ----
+            var header = new Grid { Margin = new Thickness(2, 0, 2, 14) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var brandRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            brandRow.Children.Add(new System.Windows.Shapes.Ellipse
             {
-                Text = ov.StatusText,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6)),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 14)
-            };
+                Width = 14, Height = 14, Fill = Brush("AccentBrush"),
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0)
+            });
+            brandRow.Children.Add(Styled(new TextBlock { Text = "Steady", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            Grid.SetColumn(brandRow, 0);
+            header.Children.Add(brandRow);
+
+            statusChip = MakeChip(out statusChipDot, out statusChipText);
+            statusChip.HorizontalAlignment = HorizontalAlignment.Right;
+            statusChip.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(statusChip, 1);
+            header.Children.Add(statusChip);
+            root.Children.Add(header);
+
+            var status = Styled(new TextBlock { Text = ov.StatusText, Margin = new Thickness(2, 0, 2, 14) }, "BodyText");
             root.Children.Add(status);
             ov.StatusChanged += t => Dispatcher.Invoke(() => status.Text = t);
 
-            root.Children.Add(new TextBlock { Text = "Strength", FontSize = 12 });
-            slider = new Slider
+            // ---- MOTION card ----
+            var motion = new StackPanel();
+            motion.Children.Add(Styled(new TextBlock { Text = "MOTION" }, "SectionHeader"));
+            motion.Children.Add(Styled(new TextBlock { Text = "Strength" }, "FieldLabel"));
+            slider = Styled(new Slider
             {
-                Minimum = 0.3,
-                Maximum = 6,
-                Value = ov.Sens,
-                TickFrequency = 0.1,
-                IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 2, 0, 12)
-            };
+                Minimum = 0.3, Maximum = 6, Value = ov.Sens,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "SteadySlider");
             slider.ValueChanged += (s, e) => ov.Sens = e.NewValue;
-            root.Children.Add(slider);
+            motion.Children.Add(slider);
 
-            root.Children.Add(new TextBlock { Text = "Dot size", FontSize = 12 });
-            sizeSlider = new Slider
+            motion.Children.Add(Styled(new TextBlock { Text = "Dot size" }, "FieldLabel"));
+            sizeSlider = Styled(new Slider
             {
-                Minimum = 0.4,
-                Maximum = 3.0,
-                Value = ov.DotScale,
-                TickFrequency = 0.1,
-                IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 2, 0, 12)
-            };
+                Minimum = 0.4, Maximum = 3.0, Value = ov.DotScale,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            }, "SteadySlider");
             sizeSlider.ValueChanged += (s, e) => ov.DotScale = e.NewValue;
-            root.Children.Add(sizeSlider);
+            motion.Children.Add(sizeSlider);
+            root.Children.Add(CardOf(motion));
 
-            var row1 = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-            pause = new CheckBox { Content = "Pause", Foreground = Brushes.White, Margin = new Thickness(0, 0, 14, 0) };
+            // ---- ADJUST card (toggle switches) ----
+            var adjust = new StackPanel();
+            adjust.Children.Add(Styled(new TextBlock { Text = "ADJUST" }, "SectionHeader"));
+            pause = Toggle("Pause");
             pause.Checked += (s, e) => ov.Paused = true;
             pause.Unchecked += (s, e) => ov.Paused = false;
-            flipV = new CheckBox { Content = "Flip ↕", Foreground = Brushes.White, Margin = new Thickness(0, 0, 14, 0) };
+            adjust.Children.Add(pause);
+            adjust.Children.Add(Divider());
+            flipV = Toggle("Flip vertical  ↕");
             flipV.Checked += (s, e) => ov.InvertY = -1;
             flipV.Unchecked += (s, e) => ov.InvertY = 1;
-            flipH = new CheckBox { Content = "Flip ↔", Foreground = Brushes.White };
+            flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
+            adjust.Children.Add(flipV);
+            adjust.Children.Add(Divider());
+            flipH = Toggle("Flip horizontal  ↔");
             flipH.Checked += (s, e) => ov.InvertX = -1;
             flipH.Unchecked += (s, e) => ov.InvertX = 1;
-            flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
             flipH.IsChecked = ov.InvertX == -1;
-            row1.Children.Add(pause);
-            row1.Children.Add(flipV);
-            row1.Children.Add(flipH);
-            root.Children.Add(row1);
-
-            swap = new CheckBox
-            {
-                Content = "Swap ↕↔  (if gas/brake moves dots sideways)",
-                Foreground = Brushes.White,
-                FontSize = 11,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
+            adjust.Children.Add(flipH);
+            adjust.Children.Add(Divider());
+            swap = Toggle("Swap ↕↔");
             swap.Checked += (s, e) => ov.SwapAxes = true;
             swap.Unchecked += (s, e) => ov.SwapAxes = false;
             swap.IsChecked = ov.SwapAxes;            // reflect persisted setting
-            root.Children.Add(swap);
+            adjust.Children.Add(swap);
+            adjust.Children.Add(Styled(new TextBlock
+            {
+                Text = "Turn on Swap if gas/brake moves the dots sideways.",
+                Margin = new Thickness(0, 2, 0, 0)
+            }, "FaintText"));
+            root.Children.Add(CardOf(adjust));
 
-            var row2 = new StackPanel { Orientation = Orientation.Horizontal };
-            var recenter = new Button { Content = "Recenter", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 8, 0) };
+            // ---- action buttons ----
+            var row2 = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var recenter = Styled(new Button { Content = "Recenter" }, "SteadyButtonPrimary");
             recenter.Click += (s, e) => ov.Recenter();
-            var quit = new Button { Content = "Quit", Padding = new Thickness(12, 5, 12, 5) };
+            Grid.SetColumn(recenter, 0);
+            var quit = Styled(new Button { Content = "Quit" }, "SteadyButton");
             quit.Click += (s, e) => QuitApp();
+            Grid.SetColumn(quit, 2);
             row2.Children.Add(recenter);
             row2.Children.Add(quit);
             root.Children.Add(row2);
 
-            // --- phone sensor pairing ---
-            root.Children.Add(new TextBlock
+            // ---- PHONE SENSOR card ----
+            var phone = new StackPanel();
+            phone.Children.Add(Styled(new TextBlock { Text = "PHONE SENSOR" }, "SectionHeader"));
+            phoneState = Styled(new TextBlock { Text = "Starting server…" }, "BodyText");
+            phone.Children.Add(phoneState);
+            phoneBt = Styled(new TextBlock { Margin = new Thickness(0, 8, 0, 8) }, "BodyText");   // primary path — shown first
+            phone.Children.Add(phoneBt);
+            phoneUrl = Styled(new TextBox { Margin = new Thickness(0, 0, 0, 10) }, "SteadyReadout");
+            phone.Children.Add(phoneUrl);
+            var qrFrame = new Border
             {
-                Text = "PHONE SENSOR",
-                FontSize = 12,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6)),
-                Margin = new Thickness(0, 18, 0, 4)
-            });
-            phoneState = new TextBlock
-            {
-                Text = "Starting server…",
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6))
+                Background = Brushes.White, CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10), HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 10)
             };
-            root.Children.Add(phoneState);
-            phoneBt = new TextBlock          // primary path — shown first
-            {
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6)),
-                Margin = new Thickness(0, 6, 0, 8)
-            };
-            root.Children.Add(phoneBt);
-            phoneUrl = new TextBox
-            {
-                IsReadOnly = true,
-                Background = new SolidColorBrush(Color.FromRgb(0x18, 0x1F, 0x2B)),
-                Foreground = Brushes.White,
-                BorderThickness = new Thickness(0),
-                FontSize = 12,
-                Padding = new Thickness(6, 4, 6, 4),
-                Margin = new Thickness(0, 0, 0, 8),
-                TextWrapping = TextWrapping.Wrap
-            };
-            root.Children.Add(phoneUrl);
             qrImage = new System.Windows.Controls.Image
             {
-                Width = 184,
-                Height = 184,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, 0, 8),
-                Stretch = Stretch.Fill,
-                SnapsToDevicePixels = true
+                Width = 184, Height = 184,
+                Stretch = Stretch.Fill, SnapsToDevicePixels = true
             };
             RenderOptions.SetBitmapScalingMode(qrImage, BitmapScalingMode.NearestNeighbor);
-            root.Children.Add(qrImage);
-            root.Children.Add(new TextBlock
+            qrFrame.Child = qrImage;
+            phone.Children.Add(qrFrame);
+            phone.Children.Add(Styled(new TextBlock
             {
                 Text = "Bluetooth needs no network — just pair once. The QR opens the Steady Phone app with the " +
-                       "WiFi address pre-filled (no browser warning). Install the app once, then pick Bluetooth or WiFi in it.",
-                FontSize = 10,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x74, 0x86))
-            });
+                       "WiFi address pre-filled (no browser warning). Install the app once, then pick Bluetooth or WiFi in it."
+            }, "FaintText"));
+            root.Children.Add(CardOf(phone));
 
-            // --- debug readout (diagnose what the pipeline actually sees) ---
-            dbg = new CheckBox
-            {
-                Content = "Debug readout",
-                Foreground = Brushes.White,
-                FontSize = 11,
-                Margin = new Thickness(0, 16, 0, 6)
-            };
-            root.Children.Add(dbg);
+            // ---- DEBUG card ----
+            var debug = new StackPanel();
+            debug.Children.Add(Styled(new TextBlock { Text = "DIAGNOSTICS" }, "SectionHeader"));
+            dbg = Toggle("Debug readout");
+            dbg.Margin = new Thickness(0, 0, 0, 0);
+            debug.Children.Add(dbg);
             dbgText = new TextBlock
             {
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xE6, 0xD8)),
+                Foreground = Brush("AccentBrush"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
                 Visibility = Visibility.Collapsed
             };
             dbg.Checked += (s, e) => dbgText.Visibility = Visibility.Visible;
             dbg.Unchecked += (s, e) => dbgText.Visibility = Visibility.Collapsed;
-            root.Children.Add(dbgText);
+            debug.Children.Add(dbgText);
+            root.Children.Add(CardOf(debug));
             var dbgTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             dbgTimer.Tick += (s, e) => { if (dbg.IsChecked == true) dbgText.Text = ov.DebugText; };
             dbgTimer.Start();
 
-            hotkeyHint = new TextBlock
+            // ---- APPEARANCE & STARTUP card ----
+            var prefs = new StackPanel();
+            prefs.Children.Add(Styled(new TextBlock { Text = "APPEARANCE & STARTUP" }, "SectionHeader"));
+            darkDots = Toggle("Dark dots");
+            darkDots.IsChecked = ov.DarkDots;
+            darkDots.Checked += (s, e) => ov.SetDarkDots(true);
+            darkDots.Unchecked += (s, e) => ov.SetDarkDots(false);
+            prefs.Children.Add(darkDots);
+            prefs.Children.Add(Divider());
+            startMin = Toggle("Start minimized to tray");
+            startMin.IsChecked = settings.StartMinimized;
+            prefs.Children.Add(startMin);
+            prefs.Children.Add(Divider());
+            autoStart = Toggle("Start with Windows");
+            autoStart.IsChecked = AutoStart.IsEnabled();
+            autoStart.Checked += (s, e) => AutoStart.Set(true);
+            autoStart.Unchecked += (s, e) => AutoStart.Set(false);
+            prefs.Children.Add(autoStart);
+            root.Children.Add(CardOf(prefs));
+
+            hotkeyHint = Styled(new TextBlock
             {
-                Text = "Hotkeys (work anywhere):\n" +
-                       "Ctrl+Alt+P  pause/resume\n" +
-                       "Ctrl+Alt+R  recenter\n" +
-                       "Ctrl+Alt+[ / ]  strength − / +\n" +
-                       "Ctrl+Alt+V / H  flip ↕ / ↔\n" +
-                       "Close [X] / Minimize → tray · Quit to exit",
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x74, 0x86)),
-                Margin = new Thickness(0, 14, 0, 0)
-            };
+                Text = "Hotkeys (work anywhere)\n" +
+                       "Ctrl+Alt+P  pause/resume      Ctrl+Alt+R  recenter\n" +
+                       "Ctrl+Alt+[ / ]  strength − / +      Ctrl+Alt+V / H  flip ↕ / ↔\n" +
+                       "Minimize → taskbar · Close [X] → tray · Quit to exit",
+                Margin = new Thickness(2, 2, 2, 0)
+            }, "FaintText");
             root.Children.Add(hotkeyHint);
 
-            Content = new ScrollViewer
+            var scroller = new ScrollViewer
             {
                 Content = root,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
             };
+            var shell = new Grid { Opacity = 0 };           // faded in on load
+            shell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var caption = BuildCaption();
+            Grid.SetRow(caption, 0);
+            Grid.SetRow(scroller, 1);
+            shell.Children.Add(caption);
+            shell.Children.Add(scroller);
+            Content = shell;
+            contentShell = shell;
 
             // refresh URL/QR/connection state (IPs can appear after launch via USB tether)
             var phoneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -699,13 +782,106 @@ namespace SteadyOverlay
 
             SetupTray();
             SourceInitialized += (s, e) => RegisterHotKeys();
-            StateChanged += (s, e) => { if (WindowState == WindowState.Minimized) Hide(); };  // minimize -> tray
+            // minimize (—) goes to the taskbar like a normal window; [X] hides to the tray
+            Loaded += (s, e) => contentShell?.BeginAnimation(OpacityProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
+                { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
             Closing += (s, e) => { if (!reallyQuit) { e.Cancel = true; Hide(); } };           // [X] -> tray
             Dispatcher.ShutdownStarted += (s, e) => Teardown();                               // belt-and-suspenders
             if (Application.Current != null)
                 Application.Current.SessionEnding += (s, e) => reallyQuit = true;             // let Windows log off / shut down
             AppDomain.CurrentDomain.ProcessExit += (s, e) => Teardown();                      // clear tray even on abnormal exit
             Closed += OnClosed;
+        }
+
+        // --- styling helpers (resolve Theme.xaml resources; no-op if it failed to load) ---
+        static Brush Brush(string key)
+        {
+            var b = Application.Current?.TryFindResource(key) as Brush;
+            return b ?? Brushes.Gray;
+        }
+        static T Styled<T>(T el, string key) where T : FrameworkElement
+        {
+            if (Application.Current?.TryFindResource(key) is Style st) el.Style = st;
+            return el;
+        }
+        static Border CardOf(UIElement child)
+        {
+            var card = new Border { Child = child };
+            if (Application.Current?.TryFindResource("Card") is Style st) card.Style = st;
+            else { card.Background = Brush("CardBrush"); card.CornerRadius = new CornerRadius(12); card.Padding = new Thickness(14); card.Margin = new Thickness(0, 0, 0, 12); }
+            return card;
+        }
+        static CheckBox Toggle(string label)
+        {
+            var c = new CheckBox { Content = label };
+            return Styled(c, "SteadyToggle");
+        }
+        static Border Divider() => new Border
+        {
+            Height = 1, Background = Brush("BorderBrush2"),
+            Margin = new Thickness(0, 2, 0, 2), Opacity = 0.6
+        };
+        static Border MakeChip(out System.Windows.Shapes.Ellipse dot, out TextBlock text)
+        {
+            dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
+            text = new TextBlock { Text = "Starting…", FontSize = 11, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center };
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            sp.Children.Add(dot);
+            sp.Children.Add(text);
+            return new Border
+            {
+                Background = Brush("CardBrush"),
+                BorderBrush = Brush("BorderBrush2"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(10, 4, 11, 4),
+                Child = sp
+            };
+        }
+        void SetChip(string label, Brush color)
+        {
+            if (statusChipText == null) return;
+            statusChipText.Text = label;
+            statusChipText.Foreground = color;
+            statusChipDot.Fill = color;
+        }
+
+        // --- custom dark title bar (replaces the OS caption) ---
+        FrameworkElement BuildCaption()
+        {
+            var bar = new Grid { Height = 36, Background = Brush("BgBrush") };
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
+            left.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            left.Children.Add(new TextBlock { Text = "Steady", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            Grid.SetColumn(left, 0);
+            bar.Children.Add(left);
+
+            var btns = new StackPanel { Orientation = Orientation.Horizontal };
+            var min = CaptionBtn(0xE921, "CaptionButton");
+            min.Click += (s, e) => WindowState = WindowState.Minimized;
+            var close = CaptionBtn(0xE8BB, "CaptionClose");
+            close.Click += (s, e) => Close();              // Closing handler routes to tray
+            btns.Children.Add(min);
+            btns.Children.Add(close);
+            Grid.SetColumn(btns, 1);
+            bar.Children.Add(btns);
+            return bar;
+        }
+
+        Button CaptionBtn(int glyph, string styleKey)
+        {
+            var b = Styled(new Button
+            {
+                Width = 46,
+                Height = 36,
+                Content = new TextBlock { Text = char.ConvertFromUtf32(glyph), FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 10 }
+            }, styleKey);
+            System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(b, true);
+            return b;
         }
 
         void QuitApp()
@@ -764,23 +940,27 @@ namespace SteadyOverlay
             if (!string.IsNullOrEmpty(server.Error))
             {
                 phoneState.Text = "Phone server error: " + server.Error;
-                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
+                phoneState.Foreground = Brush("DangerBrush");
+                SetChip("Error", Brush("DangerBrush"));
                 return;
             }
             if (server.Connected || ov.PhoneActive)          // WS client OR fresh UDP frames
             {
                 phoneState.Text = "Phone connected ✓ — streaming.";
-                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x6F, 0xD8, 0xC6));
+                phoneState.Foreground = Brush("AccentBrush");
+                SetChip("Connected", Brush("AccentBrush"));
             }
             else if (server.Urls.Count > 0)
             {
                 phoneState.Text = "Waiting for phone…";
-                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6));
+                phoneState.Foreground = Brush("MutedBrush");
+                SetChip("Waiting", Brush("MutedBrush"));
             }
             else
             {
                 phoneState.Text = "Waiting for phone… (use Bluetooth below, or a hotspot/tether for WiFi)";
-                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6));
+                phoneState.Foreground = Brush("MutedBrush");
+                SetChip("Waiting", Brush("MutedBrush"));
             }
 
             phoneBt.Text = server.BtListening

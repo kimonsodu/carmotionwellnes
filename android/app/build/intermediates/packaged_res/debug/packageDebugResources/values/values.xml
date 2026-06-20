@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#6FD8C6</color>
+    <color name="accent_dim">#4FB8A8</color>
+    <color name="bg">#10151E</color>
+    <color name="bg_deep">#0B0F16</color>
+    <color name="card">#161D29</color>
+    <color name="card_hi">#1C2533</color>
+    <color name="danger">#E08A8A</color>
+    <color name="faint">#6A7486</color>
+    <color name="muted">#8A94A6</color>
+    <color name="stroke">#27313F</color>
+    <color name="text">#E6EAF0</color>
+    <style name="Card">
+        <item name="android:background">@drawable/card</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+    <style name="FieldLabel">
+        <item name="android:textColor">@color/muted</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+    <style name="SectionLabel">
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:layout_marginBottom">10dp</item>
+    </style>
+    <style name="SteadyField">
+        <item name="android:background">@drawable/field</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorHint">@color/faint</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+        <item name="android:layout_marginTop">6dp</item>
+    </style>
+    <style name="Theme.Steady" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@drawable/bg_app</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/bg_deep</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/muted</item>
+        <item name="android:textColorHint">@color/faint</item>
+        <item name="android:statusBarColor">@color/bg_deep</item>
+        <item name="android:navigationBarColor">@color/bg_deep</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+</resources>

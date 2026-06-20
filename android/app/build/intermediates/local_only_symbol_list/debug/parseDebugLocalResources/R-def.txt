@@ -1,5 +1,28 @@
 R_DEF: Internal format may change without notice
 local
+color accent
+color accent_dim
+color bg
+color bg_deep
+color card
+color card_hi
+color danger
+color faint
+color muted
+color stroke
+color text
+drawable bg_app
+drawable btn_outline
+drawable btn_primary
+drawable btn_secondary
+drawable card
+drawable field
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+drawable ic_launcher_monochrome
+drawable ic_steady_mark
+drawable ic_steady_notify
+drawable readout_bg
 id btBox
 id btnPick
 id host
@@ -13,3 +36,10 @@ id toggle
 id tvBt
 id wifiBox
 layout activity_main
+mipmap ic_launcher
+mipmap ic_launcher_round
+style Card
+style FieldLabel
+style SectionLabel
+style SteadyField
+style Theme.Steady

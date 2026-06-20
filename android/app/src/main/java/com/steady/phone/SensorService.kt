@@ -160,7 +160,7 @@ class SensorService : Service(), SensorEventListener {
         val n: Notification = Notification.Builder(this, CHANNEL)
             .setContentTitle("Steady")
             .setContentText("Streaming motion to the laptop")
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.drawable.ic_steady_notify)
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 29)

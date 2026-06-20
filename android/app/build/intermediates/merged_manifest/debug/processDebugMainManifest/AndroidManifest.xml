@@ -27,10 +27,11 @@
         android:allowBackup="true"
         android:debuggable="true"
         android:extractNativeLibs="false"
-        android:icon="@android:drawable/ic_menu_compass"
+        android:icon="@mipmap/ic_launcher"
         android:label="Steady Phone"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light" >
+        android:theme="@style/Theme.Steady" >
         <activity
             android:name="com.steady.phone.MainActivity"
             android:exported="true"

@@ -1,0 +1,64 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.steady.phone.app-debug-4:/values_values.arsc.flat",
+            "map": [
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\carsick\\android\\app\\src\\main\\res\\values\\themes.xml",
+                    "from": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "142",
+                        "endLines": "15",
+                        "endColumns": "12",
+                        "endOffsets": "948"
+                    },
+                    "to": {
+                        "startLines": "39",
+                        "startColumns": "4",
+                        "startOffsets": "1680",
+                        "endLines": "51",
+                        "endColumns": "12",
+                        "endOffsets": "2486"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\carsick\\android\\app\\src\\main\\res\\values\\styles.xml",
+                    "from": {
+                        "startLines": "2,16,8,21",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,584,261,737",
+                        "endLines": "6,19,14,30",
+                        "endColumns": "12,12,12,12",
+                        "endOffsets": "255,731,578,1231"
+                    },
+                    "to": {
+                        "startLines": "13,18,22,29",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "502,707,859,1181",
+                        "endLines": "17,21,28,38",
+                        "endColumns": "12,12,12,12",
+                        "endOffsets": "702,854,1176,1675"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\carsick\\android\\app\\src\\main\\res\\values\\colors.xml",
+                    "from": {
+                        "startLines": "7,8,2,3,4,5,12,11,10,6,9",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "256,297,55,92,134,173,461,421,381,215,342",
+                        "endColumns": "40,44,36,41,38,41,40,39,39,40,38",
+                        "endOffsets": "292,337,87,129,168,210,497,456,416,251,376"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,12",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,96,141,178,220,259,301,342,382,422,463",
+                        "endColumns": "40,44,36,41,38,41,40,39,39,40,38",
+                        "endOffsets": "91,136,173,215,254,296,337,377,417,458,497"
+                    }
+                }
+            ]
+        }
+    ]
+}

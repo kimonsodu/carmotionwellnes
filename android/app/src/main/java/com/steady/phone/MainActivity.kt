@@ -161,6 +161,8 @@ class MainActivity : Activity() {
     private fun tick() {
         val running = SensorService.running
         toggle.text = if (running) "Stop streaming" else "Start streaming"
+        toggle.setBackgroundResource(if (running) R.drawable.btn_secondary else R.drawable.btn_primary)
+        toggle.setTextColor(getColor(if (running) R.color.accent else R.color.bg))
         status.text = if (running) SensorService.statusLine else "stopped"
         readout.text = SensorService.readout
         val en = !running
