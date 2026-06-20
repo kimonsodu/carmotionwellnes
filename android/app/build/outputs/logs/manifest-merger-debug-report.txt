@@ -1,0 +1,97 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-36:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-36:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-36:12
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:1-36:12
+	package
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	android:versionName
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	android:versionCode
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:5-67
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:22-64
+uses-permission#android.permission.WAKE_LOCK
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:5-68
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:22-65
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:5-77
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_DATA_SYNC
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:5-87
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:22-84
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:5-77
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:22-74
+uses-permission#android.permission.BLUETOOTH
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:5-95
+	android:maxSdkVersion
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:66-92
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:22-65
+uses-permission#android.permission.BLUETOOTH_ADMIN
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:5-101
+	android:maxSdkVersion
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:72-98
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:22-71
+uses-permission#android.permission.BLUETOOTH_CONNECT
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:5-76
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:22-73
+application
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-35:19
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-35:19
+	android:extractNativeLibs
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	android:supportsRtl
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:19:9-35
+	android:label
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:18:9-37
+	android:icon
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:17:9-57
+	android:allowBackup
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:9-35
+	android:theme
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:9-60
+activity#com.steady.phone.MainActivity
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:9-29:20
+	android:exported
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:24:13-36
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:23:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:25:13-28:29
+action#android.intent.action.MAIN
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:17-69
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:25-66
+category#android.intent.category.LAUNCHER
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:17-77
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:27-74
+service#com.steady.phone.SensorService
+ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:31:9-34:56
+	android:exported
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:13-37
+	android:foregroundServiceType
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:13-53
+	android:name
+		ADDED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:13-42
+uses-sdk
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml

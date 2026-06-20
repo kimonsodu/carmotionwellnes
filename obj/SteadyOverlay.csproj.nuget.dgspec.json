@@ -47,6 +47,10 @@
         "net8.0-windows10.0.19041": {
           "targetAlias": "net8.0-windows10.0.19041.0",
           "dependencies": {
+            "InTheHand.Net.Bluetooth": {
+              "target": "Package",
+              "version": "[4.2.0, )"
+            },
             "QRCoder": {
               "target": "Package",
               "version": "[1.6.0, )"

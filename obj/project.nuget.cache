@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "bEtAi6NwCwI=",
+  "dgSpecHash": "62iGnfbgH4M=",
   "success": true,
   "projectFilePath": "C:\\Users\\simon\\Documents\\dev\\carsick\\SteadyOverlay.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\simon\\.nuget\\packages\\inthehand.net.bluetooth\\4.2.0\\inthehand.net.bluetooth.4.2.0.nupkg.sha512",
     "C:\\Users\\simon\\.nuget\\packages\\microsoft.win32.systemevents\\6.0.0\\microsoft.win32.systemevents.6.0.0.nupkg.sha512",
     "C:\\Users\\simon\\.nuget\\packages\\qrcoder\\1.6.0\\qrcoder.1.6.0.nupkg.sha512",
     "C:\\Users\\simon\\.nuget\\packages\\system.drawing.common\\6.0.0\\system.drawing.common.6.0.0.nupkg.sha512",

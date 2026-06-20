@@ -1,0 +1,15 @@
+R_DEF: Internal format may change without notice
+local
+id btBox
+id btnPick
+id host
+id modeGroup
+id port
+id rbBt
+id rbWifi
+id readout
+id status
+id toggle
+id tvBt
+id wifiBox
+layout activity_main

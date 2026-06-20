@@ -15,6 +15,8 @@
   <ItemGroup>
     <!-- QR code for the phone-pairing panel (pure managed, no System.Drawing dep) -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <!-- Bluetooth RFCOMM/SPP server for the native app's Bluetooth transport -->
+    <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.2.0" />
   </ItemGroup>
 
 </Project>

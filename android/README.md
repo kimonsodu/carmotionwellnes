@@ -22,16 +22,23 @@ Steady control panel.
 
 ## Use it
 
-1. On the laptop, run **Steady**. The control panel's **PHONE SENSOR** section shows
-   `App (UDP):  <ip> : 8443`.
-2. Connect the phone to the laptop's local link:
-   - **USB tether** (most reliable): plug in, enable **USB tethering**. Works with mobile data
-     off; charges the phone too.
-   - or **WiFi hotspot**: phone hotspot on, laptop joins it (or vice-versa).
-3. Open **Steady Phone** on the phone. Type the **PC address** + **port** (`8443`) from the
-   panel. Tap **Start streaming**.
-4. The phone shows live numbers + Hz; the laptop panel flips to **Phone connected ✓**. Now the
-   **screen can turn off** — the notification keeps it streaming.
+Pick a **Connection** in the app: **Bluetooth** (default) or **WiFi**.
+
+### Bluetooth — recommended, needs no network at all
+Works with the phone fully offline and the laptop on any/no network.
+1. **Pair** the laptop and phone once in **Android Settings → Bluetooth** (accept on the PC too).
+2. Run **Steady** on the laptop (its panel shows `Bluetooth — pair this PC "<name>" ...`).
+3. In the app: **Bluetooth → Choose paired PC →** pick the laptop **→ Start**.
+
+### WiFi — when both are on one network
+Any shared network works: the **same WiFi router**, a **phone/laptop hotspot**, or **USB tether**
+(USB works with mobile data off and charges the phone).
+1. Run **Steady**; the panel shows `WiFi — ... <ip> : 8443` and a **QR**.
+2. **Scan the QR** with the phone camera — it opens this app with the address pre-filled (no browser,
+   no security warning). Or choose **WiFi** and type the address. Then **Start**.
+
+Either way: the phone shows live numbers + Hz, the laptop panel flips to **Phone connected ✓**,
+and the **screen can then turn off** — the notification keeps it streaming.
 
 Tune feel on the laptop as usual (Strength / Flip / **Swap ↕↔** / Recenter) to match how the
 phone is mounted. Dots react to real *acceleration* (turns, gas, brake), not tilt.

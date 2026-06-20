@@ -22,6 +22,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Media.Imaging;
 using QRCoder;
+using InTheHand.Net.Bluetooth;
+using InTheHand.Net.Sockets;
 
 namespace SteadyOverlay
 {
@@ -478,6 +480,7 @@ namespace SteadyOverlay
         TextBlock hotkeyHint, dbgText;
         TextBlock phoneState;
         TextBox phoneUrl;
+        TextBlock phoneBt;
         System.Windows.Controls.Image qrImage;
         string shownUrl;
         System.Windows.Forms.NotifyIcon notify;
@@ -601,6 +604,14 @@ namespace SteadyOverlay
                 Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6))
             };
             root.Children.Add(phoneState);
+            phoneBt = new TextBlock          // primary path — shown first
+            {
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6)),
+                Margin = new Thickness(0, 6, 0, 8)
+            };
+            root.Children.Add(phoneBt);
             phoneUrl = new TextBox
             {
                 IsReadOnly = true,
@@ -609,7 +620,7 @@ namespace SteadyOverlay
                 BorderThickness = new Thickness(0),
                 FontSize = 12,
                 Padding = new Thickness(6, 4, 6, 4),
-                Margin = new Thickness(0, 6, 0, 8),
+                Margin = new Thickness(0, 0, 0, 8),
                 TextWrapping = TextWrapping.Wrap
             };
             root.Children.Add(phoneUrl);
@@ -626,8 +637,8 @@ namespace SteadyOverlay
             root.Children.Add(qrImage);
             root.Children.Add(new TextBlock
             {
-                Text = "Put phone + PC on one WiFi hotspot, or USB-tether the phone (works with mobile data off). " +
-                       "Scan the code (or type the link), tap Start, accept the security warning. No internet needed.",
+                Text = "Bluetooth needs no network — just pair once. The QR opens the Steady Phone app with the " +
+                       "WiFi address pre-filled (no browser warning). Install the app once, then pick Bluetooth or WiFi in it.",
                 FontSize = 10,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x6A, 0x74, 0x86))
@@ -766,16 +777,21 @@ namespace SteadyOverlay
             }
             else
             {
-                phoneState.Text = "No network — turn on a WiFi hotspot or USB-tether the phone.";
-                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x8A, 0x8A));
+                phoneState.Text = "Waiting for phone… (use Bluetooth below, or a hotspot/tether for WiFi)";
+                phoneState.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA6));
             }
 
-            phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryUrl) ? ""
-                : $"App (UDP):  {server.PrimaryIp} : {server.Port}\nBrowser:  {server.PrimaryUrl}";
-            if (server.PrimaryUrl != shownUrl)               // only re-render the QR when the URL changes
+            phoneBt.Text = server.BtListening
+                ? $"① Bluetooth (recommended, no network) — pair this PC (\"{server.BtName}\") in the phone's Bluetooth settings, then in the app pick Bluetooth ▸ this PC."
+                : "① Bluetooth — " + (string.IsNullOrEmpty(server.BtError) ? "starting…" : server.BtError);
+            string appLink = string.IsNullOrEmpty(server.PrimaryIp) ? ""
+                : $"steady://connect?host={server.PrimaryIp}&port={server.Port}";
+            phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryIp) ? ""
+                : $"② WiFi — same hotspot, same WiFi, or USB tether.\n   Scan the QR to open the app pre-filled, or enter  {server.PrimaryIp} : {server.Port}\n   Browser fallback: {server.PrimaryUrl}  (warns 'not secure' → Advanced ▸ proceed)";
+            if (appLink != shownUrl)               // re-render the QR only when the target changes
             {
-                shownUrl = server.PrimaryUrl;
-                qrImage.Source = LoadPng(string.IsNullOrEmpty(shownUrl) ? null : PhoneServer.QrPng(shownUrl));
+                shownUrl = appLink;
+                qrImage.Source = LoadPng(string.IsNullOrEmpty(appLink) ? null : PhoneServer.QrPng(appLink));
             }
         }
 
@@ -908,8 +924,15 @@ namespace SteadyOverlay
         public List<string> Urls { get; private set; } = new List<string>();
         public string Error { get; private set; }
 
+        // Bluetooth (RFCOMM/SPP) — the no-network transport. Must match the Android app's UUID.
+        public static readonly Guid BtUuid = new Guid("b1a7e94c-1c3a-4e7e-9b2a-0a1b2c3d4e5f");
+        public bool BtListening { get; private set; }
+        public string BtName { get; private set; } = "";
+        public string BtError { get; private set; } = "";
+
         TcpListener listener;
         UdpClient udp;                      // plain UDP ingest for the native app (no TLS needed off-browser)
+        BluetoothListener btListener;
         volatile X509Certificate2 cert;     // swapped at runtime when link IPs change; read per-connection
         string certIps = "";
         int clients;
@@ -939,6 +962,7 @@ namespace SteadyOverlay
                     new Thread(UdpLoop) { IsBackground = true, Name = "PhoneUDP" }.Start();
                 }
                 catch { /* UDP optional; the browser WS path still works */ }
+                StartBt();
             }
             catch (Exception ex)
             {
@@ -1117,6 +1141,51 @@ namespace SteadyOverlay
             }
         }
 
+        // --- Bluetooth RFCOMM/SPP: no-network transport. Pair the phone with this PC once,
+        //     then the app connects to our service UUID and streams newline-delimited JSON. ---
+        void StartBt()
+        {
+            try
+            {
+                var radio = BluetoothRadio.Default;
+                if (radio == null) { BtError = "no Bluetooth radio on this PC"; return; }
+                BtName = radio.Name;
+                btListener = new BluetoothListener(BtUuid) { ServiceName = "SteadyPhone" };
+                btListener.Start();
+                BtListening = true;
+                new Thread(BtAcceptLoop) { IsBackground = true, Name = "PhoneBT" }.Start();
+            }
+            catch (Exception ex) { BtError = ex.Message; BtListening = false; }
+        }
+
+        void BtAcceptLoop()
+        {
+            while (true)
+            {
+                BluetoothClient c;
+                try { c = btListener.AcceptBluetoothClient(); }
+                catch { break; }       // listener stopped
+                ThreadPool.QueueUserWorkItem(_ => BtHandle(c));
+            }
+        }
+
+        void BtHandle(BluetoothClient c)
+        {
+            try
+            {
+                using (c)
+                {
+                    try { c.Client.ReceiveTimeout = 30000; } catch { }  // free the worker if the link half-opens
+                    using var s = c.GetStream();
+                    using var reader = new StreamReader(s, Encoding.UTF8);
+                    string line;
+                    while ((line = reader.ReadLine()) != null)   // one JSON object per line
+                        if (line.Length > 0) Parse(line, onFrame);
+                }
+            }
+            catch { /* connection dropped */ }
+        }
+
         void Handle(TcpClient client)
         {
             try
@@ -1213,11 +1282,14 @@ namespace SteadyOverlay
             StateChanged?.Invoke();
         }
 
-        void HandleText(byte[] payload)
+        void HandleText(byte[] payload) => Parse(Encoding.UTF8.GetString(payload), onFrame);
+
+        // Shared JSON-frame parser for every transport (WS, UDP, Bluetooth).
+        static void Parse(string json, Action<double, double, double, double, double, double, bool> onFrame)
         {
             try
             {
-                using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(payload));
+                using var doc = JsonDocument.Parse(json);
                 var r = doc.RootElement;
                 double G(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
                 bool gValid = r.TryGetProperty("g", out var gv) && gv.ValueKind == JsonValueKind.Number && gv.GetDouble() != 0;

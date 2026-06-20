@@ -24,30 +24,86 @@
             android:layout_height="wrap_content" />
 
         <TextView
-            android:text="PC address (shown in the Steady panel, 'App (UDP)')"
+            android:text="Connection"
+            android:textStyle="bold"
             android:layout_marginTop="20dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
 
-        <EditText
-            android:id="@+id/host"
-            android:hint="192.168.x.x"
-            android:inputType="text"
+        <RadioGroup
+            android:id="@+id/modeGroup"
+            android:orientation="horizontal"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content">
+            <RadioButton
+                android:id="@+id/rbBt"
+                android:text="Bluetooth"
+                android:checked="true"
+                android:layout_marginEnd="24dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <RadioButton
+                android:id="@+id/rbWifi"
+                android:text="WiFi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </RadioGroup>
 
-        <TextView
-            android:text="Port"
-            android:layout_marginTop="12dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <EditText
-            android:id="@+id/port"
-            android:hint="8443"
-            android:inputType="number"
+        <!-- WiFi target -->
+        <LinearLayout
+            android:id="@+id/wifiBox"
+            android:orientation="vertical"
+            android:visibility="gone"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content">
+            <TextView
+                android:text="PC address (shown in the Steady panel, 'WiFi — App (UDP)')"
+                android:layout_marginTop="12dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/host"
+                android:hint="192.168.x.x"
+                android:inputType="text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:text="Port"
+                android:layout_marginTop="8dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/port"
+                android:hint="8443"
+                android:inputType="number"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Bluetooth target -->
+        <LinearLayout
+            android:id="@+id/btBox"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <TextView
+                android:text="Pair the laptop in Android Bluetooth settings first, then pick it here."
+                android:layout_marginTop="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+            <Button
+                android:id="@+id/btnPick"
+                android:text="Choose paired PC"
+                android:layout_marginTop="8dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+            <TextView
+                android:id="@+id/tvBt"
+                android:text="(none chosen)"
+                android:layout_marginTop="4dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/toggle"

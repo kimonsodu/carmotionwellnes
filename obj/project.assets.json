@@ -2,6 +2,19 @@
   "version": 3,
   "targets": {
     "net8.0-windows10.0.19041": {
+      "InTheHand.Net.Bluetooth/4.2.0": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0-windows10.0.19041/InTheHand.Net.Bluetooth.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0-windows10.0.19041/InTheHand.Net.Bluetooth.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Microsoft.Win32.SystemEvents/6.0.0": {
         "type": "package",
         "compile": {
@@ -68,6 +81,54 @@
     }
   },
   "libraries": {
+    "InTheHand.Net.Bluetooth/4.2.0": {
+      "sha512": "LDhXsxus4sY48XTLaab2flwC2RZjGK3uAagg2dbOzJac9EFE1KcGM7L0VVKkmB0OnSRF1E5fS5LMtCCF0Qp1pg==",
+      "type": "package",
+      "path": "inthehand.net.bluetooth/4.2.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "32feet-package-icon.png",
+        "README.md",
+        "inthehand.net.bluetooth.4.2.0.nupkg.sha512",
+        "inthehand.net.bluetooth.nuspec",
+        "lib/monoandroid10.0/InTheHand.Net.Bluetooth.dll",
+        "lib/monoandroid10.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net462/InTheHand.Net.Bluetooth.dll",
+        "lib/net462/InTheHand.Net.Bluetooth.xml",
+        "lib/net6.0-windows10.0.19041/InTheHand.Net.Bluetooth.dll",
+        "lib/net6.0-windows10.0.19041/InTheHand.Net.Bluetooth.xml",
+        "lib/net6.0-windows7.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net6.0-windows7.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net6.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net6.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net7.0-windows10.0.19041/InTheHand.Net.Bluetooth.dll",
+        "lib/net7.0-windows10.0.19041/InTheHand.Net.Bluetooth.xml",
+        "lib/net7.0-windows7.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net7.0-windows7.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net7.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net7.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net8.0-android34.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net8.0-android34.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net8.0-ios18.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net8.0-ios18.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net8.0-windows10.0.19041/InTheHand.Net.Bluetooth.dll",
+        "lib/net8.0-windows10.0.19041/InTheHand.Net.Bluetooth.xml",
+        "lib/net8.0-windows7.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net8.0-windows7.0/InTheHand.Net.Bluetooth.xml",
+        "lib/net8.0/InTheHand.Net.Bluetooth.dll",
+        "lib/net8.0/InTheHand.Net.Bluetooth.xml",
+        "lib/netstandard2.0/InTheHand.Net.Bluetooth.dll",
+        "lib/netstandard2.0/InTheHand.Net.Bluetooth.xml",
+        "lib/netstandard2.1/InTheHand.Net.Bluetooth.dll",
+        "lib/netstandard2.1/InTheHand.Net.Bluetooth.xml",
+        "lib/uap10.0.16299/InTheHand.Net.Bluetooth.dll",
+        "lib/uap10.0.16299/InTheHand.Net.Bluetooth.pri",
+        "lib/uap10.0.16299/InTheHand.Net.Bluetooth.xml",
+        "lib/xamarinios10/InTheHand.Net.Bluetooth.dll",
+        "lib/xamarinios10/InTheHand.Net.Bluetooth.xml"
+      ]
+    },
     "Microsoft.Win32.SystemEvents/6.0.0": {
       "sha512": "hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A==",
       "type": "package",
@@ -160,6 +221,7 @@
   },
   "projectFileDependencyGroups": {
     "net8.0-windows10.0.19041": [
+      "InTheHand.Net.Bluetooth >= 4.2.0",
       "QRCoder >= 1.6.0"
     ]
   },
@@ -210,6 +272,10 @@
       "net8.0-windows10.0.19041": {
         "targetAlias": "net8.0-windows10.0.19041.0",
         "dependencies": {
+          "InTheHand.Net.Bluetooth": {
+            "target": "Package",
+            "version": "[4.2.0, )"
+          },
           "QRCoder": {
             "target": "Package",
             "version": "[1.6.0, )"

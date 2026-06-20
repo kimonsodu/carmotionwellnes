@@ -1,0 +1,87 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.steady.phone"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:5-67
+11-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.WAKE_LOCK" />
+12-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:5-68
+12-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:22-65
+13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+13-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:5-77
+13-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:22-74
+14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+14-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:5-87
+14-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:22-84
+15    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+15-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:5-77
+15-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:22-74
+16
+17    <!-- Bluetooth transport (RFCOMM/SPP to the paired laptop) -->
+18    <uses-permission
+18-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:5-95
+19        android:name="android.permission.BLUETOOTH"
+19-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:22-65
+20        android:maxSdkVersion="30" />
+20-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:66-92
+21    <uses-permission
+21-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:5-101
+22        android:name="android.permission.BLUETOOTH_ADMIN"
+22-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:22-71
+23        android:maxSdkVersion="30" />
+23-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:72-98
+24    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:5-76
+24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:13:22-73
+25
+26    <application
+26-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-35:19
+27        android:allowBackup="true"
+27-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:9-35
+28        android:debuggable="true"
+29        android:extractNativeLibs="false"
+30        android:icon="@android:drawable/ic_menu_compass"
+30-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:17:9-57
+31        android:label="Steady Phone"
+31-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:18:9-37
+32        android:supportsRtl="true"
+32-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:19:9-35
+33        android:testOnly="true"
+34        android:theme="@android:style/Theme.Material.Light" >
+34-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:9-60
+35        <activity
+35-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:9-29:20
+36            android:name="com.steady.phone.MainActivity"
+36-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:23:13-41
+37            android:exported="true" >
+37-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:24:13-36
+38            <intent-filter>
+38-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:25:13-28:29
+39                <action android:name="android.intent.action.MAIN" />
+39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:17-69
+39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:25-66
+40
+41                <category android:name="android.intent.category.LAUNCHER" />
+41-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:17-77
+41-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:27-74
+42            </intent-filter>
+43        </activity>
+44
+45        <service
+45-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:31:9-34:56
+46            android:name="com.steady.phone.SensorService"
+46-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:13-42
+47            android:exported="false"
+47-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:13-37
+48            android:foregroundServiceType="dataSync" />
+48-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:13-53
+49    </application>
+50
+51</manifest>

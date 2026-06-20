@@ -1,9 +1,11 @@
 package com.steady.phone
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -16,19 +18,22 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.PowerManager
+import java.io.OutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.util.Locale
+import java.util.UUID
 
 /**
- * Foreground service that reads the phone's accelerometer + gyroscope and streams
- * one JSON datagram per sample to the laptop over UDP. A foreground service plus a
- * partial wake lock keeps the sensors delivering with the screen off.
+ * Foreground service: reads accelerometer + gyroscope and streams one JSON object per
+ * sample to the laptop. Two transports, chosen by the app:
+ *   - "wifi": UDP datagram to host:port (needs a shared local link / USB tether)
+ *   - "bt":   Bluetooth RFCOMM/SPP, newline-delimited, to a paired PC (no network at all)
+ * A foreground service + partial wake lock keeps sampling with the screen off.
  *
- * Wire format matches the browser WS frame the PC already parses:
- *   {"ax":..,"ay":..,"az":..,"gx":..,"gy":..,"gz":..,"g":0|1}
- * accel = m/s^2 (incl. gravity, TYPE_ACCELEROMETER); gyro = deg/s (converted from rad/s).
+ * Frame (m/s^2 accel incl. gravity; deg/s gyro), matching every PC ingest path:
+ *   {"ax":..,"ay":..,"az":..,"gx":..,"gy":..,"gz":..,"g":0|1}\n
  */
 class SensorService : Service(), SensorEventListener {
 
@@ -36,18 +41,18 @@ class SensorService : Service(), SensorEventListener {
         @Volatile var running = false
         @Volatile var statusLine = ""
         @Volatile var readout = ""
+        val BT_UUID: UUID = UUID.fromString("b1a7e94c-1c3a-4e7e-9b2a-0a1b2c3d4e5f")
         private const val CHANNEL = "steady"
         private const val NOTIF_ID = 7
     }
+
+    private interface Transport { fun send(bytes: ByteArray); fun close() }
 
     private var sm: SensorManager? = null
     private var wake: PowerManager.WakeLock? = null
     private var thread: HandlerThread? = null
     private var handler: Handler? = null
-
-    private var socket: DatagramSocket? = null
-    private var addr: InetAddress? = null
-    private var port = 8443
+    @Volatile private var transport: Transport? = null
 
     @Volatile private var ax = 0f
     @Volatile private var ay = 0f
@@ -60,44 +65,39 @@ class SensorService : Service(), SensorEventListener {
     private var lastSendNs = 0L
     private var rateMark = 0L
     private var sent = 0L
-
     private val RAD2DEG = 57.29578f
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // On a START_STICKY restart the system passes a null intent, so recover the
-        // last target from SharedPreferences instead of defaulting host to "" — which
-        // InetAddress.getByName() would silently resolve to localhost (laptop gets nothing).
+        // Recover target from SharedPreferences when the intent is null (START_STICKY restart).
         val prefs = getSharedPreferences("steady", Context.MODE_PRIVATE)
+        val mode = intent?.getStringExtra("mode") ?: prefs.getString("mode", "wifi") ?: "wifi"
         var host = (intent?.getStringExtra("host")?.trim()).orEmpty()
         if (host.isEmpty()) host = (prefs.getString("host", "") ?: "").trim()
-        port = intent?.getIntExtra("port", 0)?.takeIf { it > 0 }
+        val port = intent?.getIntExtra("port", 0)?.takeIf { it > 0 }
             ?: (prefs.getString("port", "8443")?.toIntOrNull() ?: 8443)
+        var btMac = (intent?.getStringExtra("btMac")).orEmpty()
+        if (btMac.isEmpty()) btMac = prefs.getString("btMac", "") ?: ""
 
-        if (host.isEmpty()) {                       // nothing to stream to — fail loudly, never to localhost
-            statusLine = "no PC address — open the app and enter it"
-            running = false
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        if (mode == "wifi" && host.isEmpty()) return fail("no PC address — open the app and enter it")
+        if (mode == "bt" && btMac.isEmpty()) return fail("no Bluetooth device — open the app and pick the PC")
 
         startForegroundNotification()
 
         thread = HandlerThread("steady-sensors").also { it.start() }
         handler = Handler(thread!!.looper)
 
-        // resolve + open socket on the worker thread (off the main thread)
+        // open the transport on the worker thread (BT connect() blocks)
         handler!!.post {
             try {
-                val a = InetAddress.getByName(host)
-                if (a.isLoopbackAddress || a.isAnyLocalAddress)
-                    throw java.net.UnknownHostException("\"$host\" is localhost, not the laptop")
-                addr = a
-                socket = DatagramSocket()
-                statusLine = "streaming to $host:$port"
+                transport = if (mode == "bt") openBt(btMac) else openUdp(host, port)
+                statusLine = if (mode == "bt") "Bluetooth — streaming" else "WiFi — streaming to $host:$port"
             } catch (e: Exception) {
-                statusLine = "bad PC address \"$host\": ${e.message}"
+                transport = null
+                statusLine = "connect failed: ${e.message}"
+                running = false          // don't sit foregrounded with a dead stream + held wake lock
+                stopSelf()               // -> onDestroy releases sensors/wake lock; UI flips to Start
             }
         }
 
@@ -111,12 +111,45 @@ class SensorService : Service(), SensorEventListener {
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "steady:stream").apply {
-            setReferenceCounted(false)
-            acquire()
+            setReferenceCounted(false); acquire()
         }
 
         running = true
         return START_STICKY
+    }
+
+    private fun fail(msg: String): Int {
+        statusLine = msg
+        running = false
+        stopSelf()
+        return START_NOT_STICKY
+    }
+
+    private fun openUdp(host: String, port: Int): Transport {
+        val a = InetAddress.getByName(host)
+        if (a.isLoopbackAddress || a.isAnyLocalAddress)
+            throw java.net.UnknownHostException("\"$host\" is localhost, not the laptop")
+        val sock = DatagramSocket()
+        return object : Transport {
+            override fun send(bytes: ByteArray) = sock.send(DatagramPacket(bytes, bytes.size, a, port))
+            override fun close() { try { sock.close() } catch (_: Exception) {} }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun openBt(mac: String): Transport {
+        val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+            ?: throw IllegalStateException("no Bluetooth on this phone")
+        if (!adapter.isEnabled) throw IllegalStateException("turn on Bluetooth")
+        val dev = adapter.getRemoteDevice(mac)
+        try { adapter.cancelDiscovery() } catch (_: Exception) {}
+        val sock = dev.createRfcommSocketToServiceRecord(BT_UUID)
+        sock.connect()                 // blocking
+        val out: OutputStream = sock.outputStream
+        return object : Transport {
+            override fun send(bytes: ByteArray) = out.write(bytes)
+            override fun close() { try { sock.close() } catch (_: Exception) {} }
+        }
     }
 
     private fun startForegroundNotification() {
@@ -154,19 +187,19 @@ class SensorService : Service(), SensorEventListener {
         val now = System.nanoTime()
         if (now - lastSendNs < 14_000_000L) return   // ~66 Hz cap
         lastSendNs = now
-        val s = socket ?: return
-        val a = addr ?: return
-        // Locale.US so decimals use '.', not a locale comma (would break JSON on the PC)
+        val t = transport ?: return
+        // Locale.US so decimals use '.', not a locale comma (would break JSON on the PC).
+        // Trailing '\n' delimits frames for the Bluetooth stream; harmless for UDP datagrams.
         val json = String.format(
             Locale.US,
-            "{\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f,\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f,\"g\":%d}",
+            "{\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f,\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f,\"g\":%d}\n",
             ax, ay, az, gx, gy, gz, haveGyro
         )
         try {
-            val b = json.toByteArray()
-            s.send(DatagramPacket(b, b.size, a, port))
+            t.send(json.toByteArray())
             sent++
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            statusLine = "send failed: ${e.message}"
         }
         if (now - rateMark >= 500_000_000L) {
             val hz = if (rateMark == 0L) 0 else sent * 1_000_000_000L / (now - rateMark)
@@ -183,7 +216,7 @@ class SensorService : Service(), SensorEventListener {
         running = false
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
         try { wake?.release() } catch (_: Exception) {}
-        try { socket?.close() } catch (_: Exception) {}
+        try { transport?.close() } catch (_: Exception) {}
         try { thread?.quitSafely() } catch (_: Exception) {}
         statusLine = ""
         readout = ""
