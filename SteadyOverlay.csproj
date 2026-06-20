@@ -10,11 +10,14 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <ApplicationIcon>steady.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- dark-theme styles for the control panel (loaded at runtime; no App.xaml) -->
     <Resource Include="Theme.xaml" />
+    <!-- branded app icon, also loaded at runtime for the panel's taskbar/alt-tab icon -->
+    <Resource Include="steady.ico" />
   </ItemGroup>
 
   <ItemGroup>

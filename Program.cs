@@ -681,6 +681,7 @@ namespace SteadyOverlay
             server = serverIn;
             firstRunDone = settings.FirstRunDone;
             Title = "Steady";
+            try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
             MinWidth = 360; MinHeight = 520;
             ResizeMode = ResizeMode.CanResize;
@@ -729,7 +730,7 @@ namespace SteadyOverlay
 
             // ---- MOTION card ----
             var motion = new StackPanel();
-            motion.Children.Add(Styled(new TextBlock { Text = "MOTION" }, "SectionHeader"));
+            motion.Children.Add(SectionHead("MOTION"));
             motion.Children.Add(FieldHead("Strength", out var strengthVal));
             slider = Styled(new Slider
             {
@@ -757,7 +758,7 @@ namespace SteadyOverlay
 
             // ---- ADJUST card (toggle switches) ----
             var adjust = new StackPanel();
-            adjust.Children.Add(Styled(new TextBlock { Text = "ADJUST" }, "SectionHeader"));
+            adjust.Children.Add(SectionHead("ADJUST"));
             pause = Toggle("Pause");
             pause.ToolTip = "Freeze the dots (Ctrl+Alt+P).";
             pause.Checked += (s, e) => ov.Paused = true;
@@ -817,7 +818,7 @@ namespace SteadyOverlay
 
             // ---- PHONE SENSOR card ----
             var phone = new StackPanel();
-            phone.Children.Add(Styled(new TextBlock { Text = "PHONE SENSOR" }, "SectionHeader"));
+            phone.Children.Add(SectionHead("PHONE SENSOR"));
             phoneState = Styled(new TextBlock { Text = "Starting server…", Margin = new Thickness(0, 0, 0, 8) }, "BodyText");
             phone.Children.Add(phoneState);
 
@@ -882,7 +883,7 @@ namespace SteadyOverlay
 
             // ---- DEBUG card ----
             var debug = new StackPanel();
-            debug.Children.Add(Styled(new TextBlock { Text = "DIAGNOSTICS" }, "SectionHeader"));
+            debug.Children.Add(SectionHead("DIAGNOSTICS"));
             dbg = Toggle("Debug readout");
             dbg.Margin = new Thickness(0, 0, 0, 0);
             debug.Children.Add(dbg);
@@ -905,7 +906,7 @@ namespace SteadyOverlay
 
             // ---- APPEARANCE & STARTUP card ----
             var prefs = new StackPanel();
-            prefs.Children.Add(Styled(new TextBlock { Text = "APPEARANCE & STARTUP" }, "SectionHeader"));
+            prefs.Children.Add(SectionHead("APPEARANCE & STARTUP"));
             prefs.Children.Add(FieldHead("Dot colour", out var dotColourVal));
             string[] dotNames = { "Light", "Mixed", "Dark" };
             var dotStyleSlider = Styled(new Slider
@@ -1064,6 +1065,22 @@ namespace SteadyOverlay
             var c = new CheckBox { Content = label };
             return Styled(c, "SteadyToggle");
         }
+        // section title with a teal accent marker (consistent, font-glyph-free)
+        static StackPanel SectionHead(string text)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            sp.Children.Add(new Border
+            {
+                Width = 3, Height = 12, CornerRadius = new CornerRadius(2),
+                Background = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 9, 0)
+            });
+            var t = Styled(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center }, "SectionHeader");
+            t.Margin = new Thickness(0);
+            sp.Children.Add(t);
+            return sp;
+        }
+
         // a "Label …………… value" header row above a slider; value updates live
         static Grid FieldHead(string label, out TextBlock val)
         {
@@ -1171,7 +1188,7 @@ namespace SteadyOverlay
                 Margin = new Thickness(0, 0, 0, 12)
             }, "BodyText"));
 
-            col.Children.Add(Styled(new TextBlock { Text = "GETTING STARTED" }, "SectionHeader"));
+            col.Children.Add(SectionHead("GETTING STARTED"));
             col.Children.Add(Styled(new TextBlock
             {
                 Text = "1.  Settle into your seat, then press Recenter.\n" +
@@ -1180,7 +1197,7 @@ namespace SteadyOverlay
                 Margin = new Thickness(0, 0, 0, 14)
             }, "BodyText"));
 
-            col.Children.Add(Styled(new TextBlock { Text = "KEYBOARD SHORTCUTS" }, "SectionHeader"));
+            col.Children.Add(SectionHead("KEYBOARD SHORTCUTS"));
             col.Children.Add(hotkeyHint);                   // built earlier; conflict warnings append here
 
             var done = Styled(new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 16, 0, 0) }, "SteadyButtonPrimary");
@@ -1464,6 +1481,13 @@ namespace SteadyOverlay
 
         static System.Drawing.Icon BuildTrayIcon()
         {
+            try   // prefer the real multi-res brand icon for crisp tray rendering
+            {
+                var s = Application.GetResourceStream(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute))?.Stream;
+                if (s != null) using (s) return new System.Drawing.Icon(s, 32, 32);
+            }
+            catch { /* fall back to the drawn icon below */ }
+
             var bmp = new System.Drawing.Bitmap(32, 32);
             using (var g = System.Drawing.Graphics.FromImage(bmp))
             {
