@@ -33,12 +33,12 @@ class VehicleFilter {
 
     // ---- tunables (tune in-car) ----
     private val A_LP = 0.0773f      // LPF: fc 0.8 Hz @62 Hz (anti-tremor / road buzz)
-    private val A_HP = 0.0083f      // HPF: fc 0.08 Hz (tau~2 s) auto-recenter / fade sustained turns
-    private val W_LO = 0.15f        // gyro gate full-trust below 0.15 rad/s (~8.6 deg/s)
-    private val W_HI = 0.50f        // gyro gate full-cut above 0.50 rad/s (~29 deg/s)
+    private val A_HP = 0.0030f      // HPF: fc ~0.03 Hz (tau~5 s) — was 2 s; gradual bus accel/brake was auto-cancelled before it could drive the dots
+    private val W_LO = 0.30f        // gyro gate full-trust below 0.30 rad/s (~17 deg/s) — was 0.15; bus/road + handling kept the accel channel permanently gated off
+    private val W_HI = 1.10f        // gyro gate full-cut above 1.10 rad/s (~63 deg/s) — was 0.50; only a real hand twist should fully cut now
     private val YAW_K = 6.0f        // lateral cue per rad/s of yaw
     private val JERK = 4.0f         // jerk cap m/s^3
-    private val DEADBAND = 0.18f    // soft deadband m/s^2 (~0.018 g) — dots dead-still at rest
+    private val DEADBAND = 0.12f    // soft deadband m/s^2 — was 0.18; gentle bus accel was below it
     private val SPD_ON = 5.0f       // GPS speed (m/s) to latch in-vehicle (hysteresis)
     private val SPD_OFF = 2.0f
     private val GRAV_A = 0.024f     // self-split gravity EMA (tau~0.7 s)
@@ -47,6 +47,7 @@ class VehicleFilter {
     private val grav = FloatArray(3); private var gravInit = false
     private var lpF = 0f; private var lpR = 0f          // low-passed forward / right (vehicle or ENU axes)
     private var baseF = 0f; private var baseR = 0f      // slow baselines (HPF)
+    private var hdgE = 0f; private var hdgN = 1f        // inertial forward-axis unit estimate (ENU); default North
     private var yawLp = 0f                 // rad/s, low-passed
     private var gmag = 0f                  // |gyro| rad/s
     private var prevLon = 0f; private var prevLat = 0f
@@ -59,7 +60,8 @@ class VehicleFilter {
 
     /** Gyro sample (rad/s, device frame). z ~ vehicle vertical -> yaw. */
     fun onGyro(gx: Float, gy: Float, gz: Float) {
-        gmag = sqrt(gx * gx + gy * gy + gz * gz)
+        val m = sqrt(gx * gx + gy * gy + gz * gz)
+        gmag += (m - gmag) * 0.25f         // smooth: brief handling/road spikes must not fully gate accel
         yawLp += (gz - yawLp) * 0.12f      // ~0.8 Hz LPF on yaw
     }
 
@@ -109,13 +111,32 @@ class VehicleFilter {
             hN = ly - dot * uy
         }
 
-        // (B2) de-rotate ENU -> vehicle frame using GPS bearing when moving; else ENU (N=forward).
+        // (B2) Resolve a VEHICLE forward axis. Prefer GPS bearing when moving; otherwise estimate
+        // forward INERTIALLY from the direction of straight-line accel/brake, so longitudinal is
+        // never zeroed by an unknown compass heading (the old `forward = North` default silently
+        // killed accel/brake for any E/W heading — the dominant cause of "turns work, accel dead").
         val fAxis: Float; val rAxis: Float
         if (haveBearing && gpsSpeed >= SPD_OFF) {
             val b = gpsBearingRad; val cb = cos(b); val sb = sin(b)
+            hdgE = sb; hdgN = cb                // keep the inertial estimate aligned while GPS is good
             fAxis = hN * cb + hE * sb          // forward (along heading)
             rAxis = hE * cb - hN * sb          // right (90 deg cw of heading)
-        } else { fAxis = hN; rAxis = hE }
+        } else {
+            // Learn the forward axis from straight-line horizontal accel. Exclude turns (gmag) so
+            // cornering's lateral accel can't pull the estimate sideways. Sign-stabilised onto the
+            // current axis: accelerate and brake share the same travel line.
+            val hm = sqrt(hE * hE + hN * hN)
+            if (hm > 0.20f && gmag < W_LO) {
+                var dE = hE / hm; var dN = hN / hm
+                if (dE * hdgE + dN * hdgN < 0f) { dE = -dE; dN = -dN }   // fold onto current axis
+                hdgE += (dE - hdgE) * 0.02f                              // ~multi-second EMA
+                hdgN += (dN - hdgN) * 0.02f
+                val nrm = sqrt(hdgE * hdgE + hdgN * hdgN).coerceAtLeast(1e-3f)
+                hdgE /= nrm; hdgN /= nrm
+            }
+            fAxis = hE * hdgE + hN * hdgN       // signed projection onto the estimated forward axis
+            rAxis = hE * hdgN - hN * hdgE       // perpendicular = lateral
+        }
 
         // (C) band-pass: LPF then subtract slow baseline (HPF) -> zero-mean vehicle-band accel
         lpF += (fAxis - lpF) * A_LP; lpR += (rAxis - lpR) * A_LP

@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -24,6 +25,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
@@ -59,6 +61,16 @@ class OverlayService : Service(), SensorEventListener,
     @Volatile private var haveR = false
     private var lm: LocationManager? = null
     private var locListener: LocationListener? = null
+    @Volatile private var sensing = false       // true while screen-on and the IMU/GPS are live
+
+    // Phone mode: dots are invisible while the display is off, so sensing + GPS are pure waste then.
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) = when (i?.action) {
+            Intent.ACTION_SCREEN_OFF -> pauseSensing()
+            Intent.ACTION_SCREEN_ON -> resumeSensing()
+            else -> Unit
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -115,7 +127,22 @@ class OverlayService : Service(), SensorEventListener,
         thread = HandlerThread("steady-overlay-sensor").also { it.start() }
         sensorHandler = Handler(thread!!.looper)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
-        val m = sm!!
+        // Pause/resume the whole IMU + GPS + dot loop with the display so a screen-off phone in a
+        // pocket burns nothing. Dynamic registration is mandatory: SCREEN_ON/OFF can't be declared
+        // in the manifest.
+        registerReceiver(screenReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        })
+        // Come up now only if the screen is actually on (the user normally taps Start with it on);
+        // otherwise the receiver brings sensing up on the next SCREEN_ON.
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isInteractive) resumeSensing()
+    }
+
+    /** Register the IMU listeners on the sensor thread. Safe to call repeatedly (resume path). */
+    private fun registerSensors() {
+        val m = sm ?: return
         val us = 16000   // ~62 Hz; under the Android 12 200 Hz cap (no HIGH_SAMPLING_RATE_SENSORS)
 
         // Orientation source, best -> fallback. GAME_ROTATION_VECTOR avoids the magnetometer (immune
@@ -134,17 +161,35 @@ class OverlayService : Service(), SensorEventListener,
             ?.let { m.registerListener(this, it, us, sensorHandler) }
 
         m.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let { m.registerListener(this, it, us, sensorHandler) }
+    }
 
+    /** Screen ON: bring the IMU + GPS + dot loop up. Idempotent. */
+    private fun resumeSensing() {
+        if (sensing) return
+        sensing = true
+        registerSensors()
         startGps()
+        ui.post { view?.start() }
+    }
+
+    /** Screen OFF: tear the IMU + GPS + dot loop down (dots are invisible anyway). Idempotent. */
+    private fun pauseSensing() {
+        if (!sensing) return
+        sensing = false
+        try { sm?.unregisterListener(this) } catch (_: Exception) {}
+        stopGps()
+        ui.post { view?.stop() }
+        haveR = false   // force a fresh orientation matrix before feeding again on resume
     }
 
     /** Optional GPS in-vehicle gate (framework LocationManager only — NO Play Services). No-op if
-     *  ACCESS_FINE_LOCATION isn't granted, so the overlay fully works inertial-only. */
+     *  ACCESS_FINE_LOCATION isn't granted, so the overlay fully works inertial-only. Idempotent:
+     *  reuses one listener and clears any prior registration so resume can't stack listeners. */
     private fun startGps() {
         if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) return
-        lm = getSystemService(LOCATION_SERVICE) as LocationManager
-        val cb = object : LocationListener {
+        val lmgr = (lm ?: (getSystemService(LOCATION_SERVICE) as LocationManager)).also { lm = it }
+        val cb = locListener ?: object : LocationListener {
             override fun onLocationChanged(loc: Location) {
                 vf.onGps(if (loc.hasSpeed()) loc.speed else -1f, loc.bearing, loc.hasBearing())
             }
@@ -152,10 +197,15 @@ class OverlayService : Service(), SensorEventListener,
             override fun onProviderEnabled(p: String) {}
             @Deprecated("kept for older API levels")
             override fun onStatusChanged(p: String?, s: Int, e: android.os.Bundle?) {}
-        }
-        locListener = cb
-        try { lm!!.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, cb, thread!!.looper) }
+        }.also { locListener = it }
+        try { lmgr.removeUpdates(cb) } catch (_: Exception) {}   // never stack duplicate registrations
+        try { lmgr.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, cb, thread!!.looper) }
         catch (_: Exception) {}
+    }
+
+    /** Stop GPS updates without dropping the listener (so resume can re-register it). */
+    private fun stopGps() {
+        try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
     }
 
     // Callbacks arrive on the HandlerThread; VehicleFilter state is single-threaded here. feed() only
@@ -233,6 +283,8 @@ class OverlayService : Service(), SensorEventListener,
 
     override fun onDestroy() {
         running = false
+        sensing = false
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         try { SettingsStore.prefs(this).unregisterOnSharedPreferenceChangeListener(this) } catch (_: Exception) {}
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
         try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
