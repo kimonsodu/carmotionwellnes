@@ -42,11 +42,13 @@ id rbPhone
 id rbWifi
 id readout
 id rgDotColor
+id seekLon
 id seekSize
 id seekStrength
 id status
 id toggle
 id tvBt
+id tvLonVal
 id tvOverlayPerm
 id tvSizeVal
 id tvStrengthVal

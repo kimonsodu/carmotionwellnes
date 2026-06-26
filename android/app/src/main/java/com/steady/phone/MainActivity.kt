@@ -41,10 +41,12 @@ class MainActivity : Activity() {
     private lateinit var phoneBox: View
     private lateinit var btnOverlay: Button
     private lateinit var seekStrength: SeekBar
+    private lateinit var seekLon: SeekBar
     private lateinit var seekSize: SeekBar
     private lateinit var rgColor: RadioGroup
     private lateinit var cbAutoHide: CheckBox
     private lateinit var tvStrengthVal: TextView
+    private lateinit var tvLonVal: TextView
     private lateinit var tvSizeVal: TextView
     private lateinit var tvOverlayPerm: TextView
     private var pendingOverlayStart = false
@@ -74,10 +76,12 @@ class MainActivity : Activity() {
         phoneBox = findViewById(R.id.phoneBox)
         btnOverlay = findViewById(R.id.btnOverlay)
         seekStrength = findViewById(R.id.seekStrength)
+        seekLon = findViewById(R.id.seekLon)
         seekSize = findViewById(R.id.seekSize)
         rgColor = findViewById(R.id.rgDotColor)
         cbAutoHide = findViewById(R.id.cbAutoHide)
         tvStrengthVal = findViewById(R.id.tvStrengthVal)
+        tvLonVal = findViewById(R.id.tvLonVal)
         tvSizeVal = findViewById(R.id.tvSizeVal)
         tvOverlayPerm = findViewById(R.id.tvOverlayPerm)
 
@@ -160,6 +164,15 @@ class MainActivity : Activity() {
             SettingsStore.setStrength(this, v)
             tvStrengthVal.text = String.format(java.util.Locale.US, "%.1f×", v)
         })
+        // Bipolar accel/brake trim: SeekBar 0..80 maps to -4.0..+4.0 (centre 40 = 0 = off).
+        val lon = SettingsStore.lonGain(this)
+        seekLon.max = 80; seekLon.progress = ((lon + 4.0f) * 10f).toInt().coerceIn(0, 80)
+        tvLonVal.text = fmtLon(lon)
+        seekLon.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = prog / 10f - 4.0f
+            SettingsStore.setLonGain(this, v)
+            tvLonVal.text = fmtLon(v)
+        })
         seekSize.setOnSeekBarChangeListener(simpleSeek { prog ->
             val v = 0.4f + prog / 100f
             SettingsStore.setDotSize(this, v)
@@ -172,6 +185,10 @@ class MainActivity : Activity() {
         cbAutoHide.isChecked = SettingsStore.autoHide(this)
         cbAutoHide.setOnCheckedChangeListener { _, on -> SettingsStore.setAutoHide(this, on) }
     }
+
+    private fun fmtLon(v: Float): String =
+        if (kotlin.math.abs(v) < 0.05f) "off"
+        else String.format(java.util.Locale.US, "%+.1f×", v)
 
     private inline fun simpleSeek(crossinline onChange: (Int) -> Unit) =
         object : SeekBar.OnSeekBarChangeListener {

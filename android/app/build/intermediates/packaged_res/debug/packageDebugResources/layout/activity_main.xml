@@ -319,6 +319,37 @@
                     android:layout_height="wrap_content">
                     <TextView
                         style="@style/FieldLabel"
+                        android:text="Accel / brake response"
+                        android:layout_weight="1"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content" />
+                    <TextView
+                        android:id="@+id/tvLonVal"
+                        android:text="+1.5×"
+                        android:textColor="@color/accent"
+                        android:textSize="13sp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+                <SeekBar
+                    android:id="@+id/seekLon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    style="@style/FieldLabel"
+                    android:text="Drag right = accelerate sends dots down; left = up. Centre = off. Further out = stronger."
+                    android:textSize="11sp"
+                    android:layout_marginTop="2dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <LinearLayout
+                    android:orientation="horizontal"
+                    android:layout_marginTop="10dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView
+                        style="@style/FieldLabel"
                         android:text="Dot size"
                         android:layout_weight="1"
                         android:layout_width="0dp"

@@ -69,7 +69,7 @@ namespace SteadyOverlay
         public int DotStyle { get; set; } = 0;             // 0 = light, 1 = mixed, 2 = dark cue dots
         public bool DarkDots { get; set; } = false;        // legacy (pre-slider) — migrated to DotStyle on load
         public bool StartMinimized { get; set; } = false;  // launch hidden in the tray
-        public bool AutoPause { get; set; } = false;       // fade the dots out when the vehicle is stopped
+        public bool AutoPause { get; set; } = true;        // fade the dots out when the vehicle is stopped
         public double? WinLeft { get; set; }               // remembered panel position + size (null = use defaults)
         public double? WinTop { get; set; }
         public double? WinWidth { get; set; }
@@ -164,7 +164,7 @@ namespace SteadyOverlay
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
         public int DotStyle = 0;                 // 0 = light, 1 = mixed (both, works on any window), 2 = dark
-        public bool AutoPause = false;           // fade dots out when motion stops (parked / at a desk)
+        public bool AutoPause = true;            // fade dots out when motion stops (parked / at a desk)
 
         // --- motion-energy gate for AutoPause ---
         // Key: constant-speed cruising has ~zero linear accel/turn, so the SMOOTHED
@@ -190,6 +190,7 @@ namespace SteadyOverlay
         readonly List<Dot> far = new List<Dot>();
         double offX, offY, velX, velY;          // accumulated offset + flow velocity
         double lat, fore, yaw;                   // resolved motion
+        double fwd1, fwd2 = 1;                    // inertial forward-axis unit estimate (horizontal plane); default (0,1) = old fixed mapping
         double gx, gy, gz; bool gReady;          // gravity estimate
         int oriMode = -1;                        // locked axis mapping (-1 = not yet detected)
         int settleFrames;                        // frames since (re)arm — gates the lock
@@ -471,16 +472,45 @@ namespace SteadyOverlay
             if (oriMode < 0 && mag < 0.5 && tiltHold == 0 && settleFrames > 30) oriMode = candidate;
             int mode = oriMode < 0 ? candidate : oriMode;
 
-            double nlat, nfore;
-            if (mode == 0) { nlat = dx; nfore = dy; }              // device lying flat
-            else if (mode == 1) { nlat = dx; nfore = dz; }         // upright landscape (normal use)
-            else { nlat = dy; nfore = dz; }                        // upright portrait
+            // The two horizontal (non-gravity) device-axis residuals. Which one is travel-forward
+            // vs sideways is NOT knowable from gravity alone, so don't guess by mount — learn it.
+            double h1, h2;
+            if (mode == 0) { h1 = dx; h2 = dy; }                   // device lying flat (z = gravity)
+            else if (mode == 1) { h1 = dx; h2 = dz; }              // upright landscape (y = gravity)
+            else { h1 = dy; h2 = dz; }                             // upright portrait (x = gravity)
 
-            if (SwapAxes) (nlat, nfore) = (nfore, nlat);           // fix mounts where gas/brake lands sideways
+            // Inertial forward-axis estimate in the horizontal plane: track the dominant
+            // straight-line accel direction as "forward", so gas/brake is never pinned to a guessed
+            // device axis. The old fixed `nfore = h2` silently sent longitudinal into the lateral
+            // channel on most mounts (the laptop analogue of the phone's forward=North bug) — that's
+            // why turns worked but accel/brake produced no vertical flow. Default fwd=(0,1) exactly
+            // reproduces the old mapping until it converges, so this is a safe superset. Turns are
+            // excluded via yawRate (deg/s) so cornering can't pull the axis sideways.
+            double hmag = Math.Sqrt(h1 * h1 + h2 * h2);
+            if (hmag > 0.20 && Math.Abs(yawRate) < 8.0)
+            {
+                double d1 = h1 / hmag, d2 = h2 / hmag;
+                if (d1 * fwd1 + d2 * fwd2 < 0) { d1 = -d1; d2 = -d2; }    // gas & brake share the line
+                fwd1 += (d1 - fwd1) * 0.02; fwd2 += (d2 - fwd2) * 0.02;   // ~multi-second EMA
+                double fn = Math.Sqrt(fwd1 * fwd1 + fwd2 * fwd2);
+                if (fn > 1e-3) { fwd1 /= fn; fwd2 /= fn; }
+            }
+            double nfore = h1 * fwd1 + h2 * fwd2;                  // signed projection onto estimated forward
+            double nlat = h1 * fwd2 - h2 * fwd1;                   // perpendicular = lateral
 
-            lat += (nlat - lat) * 0.35;
-            fore += (nfore - fore) * 0.35;
+            if (SwapAxes) (nlat, nfore) = (nfore, nlat);           // manual override if polarity reads wrong
+
+            lat += (nlat - lat) * 0.25;              // a touch more smoothing -> road wiggle doesn't reach the dots
+            fore += (nfore - fore) * 0.25;
             yaw += (yawRate - yaw) * 0.3;            // yaw about gravity, not raw device-Z
+        }
+
+        // Soft dead-zone: ramps up from 0 at the threshold instead of jumping, so a signal that
+        // hovers near the knee (vehicle wiggling at a light) can't chatter the dots on/off.
+        static double SoftDead(double v, double dz)
+        {
+            double a = Math.Abs(v);
+            return a <= dz ? 0 : Math.Sign(v) * (a - dz);
         }
 
         void Frame()
@@ -513,8 +543,8 @@ namespace SteadyOverlay
             // Turns are driven mainly by yaw rate about gravity (works in ANY mount orientation —
             // flat, upright, on-side) plus the felt lateral g. yaw is deg/s; lat is m/s².
             double rawAX = lat + yaw * 0.15;
-            double aX = (Math.Abs(rawAX) < dz ? 0 : rawAX) * InvertX;   // turns  -> horizontal
-            double aY = (Math.Abs(fore) < dz ? 0 : fore) * InvertY;     // gas/brake -> vertical
+            double aX = SoftDead(rawAX, dz) * InvertX;   // turns  -> horizontal
+            double aY = SoftDead(fore, dz) * InvertY;    // gas/brake -> vertical
 
             // --- auto-pause: judge "useful to show" ---
             // GPS speed is authoritative when the phone supplies it: motion sickness
@@ -546,13 +576,14 @@ namespace SteadyOverlay
 
             const double decay = 0.94;              // how long flow persists
             const double gain = 0.105;              // accel -> velocity
+            const double slew = 0.40;               // max velocity change per frame -> a road jolt can't jump the dots
             if (freeze) { velX *= 0.85; velY *= 0.85; }
             else
             {
-                velX = velX * decay - aX * gain * Sens;
+                velX = velX * decay + Math.Clamp(-aX * gain * Sens, -slew, slew);
                 // forward acceleration drives dots DOWN, braking drives them UP
                 // (for the common upright mounting; Flip *if* reversed on your car).
-                velY = velY * decay - aY * gain * Sens;
+                velY = velY * decay + Math.Clamp(-aY * gain * Sens, -slew, slew);
             }
             const double vmax = 22;
             velX = Math.Clamp(velX, -vmax, vmax);
@@ -606,6 +637,7 @@ namespace SteadyOverlay
             settleFrames = 0;                       // re-arm the warm-up gate before re-locking
             tiltHold = 0;
             lat = fore = yaw = 0;
+            fwd1 = 0; fwd2 = 1;                     // re-learn the forward axis from scratch
             velX = velY = offX = offY = 0;
             startupSuppress = false;                // an explicit recenter means "show me the dots now"
             autoStill = false; stillFrames = 0; activityEma = 0.3; jitterEma = 0.05;   // wake the dots
@@ -632,6 +664,7 @@ namespace SteadyOverlay
             settleFrames = 0;
             tiltHold = 0;
             lat = fore = yaw = 0;
+            fwd1 = 0; fwd2 = 1;                     // laptop and phone differ in mount -> re-learn forward
             velX = velY = 0;
             autoStill = false; stillFrames = 0; activityEma = 0.3;   // wake on a source switch
         }

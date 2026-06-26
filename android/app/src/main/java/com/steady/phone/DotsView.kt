@@ -26,6 +26,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
 
     // --- live params (defaults mirror the Windows app) ---
     private var strength = SettingsStore.DEF_STRENGTH
+    private var lonGain = SettingsStore.DEF_LON_GAIN   // signed accel/brake trim (direction + sensitivity)
     private var sizeScale = SettingsStore.DEF_DOT_SIZE
     private var colorMode = SettingsStore.DEF_DOT_COLOR
     private var autoHide = SettingsStore.DEF_AUTO_HIDE
@@ -82,6 +83,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
 
     fun applyParams(p: SettingsStore.Params) {
         strength = p.strength
+        lonGain = p.lonGain
         sizeScale = p.dotSize
         colorMode = p.colorMode
         if (autoHide != p.autoHide) {          // turning auto-hide off must not leave dots stuck hidden
@@ -105,9 +107,10 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val driveLat = lat * enable
         val driveLon = lon * enable
         velX = velX * 0.92f - driveLat * gain
-        // +driveLon: accelerate (lon>0) -> offY up -> y grows -> dots DOWN; brake -> UP. Matches the
-        // laptop/Apple convention. onDraw maps increasing offY to increasing y (downward).
-        velY = velY * 0.92f + driveLon * gain
+        // lonGain is the user's signed accel/brake trim: +ve -> accelerate sends dots DOWN (brake UP),
+        // -ve flips it, magnitude scales sensitivity, 0 = off. (Inertial forward-axis sign is
+        // ambiguous without GPS bearing, so this slider is also the manual direction control.)
+        velY = velY * 0.92f + driveLon * lonGain * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
