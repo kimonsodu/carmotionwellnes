@@ -62,6 +62,7 @@ namespace SteadyOverlay
     public class Settings
     {
         public double Sens { get; set; } = 1.8;
+        public double LonGain { get; set; } = 1.5;         // accel/brake trim: SIGN = direction, |v| = sensitivity, 0 = off
         public int InvertX { get; set; } = 1;
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
