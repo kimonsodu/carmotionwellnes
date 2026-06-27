@@ -42,6 +42,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var jitterEma = 0f
     private var activityEma = 0.3f
     private var stillFrames = 0
+    private var dwellFrames = 999       // frames since the last visibility toggle (min-dwell lockout); init high so first reveal isn't delayed
     private var autoStill = false
     private var dotsAlpha = 1f          // eased 0..1, multiplies dot opacity
 
@@ -88,7 +89,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         colorMode = p.colorMode
         if (autoHide != p.autoHide) {          // turning auto-hide off must not leave dots stuck hidden
             autoHide = p.autoHide
-            if (!autoHide) { autoStill = false; stillFrames = 0 }
+            if (!autoHide) { autoStill = false; stillFrames = 0; dwellFrames = 999 }
         }
     }
 
@@ -123,13 +124,24 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val energy = jitterEma * 1.5f + mag
         activityEma += (energy - activityEma) * 0.06f
         if (autoHide) {
-            if (activityEma > 0.30f) { autoStill = false; stillFrames = 0 }       // thresholds lowered:
-            else if (activityEma < 0.12f) { if (++stillFrames > 45) autoStill = true } // clean signal is smaller
-            else stillFrames = 0
+            // Wide hysteresis: separate show/hide knees so one bump can't cross both.
+            var wantStill = autoStill
+            if (activityEma > 0.36f) wantStill = false            // clear maneuver -> show (wider show knee)
+            else if (activityEma < 0.10f) wantStill = true        // low motion -> hide (wider hide knee)
+            // 0.10–0.36: hold current state (hysteresis)
+            // MIN-DWELL debounce: after any toggle hold the state >= minDwell frames, and require
+            // the new state to persist `confirm` frames, so small lateral bumps can't strobe the dots.
+            if (dwellFrames < 75) dwellFrames++                   // saturate so it can't overflow on long uptime
+            if (wantStill != autoStill && dwellFrames >= 75) {    // ~1.25s lockout after a toggle (60fps)
+                if (++stillFrames >= 18) { autoStill = wantStill; stillFrames = 0; dwellFrames = 0 } // ~0.3s confirm
+            } else stillFrames = 0
         }
         // Fade when auto-hidden OR when GPS says we're parked (enable~0).
         val targetAlpha = if ((autoHide && autoStill) || enable < 0.05f) 0f else 1f
-        dotsAlpha += (targetAlpha - dotsAlpha) * 0.06f
+        // Graceful asymmetric fade: ease IN a touch quicker than OUT, slow enough that a
+        // debounced gate flip can't snap the layer on/off. (Tunable.)
+        val alphaEase = if (targetAlpha > dotsAlpha) 0.045f else 0.025f
+        dotsAlpha += (targetAlpha - dotsAlpha) * alphaEase
         if (targetAlpha == 0f) { velX *= 0.85f; velY *= 0.85f }   // settle while hidden
 
         offX += velX

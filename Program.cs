@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Interop;
+using System.Windows.Input;
 using Windows.Devices.Sensors;
 using System.Linq;
 using System.Net;
@@ -57,6 +58,18 @@ namespace SteadyOverlay
     }
 
     // ---------------------------------------------------------------
+    // A remappable global shortcut: Win32 modifier flags + virtual-key code.
+    // Stored in Settings and (de)serialized straight to JSON.
+    // ---------------------------------------------------------------
+    public class Hotkey
+    {
+        public uint Mods { get; set; }   // Win32 MOD_* flags: Alt=1, Control=2, Shift=4, Win=8
+        public uint Vk { get; set; }     // virtual-key code (e.g. 0x50 = 'P')
+        public Hotkey() { }
+        public Hotkey(uint mods, uint vk) { Mods = mods; Vk = vk; }
+    }
+
+    // ---------------------------------------------------------------
     // Persisted user settings (%AppData%\Steady\settings.json).
     // ---------------------------------------------------------------
     public class Settings
@@ -78,6 +91,7 @@ namespace SteadyOverlay
         public bool FirstRunDone { get; set; } = false;    // welcome card dismissed
         public bool PhoneOnly { get; set; } = false;       // Phone mode: ignore the laptop sensor, use the phone only
         public bool AutoHideTipSeen { get; set; } = false; // one-time "watch this on your first drive" tip shown
+        public Dictionary<string, Hotkey> Hotkeys { get; set; } // remappable global shortcuts (null = built-in defaults)
 
         static string ConfigDir =>
             System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
@@ -99,7 +113,7 @@ namespace SteadyOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -159,6 +173,7 @@ namespace SteadyOverlay
 
         // --- tunables (mirror the web version) ---
         public double Sens = 1.8;
+        public double LonGain = 1.5;             // signed accel/brake trim: sign = direction, |v| = sensitivity (composes with InvertY), 0 = off
         public int InvertX = 1;
         public int InvertY = 1;
         public bool Paused = false;
@@ -175,7 +190,8 @@ namespace SteadyOverlay
         double magSlow;                          // slow baseline of linear-accel magnitude
         double jitterEma;                        // smoothed HF jitter (road buzz)
         double activityEma;                      // combined motion energy fed to the gate
-        int stillFrames;                         // consecutive frames below the "still" threshold
+        int stillFrames;                         // consecutive frames the desired-state has persisted (confirm counter)
+        int dwellFrames = 999;                   // frames since the last visibility toggle (min-dwell lockout); init high so first reveal isn't delayed
         bool autoStill;                          // currently judged stopped
         double dotsOpacity = 1.0;                // eased overlay opacity (fades on auto-pause)
         bool startupSuppress;                    // hide dots until first motion (set on Windows auto-start)
@@ -266,6 +282,7 @@ namespace SteadyOverlay
         public void ApplySettings(Settings s)
         {
             Sens = double.IsFinite(s.Sens) ? Math.Clamp(s.Sens, 0.3, 6) : 1.8;  // keep model in slider range
+            LonGain = double.IsFinite(s.LonGain) ? Math.Clamp(s.LonGain, -4, 4) : 1.5;  // signed accel/brake trim
             InvertX = s.InvertX < 0 ? -1 : 1;
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
@@ -545,17 +562,24 @@ namespace SteadyOverlay
             // flat, upright, on-side) plus the felt lateral g. yaw is deg/s; lat is m/s².
             double rawAX = lat + yaw * 0.15;
             double aX = SoftDead(rawAX, dz) * InvertX;   // turns  -> horizontal
-            double aY = SoftDead(fore, dz) * InvertY;    // gas/brake -> vertical
+            // Longitudinal (gas/brake) axis: LonGain is the signed accel/brake trim — its SIGN sets
+            // direction and its magnitude sets sensitivity (mirrors Android's lonGain). It COMPOSES
+            // with InvertY so the "Flip vertical" toggle still reverses the whole Y axis as before.
+            double aY = SoftDead(fore, dz) * InvertY * LonGain;    // gas/brake -> vertical (signed trim)
 
             // --- auto-pause: judge "useful to show" ---
             // GPS speed is authoritative when the phone supplies it: motion sickness
             // needs real travel speed, and nobody feels ill crawling/parked — so hide
             // below ~7 km/h and show above ~12. No guessing about jitter.
+            // Raw "should be hidden?" desire, with a WIDE hysteresis band (separate show/hide knees)
+            // so a single lateral bump can't cross both knees in one frame. Inside the band the current
+            // state is held; the actual toggle is gated by the min-dwell debounce below.
+            bool wantStill = autoStill;
             if (SpeedFresh)
             {
-                if (phoneSpeed > 3.3) { autoStill = false; stillFrames = 0; }            // >~12 km/h -> show
-                else if (phoneSpeed < 2.0) { if (++stillFrames > 30) autoStill = true; } // <~7 km/h -> hide (~0.5s)
-                else stillFrames = 0;                                                     // 7–12 km/h holds state
+                if (phoneSpeed > 3.6) wantStill = false;         // >~13 km/h -> moving (show)
+                else if (phoneSpeed < 1.7) wantStill = true;     // <~6 km/h -> stopped (hide)
+                // 6–13 km/h: hold current state (hysteresis)
             }
             else
             {
@@ -565,10 +589,22 @@ namespace SteadyOverlay
                 // de-weighted now that GPS does the cruise-detection job it was invented for.
                 double energy = jitterEma * 1.5 + Math.Sqrt(lat * lat + fore * fore) + Math.Abs(yaw) * 0.03;
                 activityEma += (energy - activityEma) * 0.06;   // smoothing (gives the gate inertia)
-                if (activityEma > 0.42) { autoStill = false; stillFrames = 0; }   // clear maneuver -> wake
-                else if (activityEma < 0.22) { if (++stillFrames > 45) autoStill = true; }   // low motion -> hide (~0.75s)
-                else stillFrames = 0;                           // mid-band holds current state
+                if (activityEma > 0.50) wantStill = false;       // clear maneuver -> wake (wider show knee)
+                else if (activityEma < 0.18) wantStill = true;   // low motion -> hide (wider hide knee)
+                // 0.18–0.50: hold current state (hysteresis)
             }
+            // MIN-DWELL debounce: after any toggle, hold the new visibility state at least minDwell
+            // frames before another toggle is allowed; AND require the desired state to persist
+            // `confirm` frames before it is honoured. Together these stop small bumps from strobing
+            // the dots on/off. (Tunable.)
+            const int minDwell = 75;        // ~1.25s lockout after a toggle (60fps)
+            const int confirm = 18;         // desired state must hold ~0.3s before flipping
+            if (dwellFrames < minDwell) dwellFrames++;   // saturate (only >= minDwell matters) so it can't overflow on long uptime
+            if (wantStill != autoStill && dwellFrames >= minDwell)
+            {
+                if (++stillFrames >= confirm) { autoStill = wantStill; stillFrames = 0; dwellFrames = 0; }
+            }
+            else stillFrames = 0;
             // Launched by Windows auto-start: keep the dots invisible until the car
             // actually moves (or a manual Recenter), so a desk/boot doesn't flash them.
             if (startupSuppress && !autoStill) startupSuppress = false;   // first real motion reveals them
@@ -593,9 +629,12 @@ namespace SteadyOverlay
             offX += velX;                           // keep streaming while motion lasts
             offY += velY;
 
-            // ease overlay opacity: dots fade away when auto-paused / startup-suppressed, fade back on motion
+            // ease overlay opacity: dots fade away when auto-paused / startup-suppressed, fade back on motion.
+            // Asymmetric + slow so a (debounced) gate flip can't snap the layer: fade IN a touch quicker
+            // than OUT for a graceful, non-strobing transition. (Tunable.)
             double tgtOpacity = hide ? 0.0 : 1.0;
-            dotsOpacity += (tgtOpacity - dotsOpacity) * 0.06;
+            double opEase = tgtOpacity > dotsOpacity ? 0.045 : 0.025;
+            dotsOpacity += (tgtOpacity - dotsOpacity) * opEase;
             if (Math.Abs(dotsOpacity - Opacity) > 0.001) Opacity = dotsOpacity;
 
             if (DotScale != appliedScale) ApplyDotScale();
@@ -667,7 +706,8 @@ namespace SteadyOverlay
             lat = fore = yaw = 0;
             fwd1 = 0; fwd2 = 1;                     // laptop and phone differ in mount -> re-learn forward
             velX = velY = 0;
-            autoStill = false; stillFrames = 0; activityEma = 0.3;   // wake on a source switch
+            if (!startupSuppress) autoStill = false;                 // a source switch (e.g. phone connect) must NOT
+            stillFrames = 0; activityEma = 0.3;                      // reveal dots during startup suppression; wake on real motion
         }
     }
 
@@ -679,12 +719,36 @@ namespace SteadyOverlay
     {
         // --- global hotkeys ---
         const int WM_HOTKEY = 0x0312;
-        const uint MOD_ALT = 0x0001, MOD_CONTROL = 0x0002, MOD_NOREPEAT = 0x4000;
+        const uint MOD_ALT = 0x0001, MOD_CONTROL = 0x0002, MOD_SHIFT = 0x0004, MOD_WIN = 0x0008, MOD_NOREPEAT = 0x4000;
         const uint VK_P = 0x50, VK_R = 0x52, VK_V = 0x56, VK_H = 0x48, VK_OEM4 = 0xDB, VK_OEM6 = 0xDD;
         const int HK_PAUSE = 1, HK_RECENTER = 2, HK_DOWN = 3, HK_UP = 4, HK_FLIPV = 5, HK_FLIPH = 6;
+        // ordered binding table: action key (matches Settings.Hotkeys), Win32 hotkey id, panel label, repeat-on-hold
+        static readonly (string Key, int Id, string Label, bool Repeat)[] HotkeyActions =
+        {
+            ("Pause",        HK_PAUSE,    "Pause / resume",  false),
+            ("Recenter",     HK_RECENTER, "Recenter",        false),
+            ("StrengthDown", HK_DOWN,     "Strength −",      true),
+            ("StrengthUp",   HK_UP,       "Strength +",      true),
+            ("FlipV",        HK_FLIPV,    "Flip vertical",   false),
+            ("FlipH",        HK_FLIPH,    "Flip horizontal", false),
+        };
+        static Dictionary<string, Hotkey> DefaultHotkeys() => new Dictionary<string, Hotkey>
+        {
+            ["Pause"]        = new Hotkey(MOD_CONTROL | MOD_ALT, VK_P),
+            ["Recenter"]     = new Hotkey(MOD_CONTROL | MOD_ALT, VK_R),
+            ["StrengthDown"] = new Hotkey(MOD_CONTROL | MOD_ALT, VK_OEM4),
+            ["StrengthUp"]   = new Hotkey(MOD_CONTROL | MOD_ALT, VK_OEM6),
+            ["FlipV"]        = new Hotkey(MOD_CONTROL | MOD_ALT, VK_V),
+            ["FlipH"]        = new Hotkey(MOD_CONTROL | MOD_ALT, VK_H),
+        };
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr hWnd, int id);
         [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr handle);
+
+        // live remappable-shortcut state (see Settings.Hotkeys / HotkeyActions)
+        Dictionary<string, Hotkey> hotkeys;
+        readonly Dictionary<string, Button> hotkeyButtons = new Dictionary<string, Button>();
+        string capturingKey;                       // action currently listening for a new combo, or null
 
         readonly OverlayWindow ov;
         readonly PhoneServer server;
@@ -728,6 +792,10 @@ namespace SteadyOverlay
             server = serverIn;
             firstRunDone = settings.FirstRunDone;
             autoHideTipSeen = settings.AutoHideTipSeen;
+            hotkeys = DefaultHotkeys();                 // start from defaults, then layer any saved bindings on top
+            if (settings.Hotkeys != null)
+                foreach (var kv in settings.Hotkeys)
+                    if (kv.Value != null && kv.Value.Vk != 0) hotkeys[kv.Key] = kv.Value;
             Title = "Steady";
             try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
@@ -790,6 +858,20 @@ namespace SteadyOverlay
             slider.ValueChanged += (s, e) => { ov.Sens = e.NewValue; strengthVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
             strengthVal.Text = ov.Sens.ToString("0.0") + "×";
             motion.Children.Add(slider);
+
+            // --- Accel / Brake trim (longitudinal): bipolar -4..4, sign = direction, 0 = off (mirrors Android).
+            // Sign composes with the "Flip vertical" toggle below; centre is off. ---
+            motion.Children.Add(FieldHead("Accel / Brake", out var lonVal));
+            var lonSlider = Styled(new Slider
+            {
+                Minimum = -4, Maximum = 4, Value = ov.LonGain,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "SteadySlider");
+            lonSlider.ToolTip = "Forward/back cue trim. Sign sets direction (accelerate = dots down); centre is off.";
+            lonSlider.ValueChanged += (s, e) => { ov.LonGain = e.NewValue; lonVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
+            lonVal.Text = Math.Abs(ov.LonGain) < 0.05 ? "off" : ov.LonGain.ToString("+0.0;-0.0") + "×";
+            motion.Children.Add(lonSlider);
 
             motion.Children.Add(FieldHead("Dot size", out var sizeVal));
             sizeSlider = Styled(new Slider
@@ -1049,6 +1131,36 @@ namespace SteadyOverlay
             autoStart.Unchecked += (s, e) => AutoStart.Set(false);
             prefs.Children.Add(autoStart);
             root.Children.Add(CardOf(prefs));
+
+            // ---- ADVANCED card: remappable global hotkeys ----
+            var advanced = new StackPanel();
+            advanced.Children.Add(SectionHead("ADVANCED"));
+            advanced.Children.Add(Styled(new TextBlock
+            {
+                Text = "Global shortcuts work anywhere. Click a binding, then press the new key combo (Esc cancels).",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
+            }, "FaintText"));
+            bool firstHkRow = true;
+            foreach (var a in HotkeyActions)
+            {
+                if (!firstHkRow) advanced.Children.Add(Divider());
+                firstHkRow = false;
+                var hkRow = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var hkLbl = SubLabel(a.Label);
+                hkLbl.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(hkLbl, 0);
+                hkRow.Children.Add(hkLbl);
+                var hkBtn = BuildHotkeyButton(a.Key);
+                Grid.SetColumn(hkBtn, 1);
+                hkRow.Children.Add(hkBtn);
+                advanced.Children.Add(hkRow);
+            }
+            var hkReset = Styled(new Button { Content = "Reset shortcuts to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "SteadyButton");
+            hkReset.Click += (s, e) => { hotkeys = DefaultHotkeys(); RefreshHotkeyButtons(); ReapplyHotKeys(); QueueSave(); };
+            advanced.Children.Add(hkReset);
+            root.Children.Add(CardOf(advanced));
 
             // The full shortcut list lives in the About flyout now; build it here so
             // RegisterHotKeys can still append any "key in use" warnings to it.
@@ -1452,23 +1564,137 @@ namespace SteadyOverlay
             Application.Current.Shutdown();
         }
 
-        // --- global hotkeys ---
+        // --- global hotkeys (remappable; bindings live in `hotkeys`, persisted via Settings.Hotkeys) ---
+        public Dictionary<string, Hotkey> HotkeyConfig => hotkeys;
+
         void RegisterHotKeys()
         {
             var h = new WindowInteropHelper(this).Handle;
-            hwndSource = HwndSource.FromHwnd(h);
-            hwndSource?.AddHook(WndProc);
-            uint cm = MOD_CONTROL | MOD_ALT;
+            if (hwndSource == null)                         // hook once; re-applies reuse it
+            {
+                hwndSource = HwndSource.FromHwnd(h);
+                hwndSource?.AddHook(WndProc);
+            }
             var fails = new List<string>();
-            void Reg(int id, uint mod, uint vk, string name) { if (!RegisterHotKey(h, id, mod, vk)) fails.Add(name); }
-            Reg(HK_PAUSE, cm | MOD_NOREPEAT, VK_P, "P");
-            Reg(HK_RECENTER, cm | MOD_NOREPEAT, VK_R, "R");
-            Reg(HK_DOWN, cm, VK_OEM4, "[");                     // repeatable: hold to ramp
-            Reg(HK_UP, cm, VK_OEM6, "]");
-            Reg(HK_FLIPV, cm | MOD_NOREPEAT, VK_V, "V");
-            Reg(HK_FLIPH, cm | MOD_NOREPEAT, VK_H, "H");
-            if (fails.Count > 0 && hotkeyHint != null)
-                hotkeyHint.Text += "\n⚠ Ctrl+Alt+" + string.Join("/", fails) + " in use by another app";
+            foreach (var a in HotkeyActions)
+            {
+                if (!hotkeys.TryGetValue(a.Key, out var hk) || hk == null || hk.Vk == 0) continue;
+                uint mod = hk.Mods | (a.Repeat ? 0u : MOD_NOREPEAT);   // [ / ] repeat on hold; the rest fire once
+                if (!RegisterHotKey(h, a.Id, mod, hk.Vk)) fails.Add(ComboText(hk));
+            }
+            RefreshHotkeyHint(fails);
+        }
+
+        // unregister the old set, register the current `hotkeys` map (call after a remap)
+        void ReapplyHotKeys()
+        {
+            var h = new WindowInteropHelper(this).Handle;
+            if (h == IntPtr.Zero) return;                  // hwnd not created yet — first Register will pick up the new map
+            foreach (var a in HotkeyActions) UnregisterHotKey(h, a.Id);
+            RegisterHotKeys();
+        }
+
+        // rebuild the About-flyout shortcut list from the live bindings (+ any "in use" warnings)
+        void RefreshHotkeyHint(List<string> fails)
+        {
+            if (hotkeyHint == null) return;
+            var sb = new StringBuilder("Hotkeys (work anywhere)\n");
+            foreach (var a in HotkeyActions)
+                sb.Append(ComboText(hotkeys.TryGetValue(a.Key, out var hk) ? hk : null))
+                  .Append("  ").Append(a.Label).Append('\n');
+            sb.Append("Minimize → taskbar · Close [X] → tray");
+            if (fails != null && fails.Count > 0)
+                sb.Append("\n⚠ ").Append(string.Join(" / ", fails)).Append(" in use by another app");
+            hotkeyHint.Text = sb.ToString();
+        }
+
+        void RefreshHotkeyButtons()
+        {
+            foreach (var kv in hotkeyButtons)
+                kv.Value.Content = ComboText(hotkeys.TryGetValue(kv.Key, out var hk) ? hk : null);
+        }
+
+        // one capture-button per action: click to listen, then the next combo is captured + re-registered
+        Button BuildHotkeyButton(string actionKey)
+        {
+            var btn = Styled(new Button { MinWidth = 134, HorizontalAlignment = HorizontalAlignment.Right }, "SteadyButton");
+            btn.Content = ComboText(hotkeys.TryGetValue(actionKey, out var hk0) ? hk0 : null);
+            btn.ToolTip = "Click, then press the key combo you want. Esc cancels.";
+            btn.Click += (s, e) =>
+            {
+                capturingKey = actionKey;
+                // release the live global hotkeys so the next keystroke reaches PreviewKeyDown instead
+                // of being swallowed by RegisterHotKey — otherwise you can't rebind onto an in-use combo.
+                var h = new WindowInteropHelper(this).Handle;
+                if (h != IntPtr.Zero) foreach (var a in HotkeyActions) UnregisterHotKey(h, a.Id);
+                btn.Content = "Press keys… (Esc)";
+                Keyboard.Focus(btn);
+            };
+            btn.LostFocus += (s, e) =>
+            {
+                if (capturingKey != actionKey) return;
+                capturingKey = null;
+                btn.Content = ComboText(hotkeys.TryGetValue(actionKey, out var hk) ? hk : null);
+                ReapplyHotKeys();      // re-register the global hotkeys released when capture began
+            };
+            btn.PreviewKeyDown += (s, e) =>
+            {
+                if (capturingKey != actionKey) return;
+                e.Handled = true;
+                var key = (e.Key == Key.System) ? e.SystemKey : e.Key;   // Alt combos report Key.System
+                if (key == Key.Escape)
+                {
+                    capturingKey = null;
+                    btn.Content = ComboText(hotkeys.TryGetValue(actionKey, out var hkc) ? hkc : null);
+                    ReapplyHotKeys();  // re-register the global hotkeys released when capture began
+                    return;
+                }
+                // ignore bare modifier presses — wait for a real key with the chord still held
+                if (key == Key.LeftCtrl || key == Key.RightCtrl || key == Key.LeftAlt || key == Key.RightAlt ||
+                    key == Key.LeftShift || key == Key.RightShift || key == Key.LWin || key == Key.RWin ||
+                    key == Key.System || key == Key.None) return;
+                uint mods = 0;
+                var m = Keyboard.Modifiers;
+                if ((m & ModifierKeys.Control) != 0) mods |= MOD_CONTROL;
+                if ((m & ModifierKeys.Alt) != 0) mods |= MOD_ALT;
+                if ((m & ModifierKeys.Shift) != 0) mods |= MOD_SHIFT;
+                if ((m & ModifierKeys.Windows) != 0) mods |= MOD_WIN;
+                // require a modifier for ordinary keys so capture can't register a bare letter as a
+                // global hotkey and hijack normal typing system-wide (F-keys may stand alone).
+                bool isFunctionKey = key >= Key.F1 && key <= Key.F24;
+                if (mods == 0 && !isFunctionKey) { btn.Content = "Add Ctrl/Alt/Shift… (Esc)"; return; }
+                capturingKey = null;
+                hotkeys[actionKey] = new Hotkey(mods, (uint)KeyInterop.VirtualKeyFromKey(key));
+                btn.Content = ComboText(hotkeys[actionKey]);
+                ReapplyHotKeys();      // swap the live registration to the new combo immediately
+                QueueSave();
+            };
+            hotkeyButtons[actionKey] = btn;
+            return btn;
+        }
+
+        // "Ctrl+Alt+P"-style label for a binding
+        static string ComboText(Hotkey hk)
+        {
+            if (hk == null || hk.Vk == 0) return "Unset";
+            var parts = new List<string>();
+            if ((hk.Mods & MOD_CONTROL) != 0) parts.Add("Ctrl");
+            if ((hk.Mods & MOD_ALT) != 0) parts.Add("Alt");
+            if ((hk.Mods & MOD_SHIFT) != 0) parts.Add("Shift");
+            if ((hk.Mods & MOD_WIN) != 0) parts.Add("Win");
+            parts.Add(KeyName(hk.Vk));
+            return string.Join("+", parts);
+        }
+
+        static string KeyName(uint vk)
+        {
+            switch (vk)
+            {
+                case VK_OEM4: return "[";
+                case VK_OEM6: return "]";
+            }
+            var k = KeyInterop.KeyFromVirtualKey((int)vk);
+            return k == Key.None ? ("0x" + vk.ToString("X2")) : k.ToString();
         }
 
         IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
