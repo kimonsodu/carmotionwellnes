@@ -1,4 +1,4 @@
-package com.steady.phone
+package com.orbit.phone
 
 import android.hardware.SensorManager
 import kotlin.math.cos

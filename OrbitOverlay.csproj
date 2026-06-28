@@ -5,19 +5,19 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <StartupObject>SteadyOverlay.Program</StartupObject>
-    <AssemblyName>SteadyOverlay</AssemblyName>
+    <StartupObject>OrbitOverlay.Program</StartupObject>
+    <AssemblyName>OrbitOverlay</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <ApplicationIcon>steady.ico</ApplicationIcon>
+    <ApplicationIcon>orbit.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- dark-theme styles for the control panel (loaded at runtime; no App.xaml) -->
     <Resource Include="Theme.xaml" />
     <!-- branded app icon, also loaded at runtime for the panel's taskbar/alt-tab icon -->
-    <Resource Include="steady.ico" />
+    <Resource Include="orbit.ico" />
   </ItemGroup>
 
   <ItemGroup>

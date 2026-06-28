@@ -28,7 +28,7 @@ using QRCoder;
 using InTheHand.Net.Bluetooth;
 using InTheHand.Net.Sockets;
 
-namespace SteadyOverlay
+namespace OrbitOverlay
 {
     public static class Program
     {
@@ -70,7 +70,7 @@ namespace SteadyOverlay
     }
 
     // ---------------------------------------------------------------
-    // Persisted user settings (%AppData%\Steady\settings.json).
+    // Persisted user settings (%AppData%\Orbit\settings.json).
     // ---------------------------------------------------------------
     public class Settings
     {
@@ -94,7 +94,7 @@ namespace SteadyOverlay
         public Dictionary<string, Hotkey> Hotkeys { get; set; } // remappable global shortcuts (null = built-in defaults)
 
         static string ConfigDir =>
-            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbit");
         static string ConfigPath => System.IO.Path.Combine(ConfigDir, "settings.json");
 
         public static Settings Load()
@@ -133,7 +133,7 @@ namespace SteadyOverlay
     public static class AutoStart
     {
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        const string Name = "Steady";
+        const string Name = "Orbit";
 
         static string ExePath()
         {
@@ -796,8 +796,8 @@ namespace SteadyOverlay
             if (settings.Hotkeys != null)
                 foreach (var kv in settings.Hotkeys)
                     if (kv.Value != null && kv.Value.Vk != 0) hotkeys[kv.Key] = kv.Value;
-            Title = "Steady";
-            try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
+            Title = "Orbit";
+            try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/orbit.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
             MinWidth = 360; MinHeight = 520;
             ResizeMode = ResizeMode.CanResize;
@@ -829,7 +829,7 @@ namespace SteadyOverlay
                 Width = 14, Height = 14, Fill = Brush("AccentBrush"),
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0)
             });
-            brandRow.Children.Add(Styled(new TextBlock { Text = "Steady", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            brandRow.Children.Add(Styled(new TextBlock { Text = "Orbit", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
             Grid.SetColumn(brandRow, 0);
             header.Children.Add(brandRow);
 
@@ -853,7 +853,7 @@ namespace SteadyOverlay
                 Minimum = 0.3, Maximum = 6, Value = ov.Sens,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 12)
-            }, "SteadySlider");
+            }, "OrbitSlider");
             slider.ToolTip = "How far the dots drift for a given motion. Higher = stronger cue.";
             slider.ValueChanged += (s, e) => { ov.Sens = e.NewValue; strengthVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
             strengthVal.Text = ov.Sens.ToString("0.0") + "×";
@@ -867,7 +867,7 @@ namespace SteadyOverlay
                 Minimum = -4, Maximum = 4, Value = ov.LonGain,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 12)
-            }, "SteadySlider");
+            }, "OrbitSlider");
             lonSlider.ToolTip = "Forward/back cue trim. Sign sets direction (accelerate = dots down); centre is off.";
             lonSlider.ValueChanged += (s, e) => { ov.LonGain = e.NewValue; lonVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
             lonVal.Text = Math.Abs(ov.LonGain) < 0.05 ? "off" : ov.LonGain.ToString("+0.0;-0.0") + "×";
@@ -879,7 +879,7 @@ namespace SteadyOverlay
                 Minimum = 0.4, Maximum = 3.0, Value = ov.DotScale,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 0)
-            }, "SteadySlider");
+            }, "OrbitSlider");
             sizeSlider.ToolTip = "Diameter of the drifting dots.";
             sizeSlider.ValueChanged += (s, e) => { ov.DotScale = e.NewValue; sizeVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
             sizeVal.Text = ov.DotScale.ToString("0.0") + "×";
@@ -973,12 +973,12 @@ namespace SteadyOverlay
             row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var recenter = Styled(new Button { Content = "Recenter" }, "SteadyButtonPrimary");
+            var recenter = Styled(new Button { Content = "Recenter" }, "OrbitButtonPrimary");
             recenter.ToolTip = "Reset the dots to centre — use after settling into your seat (Ctrl+Alt+R).";
             recenter.Click += (s, e) => ov.Recenter();
             Grid.SetColumn(recenter, 0);
-            var quit = Styled(new Button { Content = "Quit" }, "SteadyButton");
-            quit.ToolTip = "Exit Steady completely.";
+            var quit = Styled(new Button { Content = "Quit" }, "OrbitButton");
+            quit.ToolTip = "Exit Orbit completely.";
             quit.Click += (s, e) => QuitApp();
             Grid.SetColumn(quit, 2);
             row2.Children.Add(recenter);
@@ -1008,7 +1008,7 @@ namespace SteadyOverlay
             // The setup detail is tall and optional, so it collapses behind an expander
             // when the laptop's own sensor is already driving the dots.
             phoneDetail = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            phoneExpander = Styled(new Button { HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(11, 6, 11, 6) }, "SteadyButton");
+            phoneExpander = Styled(new Button { HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(11, 6, 11, 6) }, "OrbitButton");
             phoneExpander.ToolTip = "Show or hide the phone pairing details.";
             phoneDetailOpen = true;                         // re-evaluated by UpdatePhone once the sensor source settles
             phoneExpander.Click += (s, e) => { phoneDetailOpen = !phoneDetailOpen; phoneExpUserSet = true; SetPhoneExpander(); };
@@ -1027,7 +1027,7 @@ namespace SteadyOverlay
 
             // Wi-Fi path — labelled row, copyable address, QR
             phoneDetail.Children.Add(SubLabel("Wi-Fi"));
-            phoneUrl = Styled(new TextBox { Margin = new Thickness(0, 4, 0, 10) }, "SteadyReadout");
+            phoneUrl = Styled(new TextBox { Margin = new Thickness(0, 4, 0, 10) }, "OrbitReadout");
             phoneDetail.Children.Add(phoneUrl);
             var qrFrame = new Border
             {
@@ -1051,7 +1051,7 @@ namespace SteadyOverlay
             phoneDetail.Children.Add(qrFrame);
             phoneDetail.Children.Add(Styled(new TextBlock
             {
-                Text = "Scan the QR to open the Steady Phone app with the address pre-filled, then pick Bluetooth or Wi-Fi in it. Install the app once."
+                Text = "Scan the QR to open the Orbit Phone app with the address pre-filled, then pick Bluetooth or Wi-Fi in it. Install the app once."
             }, "FaintText"));
             SetPhoneExpander();
             root.Children.Add(CardOf(phone));
@@ -1093,7 +1093,7 @@ namespace SteadyOverlay
                 Minimum = 0, Maximum = 2, Value = ov.DotStyle,
                 TickFrequency = 1, IsSnapToTickEnabled = true,
                 Margin = new Thickness(0, 4, 0, 2)
-            }, "SteadySlider");
+            }, "OrbitSlider");
             dotStyleSlider.ToolTip = "Light reads on dark windows, Dark reads on light ones, Mixed works on either.";
             dotStyleSlider.ValueChanged += (s, e) =>
             {
@@ -1157,7 +1157,7 @@ namespace SteadyOverlay
                 hkRow.Children.Add(hkBtn);
                 advanced.Children.Add(hkRow);
             }
-            var hkReset = Styled(new Button { Content = "Reset shortcuts to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "SteadyButton");
+            var hkReset = Styled(new Button { Content = "Reset shortcuts to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "OrbitButton");
             hkReset.Click += (s, e) => { hotkeys = DefaultHotkeys(); RefreshHotkeyButtons(); ReapplyHotKeys(); QueueSave(); };
             advanced.Children.Add(hkReset);
             root.Children.Add(CardOf(advanced));
@@ -1175,8 +1175,8 @@ namespace SteadyOverlay
                 Margin = new Thickness(0, 0, 0, 0)
             }, "FaintText");
 
-            var aboutLink = Styled(new Button { Content = "Keyboard shortcuts & about", HorizontalAlignment = HorizontalAlignment.Center }, "SteadyButton");
-            aboutLink.ToolTip = "How Steady works, shortcuts, and version.";
+            var aboutLink = Styled(new Button { Content = "Keyboard shortcuts & about", HorizontalAlignment = HorizontalAlignment.Center }, "OrbitButton");
+            aboutLink.ToolTip = "How Orbit works, shortcuts, and version.";
             aboutLink.Click += (s, e) => ShowHelp(true);
             aboutLink.Margin = new Thickness(0, 2, 0, 0);
             root.Children.Add(aboutLink);
@@ -1272,7 +1272,7 @@ namespace SteadyOverlay
         static CheckBox Toggle(string label)
         {
             var c = new CheckBox { Content = label };
-            return Styled(c, "SteadyToggle");
+            return Styled(c, "OrbitToggle");
         }
         // section title with a teal accent marker (consistent, font-glyph-free)
         static StackPanel SectionHead(string text)
@@ -1387,13 +1387,13 @@ namespace SteadyOverlay
             var col = new StackPanel();
             var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
             titleRow.Children.Add(new System.Windows.Shapes.Ellipse { Width = 12, Height = 12, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-            titleRow.Children.Add(Styled(new TextBlock { Text = "Steady", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            titleRow.Children.Add(Styled(new TextBlock { Text = "Orbit", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
             col.Children.Add(titleRow);
             col.Children.Add(Styled(new TextBlock { Text = "Version " + AppVersion() + " · early access", Margin = new Thickness(0, 0, 0, 12) }, "FaintText"));
 
             col.Children.Add(Styled(new TextBlock
             {
-                Text = "Steady eases motion sickness by drifting faint cue dots along your screen edges, matching the motion your inner ear feels — so your eyes and your balance agree.",
+                Text = "Orbit eases motion sickness by drifting faint cue dots along your screen edges, matching the motion your inner ear feels — so your eyes and your balance agree.",
                 Margin = new Thickness(0, 0, 0, 12)
             }, "BodyText"));
 
@@ -1409,7 +1409,7 @@ namespace SteadyOverlay
             col.Children.Add(SectionHead("KEYBOARD SHORTCUTS"));
             col.Children.Add(hotkeyHint);                   // built earlier; conflict warnings append here
 
-            var done = Styled(new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 16, 0, 0) }, "SteadyButtonPrimary");
+            var done = Styled(new Button { Content = "Close", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 16, 0, 0) }, "OrbitButtonPrimary");
             done.Click += (s, e) => ShowHelp(false);
             col.Children.Add(done);
 
@@ -1442,10 +1442,10 @@ namespace SteadyOverlay
         void ShowWelcome()
         {
             var col = new StackPanel();
-            col.Children.Add(Styled(new TextBlock { Text = "Welcome to Steady", Margin = new Thickness(0, 0, 0, 8) }, "Wordmark"));
+            col.Children.Add(Styled(new TextBlock { Text = "Welcome to Orbit", Margin = new Thickness(0, 0, 0, 8) }, "Wordmark"));
             col.Children.Add(Styled(new TextBlock
             {
-                Text = "Steady drifts faint dots along your screen edges to match the motion your body feels, easing car and motion sickness while you work.",
+                Text = "Orbit drifts faint dots along your screen edges to match the motion your body feels, easing car and motion sickness while you work.",
                 Margin = new Thickness(0, 0, 0, 10)
             }, "BodyText"));
             col.Children.Add(Styled(new TextBlock
@@ -1455,7 +1455,7 @@ namespace SteadyOverlay
             }, "BodyText"));
 
             Border scrim = null;
-            var go = Styled(new Button { Content = "Get started", HorizontalAlignment = HorizontalAlignment.Stretch }, "SteadyButtonPrimary");
+            var go = Styled(new Button { Content = "Get started", HorizontalAlignment = HorizontalAlignment.Stretch }, "OrbitButtonPrimary");
             go.Click += (s, e) =>
             {
                 firstRunDone = true;
@@ -1526,7 +1526,7 @@ namespace SteadyOverlay
 
             var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
             left.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-            left.Children.Add(new TextBlock { Text = "Steady", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            left.Children.Add(new TextBlock { Text = "Orbit", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
             Grid.SetColumn(left, 0);
             bar.Children.Add(left);
 
@@ -1617,7 +1617,7 @@ namespace SteadyOverlay
         // one capture-button per action: click to listen, then the next combo is captured + re-registered
         Button BuildHotkeyButton(string actionKey)
         {
-            var btn = Styled(new Button { MinWidth = 134, HorizontalAlignment = HorizontalAlignment.Right }, "SteadyButton");
+            var btn = Styled(new Button { MinWidth = 134, HorizontalAlignment = HorizontalAlignment.Right }, "OrbitButton");
             btn.Content = ComboText(hotkeys.TryGetValue(actionKey, out var hk0) ? hk0 : null);
             btn.ToolTip = "Click, then press the key combo you want. Esc cancels.";
             btn.Click += (s, e) =>
@@ -1778,7 +1778,7 @@ namespace SteadyOverlay
                 ? $"Pair this PC (\"{server.BtName}\") in your phone's Bluetooth settings, then pick Bluetooth in the app. No network needed."
                 : "Starting… " + (string.IsNullOrEmpty(server.BtError) ? "" : server.BtError);
             string appLink = string.IsNullOrEmpty(server.PrimaryIp) ? ""
-                : $"steady://connect?host={server.PrimaryIp}&port={server.Port}";
+                : $"orbit://connect?host={server.PrimaryIp}&port={server.Port}";
             phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryIp) ? "Waiting for a network address…"
                 : $"{server.PrimaryIp} : {server.Port}   ·   same Wi-Fi, hotspot, or USB tether\nBrowser fallback: {server.PrimaryUrl}  (shows a 'not secure' warning → Advanced ▸ proceed)";
             if (appLink != shownUrl)               // re-render the QR only when the target changes
@@ -1818,7 +1818,7 @@ namespace SteadyOverlay
         }
 
         // Centered "waiting for a network address" placeholder shown inside the white QR frame
-        // before any Wi-Fi address exists — a dashed teal ring around a Steady dot reads as
+        // before any Wi-Fi address exists — a dashed teal ring around an Orbit dot reads as
         // "getting ready" rather than a blank/garbage QR. Dark-on-white (frame is white).
         UIElement BuildQrPlaceholder()
         {
@@ -1917,7 +1917,7 @@ namespace SteadyOverlay
             {
                 Icon = trayIcon,
                 Visible = true,
-                Text = "Steady",
+                Text = "Orbit",
                 ContextMenuStrip = trayMenu
             };
             notify.DoubleClick += (s, e) => TogglePanel();
@@ -1927,7 +1927,7 @@ namespace SteadyOverlay
         {
             try   // prefer the real multi-res brand icon for crisp tray rendering
             {
-                var s = Application.GetResourceStream(new Uri("pack://application:,,,/steady.ico", UriKind.Absolute))?.Stream;
+                var s = Application.GetResourceStream(new Uri("pack://application:,,,/orbit.ico", UriKind.Absolute))?.Stream;
                 if (s != null) using (s) return new System.Drawing.Icon(s, 32, 32);
             }
             catch { /* fall back to the drawn icon below */ }
@@ -2028,7 +2028,7 @@ namespace SteadyOverlay
         int clients;
 
         static string Dir => System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Steady");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbit");
 
         public PhoneServer(Action<double, double, double, double, double, double, double, bool> onFrame)
         {
@@ -2152,7 +2152,7 @@ namespace SteadyOverlay
                 if (System.IO.File.Exists(pfx) && System.IO.File.Exists(ipsFile)
                     && System.IO.File.ReadAllText(ipsFile) == want)
                 {
-                    var c = new X509Certificate2(System.IO.File.ReadAllBytes(pfx), "steady",
+                    var c = new X509Certificate2(System.IO.File.ReadAllBytes(pfx), "orbit",
                         X509KeyStorageFlags.Exportable);
                     if (c.NotAfter > DateTime.Now.AddDays(1)) return c;
                 }
@@ -2164,7 +2164,7 @@ namespace SteadyOverlay
         static X509Certificate2 CreateCert(List<IPAddress> ips, string pfx, string ipsFile, string want)
         {
             using var rsa = RSA.Create(2048);
-            var req = new CertificateRequest("CN=Steady Overlay", rsa,
+            var req = new CertificateRequest("CN=Orbit Overlay", rsa,
                 HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             var san = new SubjectAlternativeNameBuilder();
             san.AddDnsName("localhost");
@@ -2175,7 +2175,7 @@ namespace SteadyOverlay
                 X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
             var now = DateTimeOffset.UtcNow;
             using var made = req.CreateSelfSigned(now.AddDays(-1), now.AddYears(5));
-            var bytes = made.Export(X509ContentType.Pfx, "steady");
+            var bytes = made.Export(X509ContentType.Pfx, "orbit");
             try
             {
                 Directory.CreateDirectory(Dir);
@@ -2184,7 +2184,7 @@ namespace SteadyOverlay
             }
             catch { /* best effort cache */ }
             // re-import from PFX so SChannel can use the key (ephemeral keys can't auth a server)
-            return new X509Certificate2(bytes, "steady", X509KeyStorageFlags.Exportable);
+            return new X509Certificate2(bytes, "orbit", X509KeyStorageFlags.Exportable);
         }
 
         void TryOpenFirewall()
@@ -2201,7 +2201,7 @@ namespace SteadyOverlay
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "netsh",
-                    Arguments = $"advfirewall firewall add rule name=\"Steady Phone {proto} {Port}\" " +
+                    Arguments = $"advfirewall firewall add rule name=\"Orbit Phone {proto} {Port}\" " +
                                 $"dir=in action=allow protocol={proto} localport={Port}",
                     CreateNoWindow = true,
                     UseShellExecute = false,
@@ -2244,7 +2244,7 @@ namespace SteadyOverlay
                 var radio = BluetoothRadio.Default;
                 if (radio == null) { BtError = "no Bluetooth radio on this PC"; return; }
                 BtName = radio.Name;
-                btListener = new BluetoothListener(BtUuid) { ServiceName = "SteadyPhone" };
+                btListener = new BluetoothListener(BtUuid) { ServiceName = "OrbitPhone" };
                 btListener.Start();
                 BtListening = true;
                 new Thread(BtAcceptLoop) { IsBackground = true, Name = "PhoneBT" }.Start();
@@ -2466,7 +2466,7 @@ namespace SteadyOverlay
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Steady - phone sensor</title>
+<title>Orbit - phone sensor</title>
 <style>
   html,body{margin:0;height:100%;background:#10151e;color:#e8ecf2;
     font-family:-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none}
@@ -2497,7 +2497,7 @@ namespace SteadyOverlay
 <body>
 <canvas id="dots"></canvas>
 <div class="wrap">
-  <h1>STEADY</h1>
+  <h1>ORBIT</h1>
   <div id="setup">
     <p>Mount the phone in the car.<br>Tap to stream its motion to the laptop.</p>
     <button id="startbtn">Start</button>

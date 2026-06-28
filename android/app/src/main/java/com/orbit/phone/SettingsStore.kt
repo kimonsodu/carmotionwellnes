@@ -1,16 +1,16 @@
-package com.steady.phone
+package com.orbit.phone
 
 import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * Phone-mode overlay settings, persisted in SharedPreferences("steady"). Defaults mirror the
+ * Phone-mode overlay settings, persisted in SharedPreferences("orbit"). Defaults mirror the
  * Windows app's feel: Strength 1.8x, Dot size 1.0x. Dot colour defaults to Mixed (per-dot
  * light/dark) so the dots contrast against any app/wallpaper behind them; Auto-hide defaults
  * off so the dots don't vanish during a first try at a desk.
  */
 object SettingsStore {
-    const val PREFS = "steady"
+    const val PREFS = "orbit"
 
     const val K_STRENGTH = "ph_strength"     // Float 0.3..6.0  (drift sensitivity multiplier)
     const val K_LON_GAIN = "ph_lonGain"      // Float -4.0..4.0 (accel/brake trim: SIGN = direction, |v| = sensitivity, 0 = off)

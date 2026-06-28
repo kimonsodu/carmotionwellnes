@@ -17,12 +17,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <ImageView
-                android:src="@drawable/ic_steady_mark"
+                android:src="@drawable/ic_orbit_mark"
                 android:layout_marginEnd="12dp"
                 android:layout_width="34dp"
                 android:layout_height="34dp" />
             <TextView
-                android:text="Steady"
+                android:text="Orbit"
                 android:textColor="@color/text"
                 android:textSize="26sp"
                 android:textStyle="bold"
@@ -31,7 +31,7 @@
         </LinearLayout>
 
         <TextView
-            android:text="Sensor source for the Steady overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
+            android:text="Sensor source for the Orbit overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
             android:textColor="@color/muted"
             android:textSize="13sp"
             android:lineSpacingExtra="2dp"
@@ -132,13 +132,13 @@
                 android:layout_height="wrap_content">
                 <TextView
                     style="@style/FieldLabel"
-                    android:text="PC address (shown in the Steady panel under WiFi)"
+                    android:text="PC address (shown in the Orbit panel under WiFi)"
                     android:layout_marginTop="14dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
                 <EditText
                     android:id="@+id/host"
-                    style="@style/SteadyField"
+                    style="@style/OrbitField"
                     android:hint="192.168.x.x"
                     android:inputType="text"
                     android:layout_width="match_parent"
@@ -151,7 +151,7 @@
                     android:layout_height="wrap_content" />
                 <EditText
                     android:id="@+id/port"
-                    style="@style/SteadyField"
+                    style="@style/OrbitField"
                     android:hint="8443"
                     android:inputType="number"
                     android:layout_width="match_parent"
@@ -422,7 +422,7 @@
 
             <TextView
                 android:id="@+id/tvOverlayPerm"
-                android:text="Steady needs permission to draw over other apps. Tap Start and allow it."
+                android:text="Orbit needs permission to draw over other apps. Tap Start and allow it."
                 android:textColor="@color/danger"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"

@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.steady.phone'
+    namespace 'com.orbit.phone'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.steady.phone"
+        applicationId "com.orbit.phone"
         minSdk 26
         targetSdk 34
         versionCode 1

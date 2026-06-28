@@ -1,4 +1,4 @@
-package com.steady.phone
+package com.orbit.phone
 
 import android.Manifest
 import android.app.Activity
@@ -52,7 +52,7 @@ class MainActivity : Activity() {
     private var pendingOverlayStart = false
     private val ui = Handler(Looper.getMainLooper())
 
-    private fun prefs() = getSharedPreferences("steady", Context.MODE_PRIVATE)
+    private fun prefs() = getSharedPreferences("orbit", Context.MODE_PRIVATE)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,10 +125,10 @@ class MainActivity : Activity() {
         handleDeepLink(intent)
     }
 
-    // steady://connect?host=<ip>&port=<port> from the QR/link: switch to WiFi and prefill
+    // orbit://connect?host=<ip>&port=<port> from the QR/link: switch to WiFi and prefill
     private fun handleDeepLink(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme != "steady") return
+        if (data.scheme != "orbit") return
         setIntent(Intent())                       // one-shot: don't re-apply on rotation/recreate
         if (SensorService.running) { toast("Stop streaming first to switch to WiFi"); return }
         val h = (data.getQueryParameter("host") ?: "").trim()
@@ -213,7 +213,7 @@ class MainActivity : Activity() {
 
     private fun requestOverlayPermission() {
         pendingOverlayStart = true                 // auto-start on return if granted (onResume)
-        toast("Allow Steady to draw over other apps, then come back")
+        toast("Allow Orbit to draw over other apps, then come back")
         startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
             android.net.Uri.parse("package:$packageName")))
     }

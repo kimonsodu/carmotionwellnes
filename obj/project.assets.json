@@ -232,9 +232,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\carsick\\SteadyOverlay.csproj",
-      "projectName": "SteadyOverlay",
-      "projectPath": "C:\\Users\\simon\\Documents\\dev\\carsick\\SteadyOverlay.csproj",
+      "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj",
+      "projectName": "OrbitOverlay",
+      "projectPath": "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj",
       "packagesPath": "C:\\Users\\simon\\.nuget\\packages\\",
       "outputPath": "C:\\Users\\simon\\Documents\\dev\\carsick\\obj\\",
       "projectStyle": "PackageReference",

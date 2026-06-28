@@ -1,4 +1,4 @@
-package com.steady.phone
+package com.orbit.phone
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -42,7 +42,7 @@ class SensorService : Service(), SensorEventListener {
         @Volatile var statusLine = ""
         @Volatile var readout = ""
         val BT_UUID: UUID = UUID.fromString("b1a7e94c-1c3a-4e7e-9b2a-0a1b2c3d4e5f")
-        private const val CHANNEL = "steady"
+        private const val CHANNEL = "orbit"
         private const val NOTIF_ID = 7
     }
 
@@ -84,7 +84,7 @@ class SensorService : Service(), SensorEventListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Recover target from SharedPreferences when the intent is null (START_STICKY restart).
-        val prefs = getSharedPreferences("steady", Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences("orbit", Context.MODE_PRIVATE)
         val mode = intent?.getStringExtra("mode") ?: prefs.getString("mode", "wifi") ?: "wifi"
         var host = (intent?.getStringExtra("host")?.trim()).orEmpty()
         if (host.isEmpty()) host = (prefs.getString("host", "") ?: "").trim()
@@ -98,7 +98,7 @@ class SensorService : Service(), SensorEventListener {
 
         startForegroundNotification()
 
-        thread = HandlerThread("steady-sensors").also { it.start() }
+        thread = HandlerThread("orbit-sensors").also { it.start() }
         handler = Handler(thread!!.looper)
 
         // open the transport on the worker thread (BT connect() blocks)
@@ -129,7 +129,7 @@ class SensorService : Service(), SensorEventListener {
         startGps()
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "steady:stream").apply {
+        wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "orbit:stream").apply {
             setReferenceCounted(false); acquire()
         }
 
@@ -197,12 +197,12 @@ class SensorService : Service(), SensorEventListener {
     private fun startForegroundNotification() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Steady streaming", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, "Orbit streaming", NotificationManager.IMPORTANCE_LOW)
         )
         val n: Notification = Notification.Builder(this, CHANNEL)
-            .setContentTitle("Steady")
+            .setContentTitle("Orbit")
             .setContentText("Streaming motion to the laptop")
-            .setSmallIcon(R.drawable.ic_steady_notify)
+            .setSmallIcon(R.drawable.ic_orbit_notify)
             .setOngoing(true)
             .build()
         // On API 34 only OR in LOCATION when a location permission is held, else startForeground throws.

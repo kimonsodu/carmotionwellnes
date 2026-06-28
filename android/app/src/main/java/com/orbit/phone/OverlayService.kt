@@ -1,4 +1,4 @@
-package com.steady.phone
+package com.orbit.phone
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -34,16 +34,16 @@ import android.view.WindowManager
  * System-wide Phone-mode overlay: drifting cue dots float on top of every app, driven by THIS
  * phone's own accelerometer. A click-through TYPE_APPLICATION_OVERLAY window hosts a [DotsView];
  * a foreground (specialUse) service keeps it alive with a Stop notification while other apps are
- * in the foreground. Cosmetic settings live in SharedPreferences("steady") and apply live.
+ * in the foreground. Cosmetic settings live in SharedPreferences("orbit") and apply live.
  */
 class OverlayService : Service(), SensorEventListener,
     SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
         @Volatile var running = false
-        private const val CHANNEL = "steady_overlay"
+        private const val CHANNEL = "orbit_overlay"
         private const val NOTIF_ID = 8                       // SensorService uses 7
-        const val ACTION_STOP = "com.steady.phone.OVERLAY_STOP"
+        const val ACTION_STOP = "com.orbit.phone.OVERLAY_STOP"
 
         fun start(ctx: Context) = ctx.startForegroundService(Intent(ctx, OverlayService::class.java))
         fun stop(ctx: Context) = ctx.stopService(Intent(ctx, OverlayService::class.java))
@@ -124,7 +124,7 @@ class OverlayService : Service(), SensorEventListener,
     }
 
     private fun startSensors() {
-        thread = HandlerThread("steady-overlay-sensor").also { it.start() }
+        thread = HandlerThread("orbit-overlay-sensor").also { it.start() }
         sensorHandler = Handler(thread!!.looper)
         sm = getSystemService(SENSOR_SERVICE) as SensorManager
         // Pause/resume the whole IMU + GPS + dot loop with the display so a screen-off phone in a
@@ -243,18 +243,18 @@ class OverlayService : Service(), SensorEventListener,
     private fun startForegroundNotification() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Steady overlay", NotificationManager.IMPORTANCE_LOW))
+            NotificationChannel(CHANNEL, "Orbit overlay", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(
             this, 0, Intent(this, OverlayService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val open = PendingIntent.getActivity(
             this, 1, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val stopIcon = Icon.createWithResource(this, R.drawable.ic_steady_notify)
+        val stopIcon = Icon.createWithResource(this, R.drawable.ic_orbit_notify)
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("Steady — dots on screen")
+            .setContentTitle("Orbit — dots on screen")
             .setContentText("Drifting cue dots over your apps")
-            .setSmallIcon(R.drawable.ic_steady_notify)
+            .setSmallIcon(R.drawable.ic_orbit_notify)
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(stopIcon, "Stop", stop).build())

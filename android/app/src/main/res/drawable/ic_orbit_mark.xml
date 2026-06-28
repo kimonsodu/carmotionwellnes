@@ -4,7 +4,7 @@
     android:height="32dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <!-- brand mark: a steady ring with drifting cue dots down each edge -->
+    <!-- brand mark: drifting cue dots down each edge -->
     <path
         android:strokeColor="#6FD8C6"
         android:strokeWidth="3.5"

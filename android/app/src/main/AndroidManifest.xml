@@ -25,9 +25,9 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="Steady Phone"
+        android:label="Orbit Phone"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Steady">
+        android:theme="@style/Theme.Orbit">
 
         <activity
             android:name=".MainActivity"
@@ -37,12 +37,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- QR/link deep link: steady://connect?host=<ip>&port=<port> opens the app pre-filled -->
+            <!-- QR/link deep link: orbit://connect?host=<ip>&port=<port> opens the app pre-filled -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="steady" android:host="connect" />
+                <data android:scheme="orbit" android:host="connect" />
             </intent-filter>
         </activity>
 

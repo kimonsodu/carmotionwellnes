@@ -101,7 +101,7 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <Style x:Key="SteadySlider" TargetType="Slider">
+    <Style x:Key="OrbitSlider" TargetType="Slider">
         <Setter Property="Height" Value="22"/>
         <Setter Property="Margin" Value="0,4,0,2"/>
         <Setter Property="IsMoveToPointEnabled" Value="True"/>
@@ -128,7 +128,7 @@
     </Style>
 
     <!-- ============ Toggle switch (CheckBox) ============ -->
-    <Style x:Key="SteadyToggle" TargetType="CheckBox">
+    <Style x:Key="OrbitToggle" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Margin" Value="0,6"/>
@@ -184,7 +184,7 @@
     </Style>
 
     <!-- ============ Buttons ============ -->
-    <Style x:Key="SteadyButton" TargetType="Button">
+    <Style x:Key="OrbitButton" TargetType="Button">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="Background" Value="{StaticResource CardHiBrush}"/>
         <Setter Property="FontSize" Value="13"/>
@@ -210,7 +210,7 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <Style x:Key="SteadyButtonPrimary" TargetType="Button" BasedOn="{StaticResource SteadyButton}">
+    <Style x:Key="OrbitButtonPrimary" TargetType="Button" BasedOn="{StaticResource OrbitButton}">
         <Setter Property="Foreground" Value="{StaticResource BgBrush}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
@@ -329,7 +329,7 @@
     </Style>
 
     <!-- ============ Readout textbox ============ -->
-    <Style x:Key="SteadyReadout" TargetType="TextBox">
+    <Style x:Key="OrbitReadout" TargetType="TextBox">
         <Setter Property="IsReadOnly" Value="True"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="Background" Value="{StaticResource BgBrush}"/>
