@@ -80,8 +80,14 @@ namespace OrbitOverlay
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
         public bool SwapAxes { get; set; } = false;
-        public int DotStyle { get; set; } = 0;             // 0 = light, 1 = mixed, 2 = dark cue dots
+        public int DotStyle { get; set; } = 0;             // 0 = light, 1 = mixed, 2 = dark, 3 = accent cue dots
         public bool DarkDots { get; set; } = false;        // legacy (pre-slider) — migrated to DotStyle on load
+        public uint AccentColor { get; set; } = 0;         // packed ARGB for the Accent dot style (0 = brand amber)
+        public double DotOpacity { get; set; } = 1.0;      // per-dot brightness multiplier (0.2..1.0)
+        public double Density { get; set; } = 1.0;         // dot-count multiplier (0.5..2.0)
+        public double Decay { get; set; } = 0.94;          // flow persistence / trail (0.80..0.97)
+        public double HideSensitivity { get; set; } = 1.0; // auto-hide knee scale (0.5..2.0)
+        public int Placement { get; set; } = 0;            // 0 = side strips, 1 = full peripheral frame
         public bool StartMinimized { get; set; } = false;  // launch hidden in the tray
         public bool AutoPause { get; set; } = true;        // fade the dots out when the vehicle is stopped
         public double? WinLeft { get; set; }               // remembered panel position + size (null = use defaults)
@@ -113,7 +119,7 @@ namespace OrbitOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -179,7 +185,13 @@ namespace OrbitOverlay
         public bool Paused = false;
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
-        public int DotStyle = 0;                 // 0 = light, 1 = mixed (both, works on any window), 2 = dark
+        public int DotStyle = 0;                 // 0 = light, 1 = mixed (both, works on any window), 2 = dark, 3 = accent
+        public uint AccentColor = 0;             // packed ARGB for the Accent dot style (0 = brand amber signal)
+        public double DotOpacity = 1.0;          // per-dot brightness multiplier (0.2..1.0)
+        public double Density = 1.0;             // dot-count multiplier (0.5..2.0)
+        public double Decay = 0.94;              // flow persistence / trail (0.80..0.97)
+        public double HideSensitivity = 1.0;     // auto-hide energy-knee scale (0.5..2.0)
+        public int Placement = 0;                // 0 = side strips, 1 = full peripheral frame (adds top/bottom bands)
         public bool AutoPause = true;            // fade dots out when motion stops (parked / at a desk)
 
         // --- motion-energy gate for AutoPause ---
@@ -213,6 +225,7 @@ namespace OrbitOverlay
         int settleFrames;                        // frames since (re)arm — gates the lock
         int tiltHold;                            // frames left of fast gravity-tracking after a tilt
         double bandW;
+        double bandH;                            // height of each top/bottom band (full-frame placement)
         double appliedScale = -1;                // last dot size pushed to the ellipses
 
         // raw sensor values written by sensor threads, read on the UI tick
@@ -287,8 +300,14 @@ namespace OrbitOverlay
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
             SwapAxes = s.SwapAxes;
-            DotStyle = Math.Clamp(s.DotStyle, 0, 2);
+            DotStyle = Math.Clamp(s.DotStyle, 0, 3);
             if (DotStyle == 0 && s.DarkDots) DotStyle = 2;   // migrate the old bool
+            AccentColor = s.AccentColor;
+            DotOpacity = double.IsFinite(s.DotOpacity) ? Math.Clamp(s.DotOpacity, 0.2, 1.0) : 1.0;
+            Density = double.IsFinite(s.Density) ? Math.Clamp(s.Density, 0.5, 2.0) : 1.0;
+            Decay = double.IsFinite(s.Decay) ? Math.Clamp(s.Decay, 0.80, 0.97) : 0.94;
+            HideSensitivity = double.IsFinite(s.HideSensitivity) ? Math.Clamp(s.HideSensitivity, 0.5, 2.0) : 1.0;
+            Placement = Math.Clamp(s.Placement, 0, 1);
             AutoPause = s.AutoPause;
             PhoneOnly = s.PhoneOnly;
         }
@@ -320,6 +339,9 @@ namespace OrbitOverlay
             timer.Start();
         }
 
+        // public so the control panel can rebuild the field when Density / Placement change
+        public void RebuildField() => BuildDots();
+
         void BuildDots()
         {
             canvas.Children.Clear();
@@ -327,10 +349,12 @@ namespace OrbitOverlay
             double W = Width, H = Height;
             if (W <= 0 || H <= 0) return;
 
+            double dens = Math.Clamp(Density, 0.5, 2.0);
             bandW = Math.Max(64, Math.Min(W * 0.22, 240));   // width of each side strip
+            bandH = Math.Max(48, Math.Min(H * 0.16, 180));   // height of each top/bottom band (full-frame)
             double colArea = bandW * H * 2;
-            int nNear = (int)(colArea / 7000);
-            int nFar = (int)(colArea / 5200);
+            int nNear = (int)(colArea / 7000 * dens);
+            int nFar = (int)(colArea / 5200 * dens);
 
             var rnd = new Random();
 
@@ -351,8 +375,32 @@ namespace OrbitOverlay
                     arr.Add(d);
                 }
             }
+            // full-frame placement: scatter dots across top (side 2) + bottom (side 3) bands too
+            void MakeBand(int n, List<Dot> arr, double rMin, double rJit, double alpha)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    var d = new Dot
+                    {
+                        side = 2 + (i % 2),                 // alternate top / bottom bands
+                        lx = rnd.NextDouble() * W,
+                        y = rnd.NextDouble() * bandH,
+                        r = rMin + rnd.NextDouble() * rJit,
+                        baseAlpha = alpha
+                    };
+                    d.el = new Ellipse { Width = d.r * 2, Height = d.r * 2, Fill = DotFill(rnd) };
+                    canvas.Children.Add(d.el);
+                    arr.Add(d);
+                }
+            }
             Make(nFar, far, 0.9, 0.8, 0.18);
             Make(nNear, near, 1.9, 1.3, 0.9);
+            if (Placement == 1)
+            {
+                double rowArea = bandH * W * 2;
+                MakeBand((int)(rowArea / 5200 * dens), far, 0.9, 0.8, 0.18);
+                MakeBand((int)(rowArea / 7000 * dens), near, 1.9, 1.3, 0.9);
+            }
             ApplyDotScale();                    // size + place dots now so the first paint is correct
             Render(near, offX, offY, W, H);
             Render(far, offX * 0.55, offY * 0.55, W, H);
@@ -365,31 +413,50 @@ namespace OrbitOverlay
             Size(near); Size(far);
         }
 
-        SolidColorBrush lightDot, darkDot;
+        SolidColorBrush lightDot, darkDot, accentDot;
         void EnsureDotBrushes()
         {
-            if (lightDot != null) return;
-            lightDot = new SolidColorBrush(Color.FromRgb(236, 231, 215)); lightDot.Freeze();
-            darkDot = new SolidColorBrush(Color.FromRgb(18, 22, 30)); darkDot.Freeze();
+            if (lightDot == null)
+            {
+                lightDot = new SolidColorBrush(Color.FromRgb(236, 231, 215)); lightDot.Freeze();
+                darkDot = new SolidColorBrush(Color.FromRgb(18, 22, 30)); darkDot.Freeze();
+            }
+            if (accentDot == null)
+            {
+                // packed ARGB from the chosen swatch, or the brand amber signal when unset
+                Color c = AccentColor != 0
+                    ? Color.FromArgb((byte)(AccentColor >> 24), (byte)(AccentColor >> 16), (byte)(AccentColor >> 8), (byte)AccentColor)
+                    : Color.FromRgb(0xE0, 0xA2, 0x4A);
+                accentDot = new SolidColorBrush(c); accentDot.Freeze();
+            }
         }
 
-        // pick a dot's colour for the current style: light, dark, or (mixed) a 50/50 split
+        // pick a dot's colour for the current style: light, dark, accent, or (mixed) a 50/50 split
         // so some dots always contrast whether the window behind is light or dark
         Brush DotFill(Random rnd)
         {
             EnsureDotBrushes();
             return DotStyle == 0 ? lightDot
                  : DotStyle == 2 ? darkDot
+                 : DotStyle == 3 ? accentDot
                  : (rnd.NextDouble() < 0.5 ? lightDot : darkDot);
         }
 
         // recolor existing dots in place (no rebuild) when the dot-style slider moves
         public void SetDotStyle(int style)
         {
-            DotStyle = Math.Clamp(style, 0, 2);
+            DotStyle = Math.Clamp(style, 0, 3);
             var rnd = new Random();
             foreach (var d in near) d.el.Fill = DotFill(rnd);
             foreach (var d in far) d.el.Fill = DotFill(rnd);
+        }
+
+        // choose a custom accent colour (packed ARGB) and switch to the Accent dot style
+        public void SetAccentColor(uint argb)
+        {
+            AccentColor = argb;
+            accentDot = null;                   // rebuilt on next EnsureDotBrushes
+            SetDotStyle(3);
         }
 
         void StartSensors()
@@ -589,9 +656,10 @@ namespace OrbitOverlay
                 // de-weighted now that GPS does the cruise-detection job it was invented for.
                 double energy = jitterEma * 1.5 + Math.Sqrt(lat * lat + fore * fore) + Math.Abs(yaw) * 0.03;
                 activityEma += (energy - activityEma) * 0.06;   // smoothing (gives the gate inertia)
-                if (activityEma > 0.50) wantStill = false;       // clear maneuver -> wake (wider show knee)
-                else if (activityEma < 0.18) wantStill = true;   // low motion -> hide (wider hide knee)
-                // 0.18–0.50: hold current state (hysteresis)
+                double hs = Math.Clamp(HideSensitivity, 0.5, 2.0);   // >1 biases toward hiding sooner
+                if (activityEma > 0.50 * hs) wantStill = false;  // clear maneuver -> wake (wider show knee)
+                else if (activityEma < 0.18 * hs) wantStill = true;  // low motion -> hide (wider hide knee)
+                // between the knees: hold current state (hysteresis)
             }
             // MIN-DWELL debounce: after any toggle, hold the new visibility state at least minDwell
             // frames before another toggle is allowed; AND require the desired state to persist
@@ -611,7 +679,7 @@ namespace OrbitOverlay
             bool hide = startupSuppress || (AutoPause && autoStill);
             bool freeze = Paused || hide;
 
-            const double decay = 0.94;              // how long flow persists
+            double decay = Math.Clamp(Decay, 0.80, 0.97);   // how long flow persists (user-tunable)
             const double gain = 0.105;              // accel -> velocity
             const double slew = 0.40;               // max velocity change per frame -> a road jolt can't jump the dots
             if (freeze) { velX *= 0.85; velY *= 0.85; }
@@ -656,14 +724,27 @@ namespace OrbitOverlay
 
         void Render(List<Dot> arr, double ox, double oy, double W, double H)
         {
+            double op = Math.Clamp(DotOpacity, 0.2, 1.0);          // user brightness multiplier
             foreach (var d in arr)
             {
-                double local = Wrap(d.lx + ox, bandW);             // horizontal flow stays in the strip
-                double x = d.side == 0 ? local : (W - bandW + local);
-                double y = Wrap(d.y + oy, H);
-                double t = Math.Min(1.0, Math.Min(y, H - y) / (H * 0.14));
-                double fade = 0.35 + 0.65 * t;                     // dim toward the corners
-                d.el.Opacity = d.baseAlpha * fade;
+                double x, y, fade;
+                if (d.side < 2)
+                {
+                    double local = Wrap(d.lx + ox, bandW);         // horizontal flow stays in the strip
+                    x = d.side == 0 ? local : (W - bandW + local);
+                    y = Wrap(d.y + oy, H);
+                    double t = Math.Min(1.0, Math.Min(y, H - y) / (H * 0.14));
+                    fade = 0.35 + 0.65 * t;                        // dim toward the corners
+                }
+                else
+                {
+                    x = Wrap(d.lx + ox, W);                        // top/bottom band: flow runs horizontally
+                    double localY = Wrap(d.y + oy, bandH);
+                    y = d.side == 2 ? localY : (H - bandH + localY);
+                    double t = Math.Min(1.0, Math.Min(x, W - x) / (W * 0.14));
+                    fade = 0.35 + 0.65 * t;                        // dim toward the left/right edges
+                }
+                d.el.Opacity = d.baseAlpha * fade * op;
                 double rr = d.r * DotScale;
                 Canvas.SetLeft(d.el, x - rr);
                 Canvas.SetTop(d.el, y - rr);
@@ -752,8 +833,9 @@ namespace OrbitOverlay
 
         readonly OverlayWindow ov;
         readonly PhoneServer server;
-        Slider slider, sizeSlider;
-        CheckBox pause, flipV, flipH, swap, dbg;
+        Slider slider, sizeSlider, lonSlider, opacitySlider, densitySlider, decaySlider, hideSlider;
+        StackPanel accentRow;
+        CheckBox pause, flipV, flipH, swap, dbg, placementTog;
         TextBlock hotkeyHint, dbgText;
         StackPanel autoHideStatusRow;            // live gate indicator under the auto-hide toggle
         System.Windows.Shapes.Ellipse autoHideDot;
@@ -847,6 +929,29 @@ namespace OrbitOverlay
             // ---- MOTION card ----
             var motion = new StackPanel();
             motion.Children.Add(SectionHead("MOTION"));
+
+            // quick feel presets — these just drive the underlying sliders (Android parity);
+            // nothing extra is persisted, the sliders' own handlers do the saving.
+            var presetRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            for (int pc = 0; pc < 5; pc++)
+                presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = pc % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(6) });
+            void AddPreset(int col, string name, double sens, double lon, double den, double op)
+            {
+                var b = Styled(new Button { Content = name }, "OrbitButton");
+                b.ToolTip = $"Preset: strength {sens:0.0}×, density {den:0.0}×, opacity {(int)(op * 100)}%.";
+                b.Click += (s, e) =>
+                {
+                    slider.Value = sens; lonSlider.Value = lon;
+                    densitySlider.Value = den; opacitySlider.Value = op;
+                };
+                Grid.SetColumn(b, col);
+                presetRow.Children.Add(b);
+            }
+            AddPreset(0, "Calm", 1.0, 1.0, 0.7, 0.6);
+            AddPreset(2, "Balanced", 1.8, 1.5, 1.0, 1.0);
+            AddPreset(4, "Strong", 3.0, 2.2, 1.4, 1.0);
+            motion.Children.Add(presetRow);
+
             motion.Children.Add(FieldHead("Strength", out var strengthVal));
             slider = Styled(new Slider
             {
@@ -862,7 +967,7 @@ namespace OrbitOverlay
             // --- Accel / Brake trim (longitudinal): bipolar -4..4, sign = direction, 0 = off (mirrors Android).
             // Sign composes with the "Flip vertical" toggle below; centre is off. ---
             motion.Children.Add(FieldHead("Accel / Brake", out var lonVal));
-            var lonSlider = Styled(new Slider
+            lonSlider = Styled(new Slider
             {
                 Minimum = -4, Maximum = 4, Value = ov.LonGain,
                 TickFrequency = 0.1, IsSnapToTickEnabled = true,
@@ -883,7 +988,34 @@ namespace OrbitOverlay
             sizeSlider.ToolTip = "Diameter of the drifting dots.";
             sizeSlider.ValueChanged += (s, e) => { ov.DotScale = e.NewValue; sizeVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
             sizeVal.Text = ov.DotScale.ToString("0.0") + "×";
+            sizeSlider.Margin = new Thickness(0, 4, 0, 12);
             motion.Children.Add(sizeSlider);
+
+            // --- Opacity: per-dot brightness (composes with the auto-hide fade, never fights it) ---
+            motion.Children.Add(FieldHead("Opacity", out var opacityVal));
+            opacitySlider = Styled(new Slider
+            {
+                Minimum = 0.2, Maximum = 1.0, Value = ov.DotOpacity,
+                TickFrequency = 0.05, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            opacitySlider.ToolTip = "How bright the dots are. Lower for a subtler cue.";
+            opacitySlider.ValueChanged += (s, e) => { ov.DotOpacity = e.NewValue; opacityVal.Text = ((int)Math.Round(e.NewValue * 100)) + "%"; QueueSave(); };
+            opacityVal.Text = ((int)Math.Round(ov.DotOpacity * 100)) + "%";
+            motion.Children.Add(opacitySlider);
+
+            // --- Density: how many dots are drawn (rebuilds the field) ---
+            motion.Children.Add(FieldHead("Density", out var densityVal));
+            densitySlider = Styled(new Slider
+            {
+                Minimum = 0.5, Maximum = 2.0, Value = ov.Density,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            }, "OrbitSlider");
+            densitySlider.ToolTip = "How many dots are drawn.";
+            densitySlider.ValueChanged += (s, e) => { ov.Density = e.NewValue; densityVal.Text = e.NewValue.ToString("0.0") + "×"; ov.RebuildField(); QueueSave(); };
+            densityVal.Text = ov.Density.ToString("0.0") + "×";
+            motion.Children.Add(densitySlider);
             root.Children.Add(CardOf(motion));
 
             // ---- ADJUST card (toggle switches) ----
@@ -1118,6 +1250,29 @@ namespace OrbitOverlay
             DotLab("Mixed", 1, HorizontalAlignment.Center);
             DotLab("Dark", 2, HorizontalAlignment.Right);
             prefs.Children.Add(dotLabels);
+
+            // Accent colour: a 4th dot style — teal / amber signal / blue (Android parity).
+            // Picking a swatch switches to the Accent style; moving the slider above leaves it.
+            prefs.Children.Add(SubLabel("Accent colour"));
+            accentRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 2) };
+            void Swatch(uint argb, string brushKey, string tip)
+            {
+                var sw = new System.Windows.Shapes.Ellipse
+                {
+                    Width = 26, Height = 26, Margin = new Thickness(0, 0, 10, 0),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Fill = Brush(brushKey), Stroke = Brush("BorderBrush2"), StrokeThickness = 1,
+                    ToolTip = tip
+                };
+                sw.MouseLeftButtonUp += (s, e) => { ov.SetAccentColor(argb); dotColourVal.Text = "Accent"; QueueSave(); };
+                accentRow.Children.Add(sw);
+            }
+            Swatch(0xFF6FD8C6, "AccentBrush", "Teal");
+            Swatch(0xFFE0A24A, "AmberBrush", "Amber (signal)");
+            Swatch(0xFF6FA8D8, "BlueBrush", "Blue");
+            prefs.Children.Add(accentRow);
+            if (ov.DotStyle == 3) dotColourVal.Text = "Accent";
+
             prefs.Children.Add(Divider());
             startMin = Toggle("Start minimized to tray");
             startMin.IsChecked = settings.StartMinimized;
@@ -1135,6 +1290,57 @@ namespace OrbitOverlay
             // ---- ADVANCED card: remappable global hotkeys ----
             var advanced = new StackPanel();
             advanced.Children.Add(SectionHead("ADVANCED"));
+
+            // --- Smoothness / trail (flow decay) ---
+            advanced.Children.Add(FieldHead("Smoothness / trail", out var decayVal));
+            decaySlider = Styled(new Slider
+            {
+                Minimum = 0.80, Maximum = 0.97, Value = ov.Decay,
+                TickFrequency = 0.01, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            decaySlider.ToolTip = "How long the dot flow persists. Higher = smoother, longer trails.";
+            decaySlider.ValueChanged += (s, e) => { ov.Decay = e.NewValue; decayVal.Text = e.NewValue.ToString("0.00"); QueueSave(); };
+            decayVal.Text = ov.Decay.ToString("0.00");
+            advanced.Children.Add(decaySlider);
+
+            // --- Hide sensitivity (auto-hide knee scale) ---
+            advanced.Children.Add(FieldHead("Hide sensitivity", out var hideVal));
+            hideSlider = Styled(new Slider
+            {
+                Minimum = 0.5, Maximum = 2.0, Value = ov.HideSensitivity,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            hideSlider.ToolTip = "How eagerly the dots hide when you stop. Higher = hide sooner.";
+            hideSlider.ValueChanged += (s, e) => { ov.HideSensitivity = e.NewValue; hideVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            hideVal.Text = ov.HideSensitivity.ToString("0.0") + "×";
+            advanced.Children.Add(hideSlider);
+
+            // --- Coverage: side strips vs full peripheral frame ---
+            placementTog = Toggle("Frame the whole screen");
+            placementTog.ToolTip = "Add top and bottom dot bands for a full peripheral frame (default: side strips only).";
+            placementTog.IsChecked = ov.Placement == 1;
+            placementTog.Checked += (s, e) => { ov.Placement = 1; ov.RebuildField(); QueueSave(); };
+            placementTog.Unchecked += (s, e) => { ov.Placement = 0; ov.RebuildField(); QueueSave(); };
+            advanced.Children.Add(placementTog);
+
+            // --- Reset every visual/motion tunable to its default ---
+            var resetVis = Styled(new Button { Content = "Reset visuals to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 14) }, "OrbitButton");
+            resetVis.ToolTip = "Restore strength, accel/brake, size, opacity, density, colour, smoothness and hide sensitivity to defaults.";
+            resetVis.Click += (s, e) =>
+            {
+                slider.Value = 1.8; lonSlider.Value = 1.5; sizeSlider.Value = 1.0;
+                opacitySlider.Value = 1.0; densitySlider.Value = 1.0;
+                decaySlider.Value = 0.94; hideSlider.Value = 1.0;
+                ov.SetDotStyle(0); dotStyleSlider.Value = 0; dotColourVal.Text = dotNames[0];
+                placementTog.IsChecked = false;     // fires Unchecked -> Placement 0 + rebuild
+                ov.RebuildField();
+                QueueSave();
+            };
+            advanced.Children.Add(resetVis);
+            advanced.Children.Add(Divider());
+
             advanced.Children.Add(Styled(new TextBlock
             {
                 Text = "Global shortcuts work anywhere. Click a binding, then press the new key combo (Esc cancels).",

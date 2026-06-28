@@ -10,6 +10,10 @@
     <SolidColorBrush x:Key="BorderBrush2"   Color="#27313F"/>
     <SolidColorBrush x:Key="AccentBrush"    Color="#6FD8C6"/>
     <SolidColorBrush x:Key="AccentDimBrush" Color="#4FB8A8"/>
+    <!-- the amber "signal" point — brand signature, matches the icon kit -->
+    <Color x:Key="AmberColor">#E0A24A</Color>
+    <SolidColorBrush x:Key="AmberBrush"     Color="#E0A24A"/>
+    <SolidColorBrush x:Key="BlueBrush"      Color="#6FA8D8"/>
     <SolidColorBrush x:Key="TextBrush"      Color="#E6EAF0"/>
     <SolidColorBrush x:Key="MutedBrush"     Color="#8A94A6"/>
     <SolidColorBrush x:Key="FaintBrush"     Color="#6A7486"/>
