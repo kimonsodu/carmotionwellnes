@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Orbital — simplified full-bleed mark. Use for: legacy launcher, apple-touch, PWA 192. Reads at thumbnail size. -->
+  <rect width="512" height="512" fill="#10151E"/>
+  <g fill="#6FD8C6">
+    <circle cx="150" cy="176" r="24"/>
+    <circle cx="138" cy="256" r="28"/>
+    <circle cx="150" cy="336" r="24"/>
+    <circle cx="362" cy="176" r="24"/>
+    <circle cx="374" cy="256" r="28"/>
+    <circle cx="362" cy="336" r="24"/>
+  </g>
+  <circle cx="256" cy="256" r="22" fill="#E0A24A"/>
+</svg>

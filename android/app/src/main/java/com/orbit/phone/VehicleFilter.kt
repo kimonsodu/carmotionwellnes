@@ -25,10 +25,13 @@ import kotlin.math.sqrt
  */
 class VehicleFilter {
 
-    /** Cleaned vehicle channels (UNSCALED by enable — caller applies enable once). */
+    /** Cleaned vehicle channels (UNSCALED by enable — caller applies enable once).
+     *  lon/lat/yaw/gate/inVehicle = VEHICLE-frame (streamed to the PC, unchanged).
+     *  screenX/screenY = SCREEN-frame cue (drives the on-phone overlay; orientation-agnostic). */
     class Out(
         @JvmField val lon: Float, @JvmField val lat: Float, @JvmField val enable: Float,
-        @JvmField val yawDegPerSec: Float, @JvmField val gate: Float, @JvmField val inVehicle: Boolean
+        @JvmField val yawDegPerSec: Float, @JvmField val gate: Float, @JvmField val inVehicle: Boolean,
+        @JvmField val screenX: Float, @JvmField val screenY: Float
     )
 
     // ---- tunables (tune in-car) ----
@@ -42,11 +45,24 @@ class VehicleFilter {
     private val SPD_ON = 5.0f       // GPS speed (m/s) to latch in-vehicle (hysteresis)
     private val SPD_OFF = 2.0f
     private val GRAV_A = 0.024f     // self-split gravity EMA (tau~0.7 s)
+    // Gentle gyro gate for the SCREEN path: vehicle turns (~0.3..1.1 rad/s) MUST pass — the real
+    // centripetal force carries the turn cue — so only a violent hand-twist cuts. Wider than the
+    // vehicle-frame gate (W_LO/W_HI) because the screen path has no separate yaw injection.
+    private val SCRN_W_LO = 0.6f
+    private val SCRN_W_HI = 2.5f
 
     // ---- state ----
     private val grav = FloatArray(3); private var gravInit = false
     private var lpF = 0f; private var lpR = 0f          // low-passed forward / right (vehicle or ENU axes)
     private var baseF = 0f; private var baseR = 0f      // slow baselines (HPF)
+    // screen-relative parallel filter state (independent of the vehicle-frame state above)
+    private var lpX = 0f; private var lpY = 0f
+    private var baseX = 0f; private var baseY = 0f
+    private var prevSX = 0f; private var prevSY = 0f
+    private var fPrevX = 0f; private var fPrevY = 1f; private var fPrevZ = 0f   // last good screen-forward (roll-degenerate hold)
+    /** Display rotation (Surface.ROTATION_0/90/180/270) of the overlay's screen. Set by
+     *  OverlayService; SensorService leaves it 0 (it doesn't render). */
+    @Volatile @JvmField var screenRot = 0
     private var hdgE = 0f; private var hdgN = 1f        // inertial forward-axis unit estimate (ENU); default North
     private var yawLp = 0f                 // rad/s, low-passed
     private var gmag = 0f                  // |gyro| rad/s
@@ -102,7 +118,7 @@ class VehicleFilter {
             // No orientation matrix. We need a gravity estimate to project tilt out; if we don't
             // have one (e.g. fused linear-accel present but no rotation sensor), the sample is
             // unusable for tilt removal — emit no drive rather than leaking device-frame tilt.
-            if (!gravInit) return Out(0f, 0f, gainEnv, yawLp * 57.29578f, 0f, moveOn)
+            if (!gravInit) return Out(0f, 0f, gainEnv, yawLp * 57.29578f, 0f, moveOn, 0f, 0f)
             val gx = grav[0]; val gy = grav[1]; val gz = grav[2]
             val gn = sqrt(gx * gx + gy * gy + gz * gz).coerceAtLeast(1e-3f)
             val ux = gx / gn; val uy = gy / gn; val uz = gz / gn
@@ -171,8 +187,59 @@ class VehicleFilter {
         }
         gainEnv += (target - gainEnv) * (if (target > gainEnv) 0.066f else 0.024f)  // attack/release
 
-        // UNSCALED lon/lat; caller multiplies by enable exactly once (avoids enable^2 double-gate).
-        return Out(lon, lat, gainEnv, yawLp * 57.29578f, gate, moveOn)
+        // ===== SCREEN-RELATIVE CUE (orientation-agnostic; drives the on-phone overlay) =====
+        // Projects the felt horizontal acceleration onto a frame anchored to the PHONE SCREEN
+        // (= the user's gaze frame), so forward / backward / sideways / diagonal seating is correct
+        // BY CONSTRUCTION — no forward-axis learning, no GPS bearing, no sign disambiguation, no
+        // settle latency. The vehicle-frame lon/lat above is left untouched (PC stream is identical).
+        //
+        // g_hat = world-UP expressed in device coords. R's 3rd row is world-up (device->world);
+        // else the self-split gravity EMA. (gravInit guaranteed here: see early return above.)
+        val ghx: Float; val ghy: Float; val ghz: Float
+        if (R != null) { ghx = R[6]; ghy = R[7]; ghz = R[8] }
+        else {
+            val gn = sqrt(grav[0] * grav[0] + grav[1] * grav[1] + grav[2] * grav[2]).coerceAtLeast(1e-3f)
+            ghx = grav[0] / gn; ghy = grav[1] / gn; ghz = grav[2] / gn
+        }
+        // screen up/right unit axes in device coords (z = 0), per the overlay's display rotation
+        val suX: Float; val suY: Float
+        when (screenRot) {
+            1 -> { suX = -1f; suY = 0f }    // ROTATION_90  (landscape; verify sign in-car)
+            2 -> { suX = 0f; suY = -1f }    // ROTATION_180
+            3 -> { suX = 1f; suY = 0f }     // ROTATION_270 (landscape; verify sign in-car)
+            else -> { suX = 0f; suY = 1f }  // ROTATION_0 (portrait)
+        }
+        // f_hat = horizontal projection of the screen's up-meridian = g_hat x (screenUp x Zdev).
+        // Built from the live up-vector so it tracks tilt every sample. Holds last when the phone
+        // is rolled ~90 deg (gravity along screen-right) and f_raw degenerates.
+        val mX = suY; val mY = -suX                          // m = screenUp x Zdev (Zdev = +z)
+        val frx = -ghz * mY; val fry = ghz * mX; val frz = ghx * mY - ghy * mX   // f_raw = g_hat x m
+        val fn = sqrt(frx * frx + fry * fry + frz * frz)
+        val fhx: Float; val fhy: Float; val fhz: Float
+        if (fn > 0.2f) { fhx = frx / fn; fhy = fry / fn; fhz = frz / fn; fPrevX = fhx; fPrevY = fhy; fPrevZ = fhz }
+        else { fhx = fPrevX; fhy = fPrevY; fhz = fPrevZ }
+        // r_hat = f_hat x g_hat (screen-right, horizontal, unit since f_hat _|_ g_hat)
+        val rhx = fhy * ghz - fhz * ghy; val rhy = fhz * ghx - fhx * ghz; val rhz = fhx * ghy - fhy * ghx
+        // remove the vertical (gravity-axis) component -> felt HORIZONTAL specific force, any tilt
+        val dgg = lx * ghx + ly * ghy + lz * ghz
+        val aHx = lx - dgg * ghx; val aHy = ly - dgg * ghy; val aHz = lz - dgg * ghz
+        val sX = aHx * rhx + aHy * rhy + aHz * rhz          // + = real accel toward screen-RIGHT
+        val sY = aHx * fhx + aHy * fhy + aHz * fhz          // + = real accel toward screen-FORWARD
+        // same cleanup as the vehicle path, with its own parallel state
+        lpX += (sX - lpX) * A_LP; lpY += (sY - lpY) * A_LP
+        baseX += (lpX - baseX) * A_HP; baseY += (lpY - baseY) * A_HP
+        var bX = lpX - baseX; var bY = lpY - baseY
+        val sgate = (1f - (gmag - SCRN_W_LO) / (SCRN_W_HI - SCRN_W_LO)).coerceIn(0f, 1f)
+        bX *= sgate; bY *= sgate
+        val jmaxS = JERK * dt
+        bX = prevSX + (bX - prevSX).coerceIn(-jmaxS, jmaxS)
+        bY = prevSY + (bY - prevSY).coerceIn(-jmaxS, jmaxS)
+        prevSX = bX; prevSY = bY
+        val sMag = sqrt(bX * bX + bY * bY)
+        if (sMag < DEADBAND) { bX = 0f; bY = 0f } else { val k = (sMag - DEADBAND) / sMag; bX *= k; bY *= k }
+
+        // UNSCALED lon/lat AND screenX/screenY; caller multiplies by enable exactly once.
+        return Out(lon, lat, gainEnv, yawLp * 57.29578f, gate, moveOn, bX, bY)
     }
 
     companion object {

@@ -1,0 +1,12 @@
+<svg width="432" height="432" viewBox="0 0 432 432" xmlns="http://www.w3.org/2000/svg">
+  <!-- Orbital — Android 13+ MONOCHROME (themed icons). Single colour; the system tints it. Same geometry as the foreground. -->
+  <g fill="#FFFFFF">
+    <circle cx="160" cy="156" r="18"/>
+    <circle cx="150" cy="216" r="22"/>
+    <circle cx="160" cy="276" r="18"/>
+    <circle cx="272" cy="156" r="18"/>
+    <circle cx="282" cy="216" r="22"/>
+    <circle cx="272" cy="276" r="18"/>
+    <circle cx="216" cy="216" r="17"/>
+  </g>
+</svg>

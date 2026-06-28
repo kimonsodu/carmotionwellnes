@@ -5,50 +5,149 @@ import android.content.SharedPreferences
 
 /**
  * Phone-mode overlay settings, persisted in SharedPreferences("orbit"). Defaults mirror the
- * Windows app's feel: Strength 1.8x, Dot size 1.0x. Dot colour defaults to Mixed (per-dot
- * light/dark) so the dots contrast against any app/wallpaper behind them; Auto-hide defaults
- * off so the dots don't vanish during a first try at a desk.
+ * Windows app's feel: Strength 1.8x, Size 1.0x. Colour defaults to Mixed (per-element light/dark)
+ * so the cue contrasts against any app/wallpaper behind it; Auto-hide defaults ON so the cue fades
+ * at stops with no GPS (subway/tunnel) for a hands-off ride.
+ *
+ * EVERYTHING here is additive + back-compatible: a fresh install with no stored prefs behaves
+ * exactly like the original (Dots style, velocity-flow, full opacity, side strips). New cue styles
+ * and customization opt in via the new keys; the runtime cue itself stays fully automatic.
  */
 object SettingsStore {
     const val PREFS = "orbit"
 
+    // ---- existing keys ----
     const val K_STRENGTH = "ph_strength"     // Float 0.3..6.0  (drift sensitivity multiplier)
-    const val K_LON_GAIN = "ph_lonGain"      // Float -4.0..4.0 (accel/brake trim: SIGN = direction, |v| = sensitivity, 0 = off)
-    const val K_DOT_SIZE = "ph_dotSize"      // Float 0.4..3.0  (dot radius scale)
-    const val K_DOT_COLOR = "ph_dotColor"    // Int   0/1/2 = Light / Mixed / Dark
-    const val K_AUTO_HIDE = "ph_autoHide"    // Bool  fade dots when the phone is still
+    const val K_LON_GAIN = "ph_lonGain"      // Float 0..4 fore/aft (accel/brake) sensitivity; 0 = off. Direction is automatic (screen-relative cue); legacy signed values read as |v|.
+    const val K_DOT_SIZE = "ph_dotSize"      // Float 0.4..3.0  (element size scale)
+    const val K_DOT_COLOR = "ph_dotColor"    // Int   0/1/2/3 = Light / Mixed / Dark / Custom(accent)
+    const val K_AUTO_HIDE = "ph_autoHide"    // Bool  fade the cue when the phone is still
 
+    // ---- new customization keys (all default to original behaviour) ----
+    const val K_CUE_STYLE = "ph_cueStyle"        // Int 0..5 = Dots / Streaks / Rails / Horizon / Flow / Chevrons
+    const val K_OPACITY = "ph_opacity"           // Float 0.2..1.0 overall alpha multiplier
+    const val K_DENSITY = "ph_density"           // Float 0.5..2.0 element-count multiplier
+    const val K_ACCENT_COLOR = "ph_accentColor"  // Int packed ARGB; 0 = unset (use the palette)
+    const val K_CUE_MODEL = "ph_cueModel"        // Int 0/1 = Velocity-flow / Acceleration-pulse
+    const val K_PLACEMENT = "ph_placement"       // Int 0/1 = Side strips / Full peripheral frame
+    const val K_DECAY = "ph_decay"               // Float 0.80..0.97 flow damping (smoothness / trail)
+    const val K_HIDE_SENS = "ph_hideSensitivity" // Float 0.5..2.0 auto-hide knee scale
+    const val K_PRESET = "ph_preset"             // Int 0..3 = Calm / Balanced / Strong / Custom (UI-only)
+    const val K_ONBOARDED = "ph_onboarded"       // Bool first-run seen (UI-only)
+
+    // ---- defaults ----
     const val DEF_STRENGTH = 1.8f
-    const val DEF_LON_GAIN = 1.5f            // accelerate -> dots down by default; flip via the slider if reversed
+    const val DEF_LON_GAIN = 1.5f            // fore/aft sensitivity magnitude; direction is automatic
     const val DEF_DOT_SIZE = 1.0f
     const val DEF_DOT_COLOR = 1              // Mixed — contrasts over any app
-    const val DEF_AUTO_HIDE = false
+    const val DEF_AUTO_HIDE = true          // hands-off: fade at stops even with no GPS (subway/tunnel)
+
+    const val DEF_CUE_STYLE = 0             // Dots = the original visual
+    const val DEF_OPACITY = 1.0f
+    const val DEF_DENSITY = 1.0f
+    const val DEF_ACCENT_COLOR = 0          // sentinel: use the Light/Mixed/Dark palette
+    const val DEF_CUE_MODEL = 0             // Velocity-flow = the original integrate-to-drift
+    const val DEF_PLACEMENT = 0             // Side strips = the original layout
+    const val DEF_DECAY = 0.92f             // == the original hardcoded velX/velY damping
+    const val DEF_HIDE_SENS = 1.0f          // == the original auto-hide knees
+    const val DEF_PRESET = 1                // Balanced == the current defaults (existing users land here)
+    const val DEF_ONBOARDED = false
 
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun strength(c: Context) = prefs(c).getFloat(K_STRENGTH, DEF_STRENGTH).coerceIn(0.3f, 6.0f)
-    fun lonGain(c: Context) = prefs(c).getFloat(K_LON_GAIN, DEF_LON_GAIN).coerceIn(-4.0f, 4.0f)
+    // abs(): a legacy negative value (the old "reversed for backward seating" hack) becomes the
+    // correct magnitude — direction is now handled automatically by the screen-relative cue.
+    fun lonGain(c: Context) = kotlin.math.abs(prefs(c).getFloat(K_LON_GAIN, DEF_LON_GAIN)).coerceIn(0f, 4.0f)
     fun dotSize(c: Context) = prefs(c).getFloat(K_DOT_SIZE, DEF_DOT_SIZE).coerceIn(0.4f, 3.0f)
-    fun dotColor(c: Context) = prefs(c).getInt(K_DOT_COLOR, DEF_DOT_COLOR).coerceIn(0, 2)
+    fun dotColor(c: Context) = prefs(c).getInt(K_DOT_COLOR, DEF_DOT_COLOR).coerceIn(0, 3)
     fun autoHide(c: Context) = prefs(c).getBoolean(K_AUTO_HIDE, DEF_AUTO_HIDE)
 
+    fun cueStyle(c: Context) = prefs(c).getInt(K_CUE_STYLE, DEF_CUE_STYLE).coerceIn(0, 5)
+    fun opacity(c: Context) = prefs(c).getFloat(K_OPACITY, DEF_OPACITY).coerceIn(0.2f, 1.0f)
+    fun density(c: Context) = prefs(c).getFloat(K_DENSITY, DEF_DENSITY).coerceIn(0.5f, 2.0f)
+    fun accentColor(c: Context) = prefs(c).getInt(K_ACCENT_COLOR, DEF_ACCENT_COLOR)   // 0 = unset
+    fun cueModel(c: Context) = prefs(c).getInt(K_CUE_MODEL, DEF_CUE_MODEL).coerceIn(0, 1)
+    fun placement(c: Context) = prefs(c).getInt(K_PLACEMENT, DEF_PLACEMENT).coerceIn(0, 1)
+    fun decay(c: Context) = prefs(c).getFloat(K_DECAY, DEF_DECAY).coerceIn(0.80f, 0.97f)
+    fun hideSensitivity(c: Context) = prefs(c).getFloat(K_HIDE_SENS, DEF_HIDE_SENS).coerceIn(0.5f, 2.0f)
+    fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
+    fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
+
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
-    fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(-4.0f, 4.0f)).apply()
+    fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(0f, 4.0f)).apply()
     fun setDotSize(c: Context, v: Float) = prefs(c).edit().putFloat(K_DOT_SIZE, v.coerceIn(0.4f, 3.0f)).apply()
-    fun setDotColor(c: Context, v: Int) = prefs(c).edit().putInt(K_DOT_COLOR, v.coerceIn(0, 2)).apply()
+    fun setDotColor(c: Context, v: Int) = prefs(c).edit().putInt(K_DOT_COLOR, v.coerceIn(0, 3)).apply()
     fun setAutoHide(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_AUTO_HIDE, v).apply()
 
-    /** Keys that should make a running overlay re-read its params. */
-    val LIVE_KEYS = setOf(K_STRENGTH, K_LON_GAIN, K_DOT_SIZE, K_DOT_COLOR, K_AUTO_HIDE)
+    fun setCueStyle(c: Context, v: Int) = prefs(c).edit().putInt(K_CUE_STYLE, v.coerceIn(0, 5)).apply()
+    fun setOpacity(c: Context, v: Float) = prefs(c).edit().putFloat(K_OPACITY, v.coerceIn(0.2f, 1.0f)).apply()
+    fun setDensity(c: Context, v: Float) = prefs(c).edit().putFloat(K_DENSITY, v.coerceIn(0.5f, 2.0f)).apply()
+    fun setAccentColor(c: Context, v: Int) = prefs(c).edit().putInt(K_ACCENT_COLOR, v).apply()
+    fun setCueModel(c: Context, v: Int) = prefs(c).edit().putInt(K_CUE_MODEL, v.coerceIn(0, 1)).apply()
+    fun setPlacement(c: Context, v: Int) = prefs(c).edit().putInt(K_PLACEMENT, v.coerceIn(0, 1)).apply()
+    fun setDecay(c: Context, v: Float) = prefs(c).edit().putFloat(K_DECAY, v.coerceIn(0.80f, 0.97f)).apply()
+    fun setHideSensitivity(c: Context, v: Float) = prefs(c).edit().putFloat(K_HIDE_SENS, v.coerceIn(0.5f, 2.0f)).apply()
+    fun setPreset(c: Context, v: Int) = prefs(c).edit().putInt(K_PRESET, v.coerceIn(0, 3)).apply()
+    fun setOnboarded(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_ONBOARDED, v).apply()
 
-    /** Immutable snapshot the overlay consumes when settings change. */
-    data class Params(
-        val strength: Float,
-        val lonGain: Float,   // signed accel/brake trim
-        val dotSize: Float,
-        val colorMode: Int,   // 0 Light, 1 Mixed, 2 Dark
-        val autoHide: Boolean
+    /**
+     * Intensity presets write the EXISTING fine keys (all in LIVE_KEYS), so a running overlay updates
+     * automatically via onSharedPreferenceChanged with NO preset-specific plumbing. Custom (3) writes
+     * nothing — it just records that the user is hand-tuning. Presets are a one-time SETUP choice, not
+     * a per-trip control, so the zero-touch-in-car philosophy is preserved.
+     */
+    fun applyPreset(c: Context, preset: Int) {
+        val e = prefs(c).edit()
+        when (preset) {
+            0 -> { e.putFloat(K_STRENGTH, 1.0f); e.putFloat(K_LON_GAIN, 1.0f); e.putFloat(K_DENSITY, 0.7f); e.putFloat(K_OPACITY, 0.6f) }   // Calm
+            1 -> { e.putFloat(K_STRENGTH, 1.8f); e.putFloat(K_LON_GAIN, 1.5f); e.putFloat(K_DENSITY, 1.0f); e.putFloat(K_OPACITY, 1.0f) }   // Balanced
+            2 -> { e.putFloat(K_STRENGTH, 3.0f); e.putFloat(K_LON_GAIN, 2.2f); e.putFloat(K_DENSITY, 1.4f); e.putFloat(K_OPACITY, 1.0f) }   // Strong
+            // 3 = Custom: leave the fine keys as the user set them
+        }
+        e.putInt(K_PRESET, preset.coerceIn(0, 3))
+        e.apply()
+    }
+
+    /** Restore every overlay value to its default (and Balanced preset). UI-driven. */
+    fun resetToDefaults(c: Context) {
+        prefs(c).edit()
+            .putFloat(K_STRENGTH, DEF_STRENGTH).putFloat(K_LON_GAIN, DEF_LON_GAIN)
+            .putFloat(K_DOT_SIZE, DEF_DOT_SIZE).putInt(K_DOT_COLOR, DEF_DOT_COLOR)
+            .putBoolean(K_AUTO_HIDE, DEF_AUTO_HIDE).putInt(K_CUE_STYLE, DEF_CUE_STYLE)
+            .putFloat(K_OPACITY, DEF_OPACITY).putFloat(K_DENSITY, DEF_DENSITY)
+            .putInt(K_ACCENT_COLOR, DEF_ACCENT_COLOR).putInt(K_CUE_MODEL, DEF_CUE_MODEL)
+            .putInt(K_PLACEMENT, DEF_PLACEMENT).putFloat(K_DECAY, DEF_DECAY)
+            .putFloat(K_HIDE_SENS, DEF_HIDE_SENS).putInt(K_PRESET, DEF_PRESET)
+            .apply()
+    }
+
+    /** Keys that should make a running overlay re-read its params. (Not K_PRESET/K_ONBOARDED — the
+     *  overlay never reads those; presets write the fine keys, which ARE live.) */
+    val LIVE_KEYS = setOf(
+        K_STRENGTH, K_LON_GAIN, K_DOT_SIZE, K_DOT_COLOR, K_AUTO_HIDE,
+        K_CUE_STYLE, K_OPACITY, K_DENSITY, K_ACCENT_COLOR, K_CUE_MODEL, K_PLACEMENT, K_DECAY, K_HIDE_SENS
     )
 
-    fun snapshot(c: Context) = Params(strength(c), lonGain(c), dotSize(c), dotColor(c), autoHide(c))
+    /** Immutable snapshot the overlay (and the in-app preview) consume when settings change. */
+    data class Params(
+        val strength: Float,
+        val lonGain: Float,    // fore/aft (accel/brake) sensitivity (magnitude; direction is automatic)
+        val dotSize: Float,
+        val colorMode: Int,    // 0 Light, 1 Mixed, 2 Dark, 3 Custom(accent)
+        val autoHide: Boolean,
+        val cueStyle: Int,     // 0 Dots, 1 Streaks, 2 Rails, 3 Horizon, 4 Flow, 5 Chevrons
+        val opacity: Float,
+        val density: Float,
+        val accentColor: Int,  // packed ARGB, 0 = unset
+        val cueModel: Int,     // 0 Velocity-flow, 1 Acceleration-pulse
+        val placement: Int,    // 0 Side strips, 1 Full frame
+        val decay: Float,
+        val hideSensitivity: Float
+    )
+
+    fun snapshot(c: Context) = Params(
+        strength(c), lonGain(c), dotSize(c), dotColor(c), autoHide(c),
+        cueStyle(c), opacity(c), density(c), accentColor(c), cueModel(c), placement(c), decay(c), hideSensitivity(c)
+    )
 }

@@ -11,10 +11,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
@@ -49,6 +51,26 @@ class MainActivity : Activity() {
     private lateinit var tvLonVal: TextView
     private lateinit var tvSizeVal: TextView
     private lateinit var tvOverlayPerm: TextView
+    private lateinit var advancedToggle: TextView
+    private lateinit var advancedBox: View
+    // --- new customization surface ---
+    private lateinit var dotsPreview: DotsView
+    private lateinit var rgPreset: RadioGroup
+    private lateinit var customBox: View
+    private lateinit var seekOpacity: SeekBar
+    private lateinit var tvOpacityVal: TextView
+    private lateinit var seekDensity: SeekBar
+    private lateinit var tvDensityVal: TextView
+    private lateinit var rgCueModel: RadioGroup
+    private lateinit var rgPlacement: RadioGroup
+    private lateinit var seekDecay: SeekBar
+    private lateinit var tvDecayVal: TextView
+    private lateinit var seekHide: SeekBar
+    private lateinit var tvHideVal: TextView
+    private lateinit var btnReset: Button
+    private lateinit var accentRow: View
+    private lateinit var styleChips: List<TextView>
+    private lateinit var accentChips: List<TextView>
     private var pendingOverlayStart = false
     private val ui = Handler(Looper.getMainLooper())
 
@@ -84,6 +106,35 @@ class MainActivity : Activity() {
         tvLonVal = findViewById(R.id.tvLonVal)
         tvSizeVal = findViewById(R.id.tvSizeVal)
         tvOverlayPerm = findViewById(R.id.tvOverlayPerm)
+        advancedToggle = findViewById(R.id.advancedToggle)
+        advancedBox = findViewById(R.id.advancedBox)
+        dotsPreview = findViewById(R.id.dotsPreview)
+        rgPreset = findViewById(R.id.rgPreset)
+        customBox = findViewById(R.id.customBox)
+        seekOpacity = findViewById(R.id.seekOpacity)
+        tvOpacityVal = findViewById(R.id.tvOpacityVal)
+        seekDensity = findViewById(R.id.seekDensity)
+        tvDensityVal = findViewById(R.id.tvDensityVal)
+        rgCueModel = findViewById(R.id.rgCueModel)
+        rgPlacement = findViewById(R.id.rgPlacement)
+        seekDecay = findViewById(R.id.seekDecay)
+        tvDecayVal = findViewById(R.id.tvDecayVal)
+        seekHide = findViewById(R.id.seekHide)
+        tvHideVal = findViewById(R.id.tvHideVal)
+        btnReset = findViewById(R.id.btnReset)
+        accentRow = findViewById(R.id.accentRow)
+        styleChips = listOf(
+            findViewById(R.id.styleDots), findViewById(R.id.styleStreaks), findViewById(R.id.styleRails),
+            findViewById(R.id.styleHorizon), findViewById(R.id.styleGrid), findViewById(R.id.styleChevrons))
+        accentChips = listOf(
+            findViewById(R.id.chipAccentTeal), findViewById(R.id.chipAccentAmber), findViewById(R.id.chipAccentBlue))
+        dotsPreview.setDemoMode(true)
+        dotsPreview.applyParams(SettingsStore.snapshot(this))
+        advancedToggle.setOnClickListener {
+            val show = advancedBox.visibility != View.VISIBLE
+            advancedBox.visibility = if (show) View.VISIBLE else View.GONE
+            advancedToggle.text = if (show) "Advanced ▴" else "Advanced ▾"
+        }
 
         val p = prefs()
         host.setText(p.getString("host", ""))
@@ -149,46 +200,146 @@ class MainActivity : Activity() {
     private fun applyDotsTarget(phone: Boolean) {
         laptopBox.visibility = if (phone) View.GONE else View.VISIBLE
         phoneBox.visibility = if (phone) View.VISIBLE else View.GONE
+        if (phone) dotsPreview.start() else dotsPreview.stop()   // the live preview only runs in phone mode
     }
 
-    // --- Phone-mode overlay settings (write through SettingsStore; running overlay updates live) ---
-    private fun bindPhoneSettings() {
+    private fun refreshPreview() { dotsPreview.applyParams(SettingsStore.snapshot(this)) }
+    private fun haptic(v: View) = v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
+    private fun rebindFineSliders() {
+        val L = java.util.Locale.US
         val str = SettingsStore.strength(this)
-        val sz = SettingsStore.dotSize(this)
-        seekStrength.max = 570; seekStrength.progress = ((str - 0.3f) * 100).toInt().coerceIn(0, 570)
-        seekSize.max = 260; seekSize.progress = ((sz - 0.4f) * 100).toInt().coerceIn(0, 260)
-        tvStrengthVal.text = String.format(java.util.Locale.US, "%.1f×", str)
-        tvSizeVal.text = String.format(java.util.Locale.US, "%.1f×", sz)
+        seekStrength.progress = ((str - 0.3f) * 100).toInt().coerceIn(0, 570)
+        tvStrengthVal.text = String.format(L, "%.1f×", str)
+        val op = SettingsStore.opacity(this)
+        seekOpacity.progress = ((op - 0.2f) * 100).toInt().coerceIn(0, 80)
+        tvOpacityVal.text = "${(op * 100).toInt()}%"
+        val den = SettingsStore.density(this)
+        seekDensity.progress = ((den - 0.5f) * 100).toInt().coerceIn(0, 150)
+        tvDensityVal.text = String.format(L, "%.1f×", den)
+    }
+
+    // --- Phone-mode overlay settings (write through SettingsStore; running overlay + preview update live) ---
+    private fun bindPhoneSettings() {
+        val L = java.util.Locale.US
+
+        // ---- Cue style gallery ----
+        fun highlightStyle(sel: Int) = styleChips.forEachIndexed { i, v -> v.isSelected = i == sel }
+        highlightStyle(SettingsStore.cueStyle(this))
+        styleChips.forEachIndexed { i, v ->
+            v.setOnClickListener { SettingsStore.setCueStyle(this, i); highlightStyle(i); refreshPreview(); haptic(v) }
+        }
+
+        // ---- Feel presets (write the existing fine keys; reveal sliders only under Custom) ----
+        val preset = SettingsStore.preset(this)
+        customBox.visibility = if (preset == 3) View.VISIBLE else View.GONE
+        rgPreset.setOnCheckedChangeListener(null)
+        rgPreset.check(when (preset) { 0 -> R.id.rbPresetCalm; 2 -> R.id.rbPresetStrong; 3 -> R.id.rbPresetCustom; else -> R.id.rbPresetBalanced })
+        rgPreset.setOnCheckedChangeListener { _, id ->
+            val pr = when (id) { R.id.rbPresetCalm -> 0; R.id.rbPresetStrong -> 2; R.id.rbPresetCustom -> 3; else -> 1 }
+            if (pr == 3) { SettingsStore.setPreset(this, 3); customBox.visibility = View.VISIBLE }
+            else { SettingsStore.applyPreset(this, pr); customBox.visibility = View.GONE; rebindFineSliders() }
+            refreshPreview()
+        }
+
+        // ---- Fine sliders (Movement / Opacity / Density), shown under Custom ----
+        seekStrength.max = 570; seekOpacity.max = 80; seekDensity.max = 150
+        rebindFineSliders()
         seekStrength.setOnSeekBarChangeListener(simpleSeek { prog ->
-            val v = 0.3f + prog / 100f
-            SettingsStore.setStrength(this, v)
-            tvStrengthVal.text = String.format(java.util.Locale.US, "%.1f×", v)
+            val v = 0.3f + prog / 100f; SettingsStore.setStrength(this, v)
+            tvStrengthVal.text = String.format(L, "%.1f×", v); refreshPreview()
         })
-        // Bipolar accel/brake trim: SeekBar 0..80 maps to -4.0..+4.0 (centre 40 = 0 = off).
+        seekOpacity.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = (0.2f + prog / 100f).coerceIn(0.2f, 1.0f); SettingsStore.setOpacity(this, v)
+            tvOpacityVal.text = "${(v * 100).toInt()}%"; refreshPreview()
+        })
+        seekDensity.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = (0.5f + prog / 100f).coerceIn(0.5f, 2.0f); SettingsStore.setDensity(this, v)
+            tvDensityVal.text = String.format(L, "%.1f×", v); refreshPreview()
+        })
+
+        // ---- Appearance: size ----
+        val sz = SettingsStore.dotSize(this)
+        seekSize.max = 260; seekSize.progress = ((sz - 0.4f) * 100).toInt().coerceIn(0, 260)
+        tvSizeVal.text = String.format(L, "%.1f×", sz)
+        seekSize.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = 0.4f + prog / 100f; SettingsStore.setDotSize(this, v)
+            tvSizeVal.text = String.format(L, "%.1f×", v); refreshPreview()
+        })
+
+        // ---- Appearance: colour (+ custom accent swatches) ----
+        val teal = getColor(R.color.accent); val amber = getColor(R.color.accent_amber); val blue = getColor(R.color.accent_blue)
+        val accentVals = listOf(teal, amber, blue)
+        fun highlightAccent() { val a = SettingsStore.accentColor(this); accentChips.forEachIndexed { i, v -> v.isSelected = a == accentVals[i] } }
+        val colInit = SettingsStore.dotColor(this)
+        accentRow.visibility = if (colInit == 3) View.VISIBLE else View.GONE
+        highlightAccent()
+        rgColor.setOnCheckedChangeListener(null)
+        rgColor.check(when (colInit) { 1 -> R.id.rbMixed; 2 -> R.id.rbDark; 3 -> R.id.rbColorCustom; else -> R.id.rbLight })
+        rgColor.setOnCheckedChangeListener { _, id ->
+            val c = when (id) { R.id.rbMixed -> 1; R.id.rbDark -> 2; R.id.rbColorCustom -> 3; else -> 0 }
+            if (c == 3 && SettingsStore.accentColor(this) == 0) SettingsStore.setAccentColor(this, teal)
+            SettingsStore.setDotColor(this, c)
+            accentRow.visibility = if (c == 3) View.VISIBLE else View.GONE
+            highlightAccent(); refreshPreview()
+        }
+        accentChips.forEachIndexed { i, v ->
+            v.setOnClickListener {
+                SettingsStore.setAccentColor(this, accentVals[i]); SettingsStore.setDotColor(this, 3)
+                rgColor.check(R.id.rbColorCustom); accentRow.visibility = View.VISIBLE
+                highlightAccent(); refreshPreview(); haptic(v)
+            }
+        }
+
+        // ---- Comfort ----
+        cbAutoHide.setOnCheckedChangeListener(null)
+        cbAutoHide.isChecked = SettingsStore.autoHide(this)
+        cbAutoHide.setOnCheckedChangeListener { _, on -> SettingsStore.setAutoHide(this, on); refreshPreview() }
+
+        // ---- Advanced: accel/brake (magnitude only; direction is automatic) ----
         val lon = SettingsStore.lonGain(this)
-        seekLon.max = 80; seekLon.progress = ((lon + 4.0f) * 10f).toInt().coerceIn(0, 80)
+        seekLon.max = 40; seekLon.progress = (lon * 10f).toInt().coerceIn(0, 40)
         tvLonVal.text = fmtLon(lon)
         seekLon.setOnSeekBarChangeListener(simpleSeek { prog ->
-            val v = prog / 10f - 4.0f
-            SettingsStore.setLonGain(this, v)
-            tvLonVal.text = fmtLon(v)
+            val v = prog / 10f; SettingsStore.setLonGain(this, v); tvLonVal.text = fmtLon(v); refreshPreview()
         })
-        seekSize.setOnSeekBarChangeListener(simpleSeek { prog ->
-            val v = 0.4f + prog / 100f
-            SettingsStore.setDotSize(this, v)
-            tvSizeVal.text = String.format(java.util.Locale.US, "%.1f×", v)
+
+        // ---- Advanced: cue motion model / coverage ----
+        rgCueModel.setOnCheckedChangeListener(null)
+        rgCueModel.check(if (SettingsStore.cueModel(this) == 1) R.id.rbModelPulse else R.id.rbModelFlow)
+        rgCueModel.setOnCheckedChangeListener { _, id -> SettingsStore.setCueModel(this, if (id == R.id.rbModelPulse) 1 else 0); refreshPreview() }
+        rgPlacement.setOnCheckedChangeListener(null)
+        rgPlacement.check(if (SettingsStore.placement(this) == 1) R.id.rbPlaceFull else R.id.rbPlaceStrips)
+        rgPlacement.setOnCheckedChangeListener { _, id -> SettingsStore.setPlacement(this, if (id == R.id.rbPlaceFull) 1 else 0); refreshPreview() }
+
+        // ---- Advanced: smoothness / hide-sensitivity ----
+        val dec = SettingsStore.decay(this)
+        seekDecay.max = 17; seekDecay.progress = ((dec - 0.80f) * 100).toInt().coerceIn(0, 17)
+        tvDecayVal.text = String.format(L, "%.2f", dec)
+        seekDecay.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = (0.80f + prog / 100f).coerceIn(0.80f, 0.97f); SettingsStore.setDecay(this, v)
+            tvDecayVal.text = String.format(L, "%.2f", v); refreshPreview()
         })
-        rgColor.check(when (SettingsStore.dotColor(this)) { 1 -> R.id.rbMixed; 2 -> R.id.rbDark; else -> R.id.rbLight })
-        rgColor.setOnCheckedChangeListener { _, id ->
-            SettingsStore.setDotColor(this, when (id) { R.id.rbMixed -> 1; R.id.rbDark -> 2; else -> 0 })
+        val hs = SettingsStore.hideSensitivity(this)
+        seekHide.max = 150; seekHide.progress = ((hs - 0.5f) * 100).toInt().coerceIn(0, 150)
+        tvHideVal.text = String.format(L, "%.1f×", hs)
+        seekHide.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = (0.5f + prog / 100f).coerceIn(0.5f, 2.0f); SettingsStore.setHideSensitivity(this, v)
+            tvHideVal.text = String.format(L, "%.1f×", v)   // auto-hide gate is bypassed in the demo, so no preview change
+        })
+
+        // ---- Advanced: reset ----
+        btnReset.setOnClickListener {
+            SettingsStore.resetToDefaults(this)
+            bindPhoneSettings()                 // re-read every control from defaults
+            refreshPreview(); haptic(it)
+            toast("Reset to defaults")
         }
-        cbAutoHide.isChecked = SettingsStore.autoHide(this)
-        cbAutoHide.setOnCheckedChangeListener { _, on -> SettingsStore.setAutoHide(this, on) }
     }
 
     private fun fmtLon(v: Float): String =
-        if (kotlin.math.abs(v) < 0.05f) "off"
-        else String.format(java.util.Locale.US, "%+.1f×", v)
+        if (v < 0.05f) "off"
+        else String.format(java.util.Locale.US, "%.1f×", v)
 
     private inline fun simpleSeek(crossinline onChange: (Int) -> Unit) =
         object : SeekBar.OnSeekBarChangeListener {
@@ -220,11 +371,17 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (phoneBox.visibility == View.VISIBLE) dotsPreview.start()   // resume the live preview
         if (pendingOverlayStart) {
             pendingOverlayStart = false
             if (android.provider.Settings.canDrawOverlays(this) && !OverlayService.running)
                 startForegroundService(Intent(this, OverlayService::class.java))
         }
+    }
+
+    override fun onPause() {
+        dotsPreview.stop()   // don't burn a Choreographer loop while backgrounded
+        super.onPause()
     }
 
     private fun requestPerms() {
@@ -302,7 +459,7 @@ class MainActivity : Activity() {
 
         // phone-mode overlay button + permission notice
         val ov = OverlayService.running
-        btnOverlay.text = if (ov) "Stop dots overlay" else "Start dots overlay"
+        btnOverlay.text = if (ov) "Stop cue overlay" else "Start cue overlay"
         btnOverlay.setBackgroundResource(if (ov) R.drawable.btn_secondary else R.drawable.btn_primary)
         btnOverlay.setTextColor(getColor(if (ov) R.color.accent else R.color.bg))
         tvOverlayPerm.visibility =
@@ -315,6 +472,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
+        dotsPreview.stop()
         super.onDestroy()
     }
 }

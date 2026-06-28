@@ -11,4 +11,8 @@
     <color name="muted">#8A94A6</color>
     <color name="faint">#6A7486</color>
     <color name="danger">#E08A8A</color>
+    <color name="swatch_light">#ECE7D7</color>
+    <color name="swatch_dark">#12161E</color>
+    <color name="accent_amber">#E8B66F</color>
+    <color name="accent_blue">#6FA8D8</color>
 </resources>

@@ -116,6 +116,7 @@ class OverlayService : Service(), SensorEventListener,
             wm!!.addView(v, p)
             v.start()
             view = v; lp = p
+            vf.screenRot = currentRotation()   // screen-relative cue needs the live display rotation
             true
         } catch (e: Exception) {
             try { v.stop() } catch (_: Exception) {}
@@ -221,11 +222,11 @@ class OverlayService : Service(), SensorEventListener,
                 vf.onGyro(e.values[0], e.values[1], e.values[2])
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 val o = vf.onAccel(e.values, true, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.lon, o.lat, o.enable)
+                view?.feed(o.screenX, o.screenY, o.enable)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.lon, o.lat, o.enable)
+                view?.feed(o.screenX, o.screenY, o.enable)
             }
         }
     }
@@ -279,7 +280,15 @@ class OverlayService : Service(), SensorEventListener,
         super.onConfigurationChanged(newConfig)
         // MATCH_PARENT + FLAG_LAYOUT_NO_LIMITS already track rotation; force a re-measure.
         view?.let { v -> lp?.let { p -> try { wm?.updateViewLayout(v, p) } catch (_: Exception) {} } }
+        vf.screenRot = currentRotation()   // keep the screen-relative cue aligned after a rotate
     }
+
+    /** Display rotation of the overlay's screen (Surface.ROTATION_0/90/180/270) for the
+     *  screen-relative cue. Falls back to ROTATION_0 (portrait) if the display can't be read. */
+    private fun currentRotation(): Int = try {
+        (getSystemService(DISPLAY_SERVICE) as android.hardware.display.DisplayManager)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY).rotation
+    } catch (_: Exception) { 0 }
 
     override fun onDestroy() {
         running = false

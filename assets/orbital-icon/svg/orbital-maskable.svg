@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Orbital — maskable. Motif kept inside the central 80% safe zone so PWA/launcher masks never clip it. -->
+  <rect width="512" height="512" fill="#10151E"/>
+  <g fill="#6FD8C6">
+    <circle cx="190" cy="185" r="21"/>
+    <circle cx="178" cy="256" r="26"/>
+    <circle cx="190" cy="327" r="21"/>
+    <circle cx="322" cy="185" r="21"/>
+    <circle cx="334" cy="256" r="26"/>
+    <circle cx="322" cy="327" r="21"/>
+  </g>
+  <circle cx="256" cy="256" r="20" fill="#E0A24A"/>
+</svg>
