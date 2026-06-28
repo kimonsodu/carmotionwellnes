@@ -1,6 +1,6 @@
-# Building the Orbit installer
+# Building the Orbital installer
 
-Orbit ships as a **self-contained, single-file** Windows app plus a small
+Orbital ships as a **self-contained, single-file** Windows app plus a small
 per-user Inno Setup installer. No admin rights, no .NET install required on the
 target machine.
 
@@ -8,7 +8,7 @@ target machine.
 
 ```powershell
 # 1. From the repo root: publish the self-contained single-file exe
-"C:\Program Files\dotnet\dotnet.exe" publish .\OrbitOverlay.csproj `
+"C:\Program Files\dotnet\dotnet.exe" publish .\OrbitalOverlay.csproj `
   -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=true `
   -p:IncludeNativeLibrariesForSelfExtract=true `
@@ -17,17 +17,17 @@ target machine.
   -o .\bin\publish\win-x64
 
 # 2. Compile the installer (requires Inno Setup 6 -> iscc on PATH)
-iscc .\installer\Orbit.iss
+iscc .\installer\Orbital.iss
 ```
 
 Outputs:
 
 | Artifact | Path |
 | --- | --- |
-| Self-contained exe | `bin\publish\win-x64\OrbitOverlay.exe` |
-| Installer | `bin\installer\Orbit-Setup-1.0.0.exe` |
+| Self-contained exe | `bin\publish\win-x64\OrbitalOverlay.exe` |
+| Installer | `bin\installer\Orbital-Setup-1.0.0.exe` |
 
-> Kill any running `OrbitOverlay.exe` before publishing/compiling — the
+> Kill any running `OrbitalOverlay.exe` before publishing/compiling — the
 > single-file exe self-extracts to a temp dir and locks files while running.
 
 ## About the publish flags
@@ -39,7 +39,7 @@ Outputs:
 - `EnableCompressionInSingleFile=true` shrinks the ~150 MB self-contained
   bundle noticeably.
 - **No trimming.** WPF is not trim-safe — `PublishTrimmed=true` strips XAML/
-  reflection-loaded types and Orbit will crash at runtime (it loads
+  reflection-loaded types and Orbital will crash at runtime (it loads
   `Theme.xaml` reflectively and uses WinForms interop). Leave trimming OFF.
 - `DebugType=none` drops the `.pdb` so the publish folder is just the one exe.
 
@@ -75,12 +75,12 @@ The installer and the app are **unsigned** out of the box. Consequences:
 ```powershell
 # Create a self-signed code-signing cert in your user store
 $cert = New-SelfSignedCertificate -Type CodeSigningCert `
-  -Subject "CN=Orbit Test" -CertStoreLocation Cert:\CurrentUser\My
+  -Subject "CN=Orbital Test" -CertStoreLocation Cert:\CurrentUser\My
 
 # Sign the published exe (and/or the built Setup.exe)
 $signtool = "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe"
 & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint /t http://timestamp.digicert.com `
-  ".\bin\publish\win-x64\OrbitOverlay.exe"
+  ".\bin\publish\win-x64\OrbitalOverlay.exe"
 ```
 
 A self-signed cert is only trusted on machines where you've manually imported
@@ -95,14 +95,14 @@ It's useful only to validate the signing pipeline.
 - **EV cert (~$300–600/yr, hardware token / cloud HSM):** grants immediate
   SmartScreen reputation — the cleanest user experience, no "unknown publisher"
   wall. Recommended if you distribute widely.
-- Sign **both** the published `OrbitOverlay.exe` and the final
-  `Orbit-Setup-*.exe`, always with `/t` (a timestamp URL) so signatures stay
+- Sign **both** the published `OrbitalOverlay.exe` and the final
+  `Orbital-Setup-*.exe`, always with `/t` (a timestamp URL) so signatures stay
   valid after the cert expires.
 
 ## Autostart note
 
 The installer **does not** add its own "start with Windows" entry by default.
-Orbit's in-app **"Start with Windows"** toggle owns the
-`HKCU\...\Run\Orbit` value (`"<exe>" --autostart`). The optional installer
+Orbital's in-app **"Start with Windows"** toggle owns the
+`HKCU\...\Run\Orbital` value (`"<exe>" --autostart`). The optional installer
 *"Start automatically when I sign in"* task simply pre-writes that **same**
 value so the two never disagree; it's removed on uninstall.

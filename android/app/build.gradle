@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace 'com.orbit.phone'
+    namespace 'com.orbital.phone'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.orbit.phone"
+        applicationId "com.orbital.phone"
         minSdk 26
         targetSdk 34
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
     }
 
     buildTypes {

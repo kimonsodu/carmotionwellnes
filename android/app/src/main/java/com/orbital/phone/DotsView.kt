@@ -1,4 +1,4 @@
-package com.orbit.phone
+package com.orbital.phone
 
 import android.content.Context
 import android.graphics.Canvas

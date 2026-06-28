@@ -1,4 +1,4 @@
-package com.orbit.phone
+package com.orbital.phone
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -43,7 +43,7 @@ class OverlayService : Service(), SensorEventListener,
         @Volatile var running = false
         private const val CHANNEL = "orbit_overlay"
         private const val NOTIF_ID = 8                       // SensorService uses 7
-        const val ACTION_STOP = "com.orbit.phone.OVERLAY_STOP"
+        const val ACTION_STOP = "com.orbital.phone.OVERLAY_STOP"
 
         fun start(ctx: Context) = ctx.startForegroundService(Intent(ctx, OverlayService::class.java))
         fun stop(ctx: Context) = ctx.stopService(Intent(ctx, OverlayService::class.java))
@@ -244,7 +244,7 @@ class OverlayService : Service(), SensorEventListener,
     private fun startForegroundNotification() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Orbit overlay", NotificationManager.IMPORTANCE_LOW))
+            NotificationChannel(CHANNEL, "Orbital overlay", NotificationManager.IMPORTANCE_LOW))
         val stop = PendingIntent.getService(
             this, 0, Intent(this, OverlayService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -253,7 +253,7 @@ class OverlayService : Service(), SensorEventListener,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val stopIcon = Icon.createWithResource(this, R.drawable.ic_orbit_notify)
         val n = Notification.Builder(this, CHANNEL)
-            .setContentTitle("Orbit — dots on screen")
+            .setContentTitle("Orbital — dots on screen")
             .setContentText("Drifting cue dots over your apps")
             .setSmallIcon(R.drawable.ic_orbit_notify)
             .setOngoing(true)

@@ -13,6 +13,8 @@
     <!-- the amber "signal" point — brand signature, matches the icon kit -->
     <Color x:Key="AmberColor">#E0A24A</Color>
     <SolidColorBrush x:Key="AmberBrush"     Color="#E0A24A"/>
+    <!-- accent swatch amber: shared with Android's accent_amber so the two apps match -->
+    <SolidColorBrush x:Key="AccentAmberBrush" Color="#E8B66F"/>
     <SolidColorBrush x:Key="BlueBrush"      Color="#6FA8D8"/>
     <SolidColorBrush x:Key="TextBrush"      Color="#E6EAF0"/>
     <SolidColorBrush x:Key="MutedBrush"     Color="#8A94A6"/>

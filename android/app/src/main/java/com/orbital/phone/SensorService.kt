@@ -1,4 +1,4 @@
-package com.orbit.phone
+package com.orbital.phone
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -197,10 +197,10 @@ class SensorService : Service(), SensorEventListener {
     private fun startForegroundNotification() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Orbit streaming", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, "Orbital streaming", NotificationManager.IMPORTANCE_LOW)
         )
         val n: Notification = Notification.Builder(this, CHANNEL)
-            .setContentTitle("Orbit")
+            .setContentTitle("Orbital")
             .setContentText("Streaming motion to the laptop")
             .setSmallIcon(R.drawable.ic_orbit_notify)
             .setOngoing(true)

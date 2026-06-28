@@ -232,9 +232,9 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj",
-      "projectName": "OrbitOverlay",
-      "projectPath": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj",
+      "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitalOverlay.csproj",
+      "projectName": "OrbitalOverlay",
+      "projectPath": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitalOverlay.csproj",
       "packagesPath": "C:\\Users\\simon\\.nuget\\packages\\",
       "outputPath": "C:\\Users\\simon\\Documents\\dev\\orbital\\obj\\",
       "projectStyle": "PackageReference",

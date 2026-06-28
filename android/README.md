@@ -1,12 +1,12 @@
-# Orbit Phone (Android sensor streamer)
+# Orbital Phone (Android sensor streamer)
 
-Streams your phone's accelerometer + gyroscope to the **Orbit** overlay on your laptop, so
+Streams your phone's accelerometer + gyroscope to the **Orbital** overlay on your laptop, so
 laptops without a motion sensor still work — and, unlike the browser page, it **keeps streaming
 with the screen off** (it runs as a foreground service).
 
 No internet/cell needed: the phone talks to the laptop over the **local link** (USB tether or a
 WiFi hotspot). Data goes out as small UDP packets to the PC's `App (UDP)` address shown in the
-Orbit control panel.
+Orbital control panel.
 
 ## Build it (one time)
 
@@ -27,13 +27,13 @@ Pick a **Connection** in the app: **Bluetooth** (default) or **WiFi**.
 ### Bluetooth — recommended, needs no network at all
 Works with the phone fully offline and the laptop on any/no network.
 1. **Pair** the laptop and phone once in **Android Settings → Bluetooth** (accept on the PC too).
-2. Run **Orbit** on the laptop (its panel shows `Bluetooth — pair this PC "<name>" ...`).
+2. Run **Orbital** on the laptop (its panel shows `Bluetooth — pair this PC "<name>" ...`).
 3. In the app: **Bluetooth → Choose paired PC →** pick the laptop **→ Start**.
 
 ### WiFi — when both are on one network
 Any shared network works: the **same WiFi router**, a **phone/laptop hotspot**, or **USB tether**
 (USB works with mobile data off and charges the phone).
-1. Run **Orbit**; the panel shows `WiFi — ... <ip> : 8443` and a **QR**.
+1. Run **Orbital**; the panel shows `WiFi — ... <ip> : 8443` and a **QR**.
 2. **Scan the QR** with the phone camera — it opens this app with the address pre-filled (no browser,
    no security warning). Or choose **WiFi** and type the address. Then **Start**.
 
@@ -46,10 +46,10 @@ phone is mounted. Dots react to real *acceleration* (turns, gas, brake), not til
 ## Notes
 
 - If nothing arrives: re-check the PC address, confirm both devices are on the same
-  tether/hotspot, and that **OrbitOverlay** is allowed through Windows Firewall (it tries to
+  tether/hotspot, and that **OrbitalOverlay** is allowed through Windows Firewall (it tries to
   add a rule; otherwise allow it when Windows prompts, or once via an elevated run).
 - Some phones aggressively kill background apps. If streaming stops with the screen off, exclude
-  **Orbit Phone** from battery optimization (Settings → Apps → Orbit Phone → Battery →
+  **Orbital Phone** from battery optimization (Settings → Apps → Orbital Phone → Battery →
   Unrestricted).
 - Wire format is plain JSON over UDP, identical to the browser path, so the laptop treats both
   sources the same.

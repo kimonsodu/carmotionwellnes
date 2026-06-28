@@ -1,4 +1,4 @@
-package com.orbit.phone
+package com.orbital.phone
 
 import android.hardware.SensorManager
 import kotlin.math.cos

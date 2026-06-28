@@ -1,4 +1,4 @@
-package com.orbit.phone
+package com.orbital.phone
 
 import android.Manifest
 import android.app.Activity
@@ -364,7 +364,7 @@ class MainActivity : Activity() {
 
     private fun requestOverlayPermission() {
         pendingOverlayStart = true                 // auto-start on return if granted (onResume)
-        toast("Allow Orbit to draw over other apps, then come back")
+        toast("Allow Orbital to draw over other apps, then come back")
         startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
             android.net.Uri.parse("package:$packageName")))
     }

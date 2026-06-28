@@ -22,7 +22,7 @@
                 android:layout_width="34dp"
                 android:layout_height="34dp" />
             <TextView
-                android:text="Orbit"
+                android:text="Orbital"
                 android:textColor="@color/text"
                 android:textSize="26sp"
                 android:textStyle="bold"
@@ -31,7 +31,7 @@
         </LinearLayout>
 
         <TextView
-            android:text="Sensor source for the Orbit overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
+            android:text="Sensor source for the Orbital overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
             android:textColor="@color/muted"
             android:textSize="13sp"
             android:lineSpacingExtra="2dp"
@@ -132,7 +132,7 @@
                 android:layout_height="wrap_content">
                 <TextView
                     style="@style/FieldLabel"
-                    android:text="PC address (shown in the Orbit panel under WiFi)"
+                    android:text="PC address (shown in the Orbital panel under WiFi)"
                     android:layout_marginTop="14dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
@@ -274,7 +274,7 @@
                     android:background="@drawable/preview_bg"
                     android:layout_width="match_parent"
                     android:layout_height="220dp">
-                    <com.orbit.phone.DotsView
+                    <com.orbital.phone.DotsView
                         android:id="@+id/dotsPreview"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent" />
@@ -544,7 +544,7 @@
 
             <TextView
                 android:id="@+id/tvOverlayPerm"
-                android:text="One-time setup: allow Orbit to draw over other apps when you tap Start."
+                android:text="One-time setup: allow Orbital to draw over other apps when you tap Start."
                 android:textColor="@color/muted"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"

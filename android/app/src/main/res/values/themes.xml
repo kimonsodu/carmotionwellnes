@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Dark brand theme on the platform Material base (no AppCompat dependency). -->
-    <style name="Theme.Orbit" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Orbital" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@drawable/bg_app</item>
         <item name="android:colorBackground">@color/bg</item>
         <item name="android:colorPrimary">@color/accent</item>

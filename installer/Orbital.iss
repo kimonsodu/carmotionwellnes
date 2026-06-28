@@ -1,27 +1,27 @@
 ; ============================================================================
-;  Orbit — Inno Setup script  (per-user, no admin)
+;  Orbital — Inno Setup script  (per-user, no admin)
 ; ----------------------------------------------------------------------------
-;  Orbit is a self-contained, single-file .NET 8 WPF exe. This installer:
-;    * installs to %LOCALAPPDATA%\Programs\Orbit   (no admin rights needed)
+;  Orbital is a self-contained, single-file .NET 8 WPF exe. This installer:
+;    * installs to %LOCALAPPDATA%\Programs\Orbital   (no admin rights needed)
 ;    * drops a Start Menu shortcut (and optional desktop shortcut)
 ;    * registers a proper uninstaller (Apps & Features / Settings > Apps)
-;    * uses the branded orbit.ico for the installer + shortcuts
+;    * uses the branded orbital.ico for the installer + shortcuts
 ;
 ;  IT DELIBERATELY DOES NOT add a "Start with Windows" / Run-key entry.
-;  Orbit's own in-app "Start with Windows" toggle owns that registry value
-;  (HKCU\...\Run\Orbit -> "<exe>" --autostart). Adding it here too would
+;  Orbital's own in-app "Start with Windows" toggle owns that registry value
+;  (HKCU\...\Run\Orbital -> "<exe>" --autostart). Adding it here too would
 ;  create a duplicate that fights the in-app toggle and points at a stale path.
 ;  The optional "launch at login" task below is provided for convenience and
 ;  simply pre-flips the SAME registry value the app uses, so they stay in sync.
 ;
-;  Build:  iscc installer\Orbit.iss   (run from the repo root, AFTER publish)
+;  Build:  iscc installer\Orbital.iss   (run from the repo root, AFTER publish)
 ;  See installer\README.md for the full publish + compile recipe.
 ; ============================================================================
 
-#define MyAppName     "Orbit"
+#define MyAppName     "Orbital"
 #define MyAppVersion  "1.0.0"
 #define MyAppPublisher "Simon"
-#define MyAppExeName  "OrbitOverlay.exe"
+#define MyAppExeName  "OrbitalOverlay.exe"
 ; Path to the self-contained single-file publish output (relative to this .iss).
 ; Adjust if you publish elsewhere.
 #define PublishDir    "..\bin\publish\win-x64"
@@ -44,18 +44,18 @@ DefaultGroupName={#MyAppName}
 
 ; --- Output installer ---
 OutputDir=..\bin\installer
-OutputBaseFilename=Orbit-Setup-{#MyAppVersion}
+OutputBaseFilename=Orbital-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 
 ; --- Branding / UX ---
-SetupIconFile=..\orbit.ico
+SetupIconFile=..\orbital.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-; Close a running Orbit before overwriting its (locked) exe on upgrade.
+; Close a running Orbital before overwriting its (locked) exe on upgrade.
 CloseApplications=yes
 RestartApplications=no
 
@@ -72,26 +72,26 @@ Name: "startuplogin"; Description: "Start {#MyAppName} automatically when I sign
 ; The single self-contained exe (publish produces just this one file + maybe a pdb).
 Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Ship the icon alongside so shortcuts/uninstaller have a stable icon source.
-Source: "..\orbit.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\orbital.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; If WPF/runtime emits extra loose files in your publish dir, uncomment to grab them:
 ; Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb"
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\orbit.ico"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\orbit.ico"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\orbital.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\orbital.ico"; Tasks: desktopicon
 
 [Registry]
 ; Only written if the user ticks the "Start automatically" task. Mirrors exactly
 ; what AutoStart.Set(true) writes inside the app, so the in-app toggle stays
 ; authoritative and consistent. Removed on uninstall.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Orbit"; ValueData: """{app}\{#MyAppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: startuplogin
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Orbital"; ValueData: """{app}\{#MyAppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: startuplogin
 
 [Run]
 ; Offer to launch right after install.
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Note: this does NOT touch %AppData%\Orbit\settings.json — user settings are
+; Note: this does NOT touch %AppData%\Orbital\settings.json — user settings are
 ; intentionally preserved across reinstall/upgrade. Delete that folder manually
 ; for a truly clean wipe.
 Type: dirifempty; Name: "{app}"

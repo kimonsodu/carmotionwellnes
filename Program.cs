@@ -28,7 +28,7 @@ using QRCoder;
 using InTheHand.Net.Bluetooth;
 using InTheHand.Net.Sockets;
 
-namespace OrbitOverlay
+namespace OrbitalOverlay
 {
     public static class Program
     {
@@ -70,7 +70,7 @@ namespace OrbitOverlay
     }
 
     // ---------------------------------------------------------------
-    // Persisted user settings (%AppData%\Orbit\settings.json).
+    // Persisted user settings (%AppData%\Orbital\settings.json).
     // ---------------------------------------------------------------
     public class Settings
     {
@@ -80,7 +80,7 @@ namespace OrbitOverlay
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
         public bool SwapAxes { get; set; } = false;
-        public int DotStyle { get; set; } = 0;             // 0 = light, 1 = mixed, 2 = dark, 3 = accent cue dots
+        public int DotStyle { get; set; } = 1;             // 0 = light, 1 = mixed (default, matches Android), 2 = dark, 3 = accent
         public bool DarkDots { get; set; } = false;        // legacy (pre-slider) — migrated to DotStyle on load
         public uint AccentColor { get; set; } = 0;         // packed ARGB for the Accent dot style (0 = brand amber)
         public double DotOpacity { get; set; } = 1.0;      // per-dot brightness multiplier (0.2..1.0)
@@ -88,6 +88,8 @@ namespace OrbitOverlay
         public double Decay { get; set; } = 0.94;          // flow persistence / trail (0.80..0.97)
         public double HideSensitivity { get; set; } = 1.0; // auto-hide knee scale (0.5..2.0)
         public int Placement { get; set; } = 0;            // 0 = side strips, 1 = full peripheral frame
+        public int CueStyle { get; set; } = 0;             // 0 Dots,1 Streaks,2 Rails,3 Horizon,4 Flow,5 Chevrons
+        public int CueModel { get; set; } = 0;             // 0 velocity-flow, 1 acceleration-pulse
         public bool StartMinimized { get; set; } = false;  // launch hidden in the tray
         public bool AutoPause { get; set; } = true;        // fade the dots out when the vehicle is stopped
         public double? WinLeft { get; set; }               // remembered panel position + size (null = use defaults)
@@ -100,7 +102,7 @@ namespace OrbitOverlay
         public Dictionary<string, Hotkey> Hotkeys { get; set; } // remappable global shortcuts (null = built-in defaults)
 
         static string ConfigDir =>
-            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbit");
+            System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbital");
         static string ConfigPath => System.IO.Path.Combine(ConfigDir, "settings.json");
 
         public static Settings Load()
@@ -119,7 +121,7 @@ namespace OrbitOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -139,7 +141,7 @@ namespace OrbitOverlay
     public static class AutoStart
     {
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        const string Name = "Orbit";
+        const string Name = "Orbital";
 
         static string ExePath()
         {
@@ -165,6 +167,287 @@ namespace OrbitOverlay
     }
 
     // ---------------------------------------------------------------
+    // Immediate-mode cue renderer — a 1:1 port of the Android DotsView
+    // render paths so the two apps share the same cue STYLES and figures.
+    // The OverlayWindow owns the physics (flow integrator); this element
+    // just draws the current style each frame from that flow state.
+    // ---------------------------------------------------------------
+    public class CueElement : FrameworkElement
+    {
+        // --- flow state, written by OverlayWindow.Frame() each tick ---
+        public double OffX, OffY, VelX, VelY, AccelEnv;
+
+        // --- live params (mirror Android's DotsView) ---
+        public int DotStyle = 1;          // colour mode: 0 light, 1 mixed, 2 dark, 3 accent
+        public uint AccentColor = 0;      // packed ARGB for accent mode (0 = brand amber)
+        public double DotScale = 1.0;     // element size multiplier
+        public double DotOpacity = 1.0;   // overall brightness (0.2..1.0)
+        public double Density = 1.0;      // element-count multiplier (0.5..2.0)
+        public int Placement = 0;         // 0 side strips, 1 full peripheral frame
+        public int CueStyle = 0;          // 0 Dots,1 Streaks,2 Rails,3 Horizon,4 Flow,5 Chevrons
+        public int CueModel = 0;          // 0 velocity-flow, 1 acceleration-pulse
+
+        class Dot { public int side; public double lx, y, r, alpha, depth; public int pick; }
+        readonly List<Dot> field = new List<Dot>();
+        double bandW, bandH;
+        int builtW = -1, builtH = -1;
+        readonly Random rnd = new Random();
+
+        static readonly Color light = Color.FromArgb(217, 0xEC, 0xE7, 0xD7);  // warm off-white (matches PC/Android light)
+        static readonly Color dark  = Color.FromArgb(217, 0x12, 0x16, 0x1E);  // near-bg dark
+        static readonly Color amber = Color.FromArgb(217, 0xE8, 0xB6, 0x6F);  // accent default (Android accent_amber)
+
+        readonly Dictionary<uint, SolidColorBrush> brushCache = new Dictionary<uint, SolidColorBrush>();
+        readonly Dictionary<long, Pen> penCache = new Dictionary<long, Pen>();
+
+        public CueElement() { IsHitTestVisible = false; }
+
+        public void RebuildField() { builtW = -1; InvalidateVisual(); }   // counts baked in -> force a rebuild
+
+        Color BaseColor(int pick)
+        {
+            switch (DotStyle)
+            {
+                case 0: return light;
+                case 2: return dark;
+                case 3: return AccentColor != 0
+                    ? Color.FromArgb(0xFF, (byte)(AccentColor >> 16), (byte)(AccentColor >> 8), (byte)AccentColor)
+                    : amber;
+                default: return pick == 0 ? light : dark;   // Mixed: each element keeps its own pick
+            }
+        }
+
+        SolidColorBrush BrushFor(Color c, double mul)
+        {
+            byte a = (byte)Math.Clamp((int)Math.Round(c.A * mul), 0, 255);
+            uint key = ((uint)a << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+            if (!brushCache.TryGetValue(key, out var b))
+            {
+                b = new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B)); b.Freeze();
+                brushCache[key] = b;
+            }
+            return b;
+        }
+
+        Pen PenFor(Color c, double mul, double th)
+        {
+            byte a = (byte)Math.Clamp((int)Math.Round(c.A * mul), 0, 255);
+            int ti = (int)Math.Round(th * 4);
+            long key = ((long)a << 40) | ((long)c.R << 32) | ((long)c.G << 24) | ((long)c.B << 16) | (uint)ti;
+            if (!penCache.TryGetValue(key, out var p))
+            {
+                p = new Pen(BrushFor(c, mul), th) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+                p.Freeze();
+                penCache[key] = p;
+            }
+            return p;
+        }
+
+        static double Wrap(double v, double m) { double x = v % m; return x < 0 ? x + m : x; }
+        static double CornerFade(double y, double h) => 0.35 + 0.65 * Math.Min(1.0, Math.Min(y, h - y) / (h * 0.14));
+        static double SmoothStep(double e0, double e1, double x) { double t = Math.Clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+        static double CentreFade(double y, double h) => SmoothStep(0, 1, Math.Abs(y - h * 0.5) / (h * 0.5));
+
+        void BuildField(double w, double h)
+        {
+            field.Clear();
+            bandW = Math.Clamp(w * 0.22, 56, 130);
+            bandH = Math.Clamp(h * 0.16, 56, 160);
+            double dens = Math.Clamp(Density, 0.5, 2.0);
+            double colArea = bandW * h * 2;
+            int nNear = Math.Clamp((int)(colArea / 7000 * dens), 8, 200);
+            int nFar  = Math.Clamp((int)(colArea / 5200 * dens), 8, 260);
+            void Strip(int n, double rMin, double rJit, double alpha, double depth)
+            {
+                for (int i = 0; i < n; i++)
+                    field.Add(new Dot { side = i & 1, lx = rnd.NextDouble() * bandW, y = rnd.NextDouble() * h, r = rMin + rnd.NextDouble() * rJit, alpha = alpha, depth = depth, pick = rnd.Next(2) });
+            }
+            Strip(nFar, 0.9, 0.8, 0.18, 0.55);
+            Strip(nNear, 1.9, 1.3, 0.9, 1.0);
+            if (Placement == 1)
+            {
+                double bandArea = w * bandH * 2;
+                int bNear = Math.Clamp((int)(bandArea / 7000 * dens), 6, 200);
+                int bFar  = Math.Clamp((int)(bandArea / 5200 * dens), 6, 260);
+                void Band(int n, double rMin, double rJit, double alpha, double depth)
+                {
+                    for (int i = 0; i < n; i++)
+                        field.Add(new Dot { side = (i & 1) == 0 ? 2 : 3, lx = rnd.NextDouble() * w, y = rnd.NextDouble() * bandH, r = rMin + rnd.NextDouble() * rJit, alpha = alpha, depth = depth, pick = rnd.Next(2) });
+                }
+                Band(bFar, 0.9, 0.8, 0.18, 0.55);
+                Band(bNear, 1.9, 1.3, 0.9, 1.0);
+            }
+        }
+
+        (double x, double y) Head(Dot dot, double sX, double sY, double w, double h)
+        {
+            switch (dot.side)
+            {
+                case 0:  return (Wrap(dot.lx + sX * dot.depth, bandW), Wrap(dot.y + sY * dot.depth, h));
+                case 1:  return (w - bandW + Wrap(dot.lx + sX * dot.depth, bandW), Wrap(dot.y + sY * dot.depth, h));
+                case 2:  return (Wrap(dot.lx + sX * dot.depth, w), Wrap(dot.y + sY * dot.depth, bandH));
+                default: return (Wrap(dot.lx + sX * dot.depth, w), h - bandH + Wrap(dot.y + sY * dot.depth, bandH));
+            }
+        }
+
+        double frW, frH, frOp, frSX, frSY, frKFlow, frIntens;
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            double w = ActualWidth, h = ActualHeight;
+            if (w <= 0 || h <= 0) return;
+            if (field.Count == 0 || builtW != (int)w || builtH != (int)h) { BuildField(w, h); builtW = (int)w; builtH = (int)h; }
+            frW = w; frH = h; frOp = Math.Clamp(DotOpacity, 0.2, 1.0); frKFlow = 0.6;
+            frSX = OffX * frKFlow; frSY = OffY * frKFlow;
+            frIntens = CueModel == 1 ? Math.Clamp(AccelEnv, 0, 1) : 1.0;
+            switch (CueStyle)
+            {
+                case 1: Streaks(dc); break;
+                case 2: Rails(dc); break;
+                case 3: Horizon(dc); break;
+                case 4: FlowGrid(dc); break;
+                case 5: Chevrons(dc); break;
+                default: Dots(dc); break;
+            }
+        }
+
+        void Dots(DrawingContext dc)
+        {
+            foreach (var dot in field)
+            {
+                var (x, y) = Head(dot, frSX, frSY, frW, frH);
+                double mul = frOp * dot.alpha * CornerFade(y, frH) * frIntens;
+                double rr = dot.r * DotScale;
+                dc.DrawEllipse(BrushFor(BaseColor(dot.pick), mul), null, new Point(x, y), rr, rr);
+            }
+        }
+
+        void Streaks(DrawingContext dc)
+        {
+            double spd = Math.Sqrt(VelX * VelX + VelY * VelY);
+            if (spd < 1e-3) { Dots(dc); return; }                 // steady cruise -> collapse to dots
+            double ux = VelX / spd, uy = VelY / spd;
+            foreach (var dot in field)
+            {
+                var (x, y) = Head(dot, frSX, frSY, frW, frH);
+                double len = Math.Clamp(spd * frKFlow * dot.depth * 2.2 * (CueModel == 1 ? (0.4 + Math.Clamp(AccelEnv, 0, 1)) : 1.0), 2, 26);
+                double mul = frOp * dot.alpha * CornerFade(y, frH) * frIntens;
+                double th = Math.Max(1.0, dot.r * DotScale * 0.9);
+                dc.DrawLine(PenFor(BaseColor(dot.pick), mul, th), new Point(x, y), new Point(x - ux * len, y - uy * len));
+            }
+        }
+
+        void Rails(DrawingContext dc)
+        {
+            double w = frW, h = frH;
+            int nBars = Math.Clamp((int)(6 * Density), 3, 12);
+            double barH = h / nBars;
+            double phase = Wrap(frSY * 0.02, barH);
+            var col = BaseColor(0);
+            double k = 1.0 / 8.0;
+            double leftLit = Math.Clamp(-VelX * k, 0, 1), rightLit = Math.Clamp(VelX * k, 0, 1);
+            for (int side = 0; side < 2; side++)
+            {
+                double x0 = side == 0 ? w * 0.012 : w - bandW + w * 0.012;
+                double x1 = side == 0 ? bandW - w * 0.012 : w - w * 0.012;
+                double sideI = side == 0 ? leftLit : rightLit;
+                for (int i = -1; i <= nBars; i++)
+                {
+                    double cyTop = i * barH + phase;
+                    double segH = barH * 0.6;
+                    double mul = frOp * (0.30 + 0.70 * sideI) * CornerFade(cyTop + segH * 0.5, h) * frIntens;
+                    dc.DrawRoundedRectangle(BrushFor(col, mul), null, new Rect(x0, cyTop, Math.Max(0, x1 - x0), segH), 4, 4);
+                }
+            }
+        }
+
+        void Horizon(DrawingContext dc)
+        {
+            double w = frW, h = frH;
+            double pitch = Math.Clamp(VelY * 4.0, -h * 0.18, h * 0.18);
+            double rollDeg = Math.Clamp(VelX * 1.6, -16, 16);
+            double cy = h * 0.5 + pitch;
+            var col = BaseColor(0);
+            dc.PushTransform(new RotateTransform(rollDeg, w * 0.5, cy));
+            var penMain = PenFor(col, frOp * frIntens, 2.4 * DotScale);
+            double inset = w * 0.06, gapHalf = w * 0.15;
+            dc.DrawLine(penMain, new Point(inset, cy), new Point(w * 0.5 - gapHalf, cy));
+            dc.DrawLine(penMain, new Point(w * 0.5 + gapHalf, cy), new Point(w - inset, cy));
+            int rungs = Math.Clamp((int)(3 * Density), 2, 6);
+            double sp = 26.0;
+            double phase = Wrap(frSY * 0.10, sp);
+            for (int n = -rungs; n <= rungs; n++)
+            {
+                double yy = cy + n * sp + phase - sp;
+                double ladderA = 1.0 - Math.Abs(yy - cy) / ((rungs + 1) * sp);
+                if (ladderA > 0)
+                {
+                    double half = w * 0.035 * (1 + Math.Abs(n) * 0.12);
+                    dc.DrawLine(PenFor(col, 0.5 * ladderA * frIntens * frOp, 1.4 * DotScale), new Point(w * 0.5 - half, yy), new Point(w * 0.5 + half, yy));
+                }
+            }
+            dc.Pop();
+        }
+
+        void FlowGrid(DrawingContext dc)
+        {
+            double w = frW, h = frH;
+            double th = 0.8 * DotScale;
+            var col = BaseColor(0);
+            double horizonY = h * 0.46;
+            double vanishX = w * 0.5 + frSX * 0.30;
+            double scroll = frSY * 0.012;
+            int rows = Math.Clamp((int)(9 * Density), 4, 16);
+            int cols = Math.Clamp((int)(7 * Density), 3, 14);
+            for (int i = 0; i < rows; i++)
+            {
+                double z = ((i + scroll) % rows) / rows;
+                if (z <= 0) z += 1;
+                double y = horizonY + (h - horizonY) * z * z;
+                double bank = (vanishX - w * 0.5) * (1 - z);
+                double mul = z * CentreFade(y, h) * 0.5 * frIntens * frOp;
+                dc.DrawLine(PenFor(col, mul, th), new Point(bank, y), new Point(w + bank, y));
+            }
+            for (int kk = -cols; kk <= cols; kk++)
+            {
+                double xB = w * 0.5 + kk * (w * 0.5 / cols) + (vanishX - w * 0.5);
+                dc.DrawLine(PenFor(col, 0.35 * frIntens * frOp, th), new Point(vanishX, horizonY), new Point(xB, h));
+            }
+        }
+
+        void Chevrons(DrawingContext dc)
+        {
+            double w = frW, h = frH;
+            double spd = Math.Sqrt(VelX * VelX + VelY * VelY);
+            if (spd < 1e-3) return;
+            double mag = Math.Clamp(spd / 8.0, 0, 1);
+            double magVis = mag > 0.25 ? mag : 0.25;              // comfort floor while a maneuver is happening
+            double ux = VelX / spd, uy = VelY / spd;
+            double s = 8.0 * DotScale;
+            int k = Math.Clamp((int)(5 * Density), 3, 9);
+            var col = BaseColor(0);
+            double th = 2.4 * DotScale;
+            for (int side = 0; side < 2; side++)
+            {
+                double cx = side == 0 ? bandW * 0.5 : w - bandW * 0.5;
+                for (int i = 0; i < k; i++)
+                {
+                    double f = (double)i / k + frSY * 0.004;
+                    f -= Math.Floor(f);
+                    double cyy = f * h;
+                    double edge = Math.Min(1.0, Math.Min(cyy, h - cyy) / (h * 0.12));
+                    var pen = PenFor(col, magVis * edge * frIntens * frOp, th);
+                    double tx = cx + ux * s, ty = cyy + uy * s;   // tip points where the force pushes
+                    double px = -uy, py = ux;                     // perpendicular wings
+                    double bx = cx - ux * s * 0.25, by = cyy - uy * s * 0.25;
+                    dc.DrawLine(pen, new Point(bx + px * s, by + py * s), new Point(tx, ty));
+                    dc.DrawLine(pen, new Point(bx - px * s, by - py * s), new Point(tx, ty));
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
     // The transparent, always-on-top, click-through cue overlay.
     // ---------------------------------------------------------------
     public class OverlayWindow : Window
@@ -185,13 +468,15 @@ namespace OrbitOverlay
         public bool Paused = false;
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
-        public int DotStyle = 0;                 // 0 = light, 1 = mixed (both, works on any window), 2 = dark, 3 = accent
-        public uint AccentColor = 0;             // packed ARGB for the Accent dot style (0 = brand amber signal)
+        public int DotStyle = 1;                 // 0 = light, 1 = mixed (default, matches Android), 2 = dark, 3 = accent
+        public uint AccentColor = 0;             // packed ARGB for the Accent dot style (0 = brand amber)
         public double DotOpacity = 1.0;          // per-dot brightness multiplier (0.2..1.0)
         public double Density = 1.0;             // dot-count multiplier (0.5..2.0)
         public double Decay = 0.94;              // flow persistence / trail (0.80..0.97)
         public double HideSensitivity = 1.0;     // auto-hide energy-knee scale (0.5..2.0)
         public int Placement = 0;                // 0 = side strips, 1 = full peripheral frame (adds top/bottom bands)
+        public int CueStyle = 0;                 // 0 Dots,1 Streaks,2 Rails,3 Horizon,4 Flow,5 Chevrons (Android parity)
+        public int CueModel = 0;                 // 0 velocity-flow, 1 acceleration-pulse
         public bool AutoPause = true;            // fade dots out when motion stops (parked / at a desk)
 
         // --- motion-energy gate for AutoPause ---
@@ -214,19 +499,15 @@ namespace OrbitOverlay
         public event Action<string> StatusChanged;
         void SetStatus(string t) { StatusText = t; StatusChanged?.Invoke(t); }
 
-        readonly Canvas canvas = new Canvas();
-        readonly List<Dot> near = new List<Dot>();
-        readonly List<Dot> far = new List<Dot>();
+        readonly CueElement cue = new CueElement();   // immediate-mode renderer (shared styles with Android)
         double offX, offY, velX, velY;          // accumulated offset + flow velocity
+        double accelEnv;                        // smoothed 0..1 accel envelope (Acceleration-pulse model)
         double lat, fore, yaw;                   // resolved motion
         double fwd1, fwd2 = 1;                    // inertial forward-axis unit estimate (horizontal plane); default (0,1) = old fixed mapping
         double gx, gy, gz; bool gReady;          // gravity estimate
         int oriMode = -1;                        // locked axis mapping (-1 = not yet detected)
         int settleFrames;                        // frames since (re)arm — gates the lock
         int tiltHold;                            // frames left of fast gravity-tracking after a tilt
-        double bandW;
-        double bandH;                            // height of each top/bottom band (full-frame placement)
-        double appliedScale = -1;                // last dot size pushed to the ellipses
 
         // raw sensor values written by sensor threads, read on the UI tick
         volatile bool hasReading;
@@ -267,8 +548,6 @@ namespace OrbitOverlay
             lastPhoneTick = Environment.TickCount64;
         }
 
-        class Dot { public int side; public double lx, y, r, baseAlpha; public Ellipse el; }
-
         public OverlayWindow()
         {
             WindowStyle = WindowStyle.None;
@@ -285,11 +564,11 @@ namespace OrbitOverlay
             Width = SystemParameters.VirtualScreenWidth;
             Height = SystemParameters.VirtualScreenHeight;
 
-            Content = canvas;
+            Content = cue;
 
             SourceInitialized += (s, e) => MakeClickThrough();
             Loaded += OnLoaded;
-            SizeChanged += (s, e) => BuildDots();
+            SizeChanged += (s, e) => cue.RebuildField();
         }
 
         public void ApplySettings(Settings s)
@@ -308,6 +587,8 @@ namespace OrbitOverlay
             Decay = double.IsFinite(s.Decay) ? Math.Clamp(s.Decay, 0.80, 0.97) : 0.94;
             HideSensitivity = double.IsFinite(s.HideSensitivity) ? Math.Clamp(s.HideSensitivity, 0.5, 2.0) : 1.0;
             Placement = Math.Clamp(s.Placement, 0, 1);
+            CueStyle = Math.Clamp(s.CueStyle, 0, 5);
+            CueModel = Math.Clamp(s.CueModel, 0, 1);
             AutoPause = s.AutoPause;
             PhoneOnly = s.PhoneOnly;
         }
@@ -332,132 +613,32 @@ namespace OrbitOverlay
 
         void OnLoaded(object sender, RoutedEventArgs e)
         {
-            BuildDots();
             StartSensors();
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             timer.Tick += (a, b) => Frame();
             timer.Start();
         }
 
-        // public so the control panel can rebuild the field when Density / Placement change
-        public void RebuildField() => BuildDots();
+        // rebuild the cue field when Density / Placement change (counts are baked in)
+        public void RebuildField() => cue.RebuildField();
 
-        void BuildDots()
-        {
-            canvas.Children.Clear();
-            near.Clear(); far.Clear();
-            double W = Width, H = Height;
-            if (W <= 0 || H <= 0) return;
-
-            double dens = Math.Clamp(Density, 0.5, 2.0);
-            bandW = Math.Max(64, Math.Min(W * 0.22, 240));   // width of each side strip
-            bandH = Math.Max(48, Math.Min(H * 0.16, 180));   // height of each top/bottom band (full-frame)
-            double colArea = bandW * H * 2;
-            int nNear = (int)(colArea / 7000 * dens);
-            int nFar = (int)(colArea / 5200 * dens);
-
-            var rnd = new Random();
-
-            void Make(int n, List<Dot> arr, double rMin, double rJit, double alpha)
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    var d = new Dot
-                    {
-                        side = i % 2,                       // alternate left / right strips
-                        lx = rnd.NextDouble() * bandW,
-                        y = rnd.NextDouble() * H,
-                        r = rMin + rnd.NextDouble() * rJit,
-                        baseAlpha = alpha
-                    };
-                    d.el = new Ellipse { Width = d.r * 2, Height = d.r * 2, Fill = DotFill(rnd) };
-                    canvas.Children.Add(d.el);
-                    arr.Add(d);
-                }
-            }
-            // full-frame placement: scatter dots across top (side 2) + bottom (side 3) bands too
-            void MakeBand(int n, List<Dot> arr, double rMin, double rJit, double alpha)
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    var d = new Dot
-                    {
-                        side = 2 + (i % 2),                 // alternate top / bottom bands
-                        lx = rnd.NextDouble() * W,
-                        y = rnd.NextDouble() * bandH,
-                        r = rMin + rnd.NextDouble() * rJit,
-                        baseAlpha = alpha
-                    };
-                    d.el = new Ellipse { Width = d.r * 2, Height = d.r * 2, Fill = DotFill(rnd) };
-                    canvas.Children.Add(d.el);
-                    arr.Add(d);
-                }
-            }
-            Make(nFar, far, 0.9, 0.8, 0.18);
-            Make(nNear, near, 1.9, 1.3, 0.9);
-            if (Placement == 1)
-            {
-                double rowArea = bandH * W * 2;
-                MakeBand((int)(rowArea / 5200 * dens), far, 0.9, 0.8, 0.18);
-                MakeBand((int)(rowArea / 7000 * dens), near, 1.9, 1.3, 0.9);
-            }
-            ApplyDotScale();                    // size + place dots now so the first paint is correct
-            Render(near, offX, offY, W, H);
-            Render(far, offX * 0.55, offY * 0.55, W, H);
-        }
-
-        void ApplyDotScale()
-        {
-            appliedScale = DotScale;
-            void Size(List<Dot> arr) { foreach (var d in arr) { d.el.Width = d.el.Height = d.r * 2 * DotScale; } }
-            Size(near); Size(far);
-        }
-
-        SolidColorBrush lightDot, darkDot, accentDot;
-        void EnsureDotBrushes()
-        {
-            if (lightDot == null)
-            {
-                lightDot = new SolidColorBrush(Color.FromRgb(236, 231, 215)); lightDot.Freeze();
-                darkDot = new SolidColorBrush(Color.FromRgb(18, 22, 30)); darkDot.Freeze();
-            }
-            if (accentDot == null)
-            {
-                // packed ARGB from the chosen swatch, or the brand amber signal when unset
-                Color c = AccentColor != 0
-                    ? Color.FromArgb((byte)(AccentColor >> 24), (byte)(AccentColor >> 16), (byte)(AccentColor >> 8), (byte)AccentColor)
-                    : Color.FromRgb(0xE0, 0xA2, 0x4A);
-                accentDot = new SolidColorBrush(c); accentDot.Freeze();
-            }
-        }
-
-        // pick a dot's colour for the current style: light, dark, accent, or (mixed) a 50/50 split
-        // so some dots always contrast whether the window behind is light or dark
-        Brush DotFill(Random rnd)
-        {
-            EnsureDotBrushes();
-            return DotStyle == 0 ? lightDot
-                 : DotStyle == 2 ? darkDot
-                 : DotStyle == 3 ? accentDot
-                 : (rnd.NextDouble() < 0.5 ? lightDot : darkDot);
-        }
-
-        // recolor existing dots in place (no rebuild) when the dot-style slider moves
+        // recolour the dots: 0 light, 1 mixed, 2 dark, 3 accent
         public void SetDotStyle(int style)
         {
             DotStyle = Math.Clamp(style, 0, 3);
-            var rnd = new Random();
-            foreach (var d in near) d.el.Fill = DotFill(rnd);
-            foreach (var d in far) d.el.Fill = DotFill(rnd);
+            cue.DotStyle = DotStyle; cue.InvalidateVisual();
         }
 
         // choose a custom accent colour (packed ARGB) and switch to the Accent dot style
         public void SetAccentColor(uint argb)
         {
-            AccentColor = argb;
-            accentDot = null;                   // rebuilt on next EnsureDotBrushes
-            SetDotStyle(3);
+            AccentColor = argb; DotStyle = 3;
+            cue.AccentColor = argb; cue.DotStyle = 3; cue.InvalidateVisual();
         }
+
+        // pick the cue STYLE (Dots/Streaks/Rails/Horizon/Flow/Chevrons) and motion MODEL (flow/pulse)
+        public void SetCueStyle(int style) { CueStyle = Math.Clamp(style, 0, 5); cue.CueStyle = CueStyle; cue.InvalidateVisual(); }
+        public void SetCueModel(int model) { CueModel = Math.Clamp(model, 0, 1); cue.CueModel = CueModel; }
 
         void StartSensors()
         {
@@ -634,6 +815,10 @@ namespace OrbitOverlay
             // with InvertY so the "Flip vertical" toggle still reverses the whole Y axis as before.
             double aY = SoftDead(fore, dz) * InvertY * LonGain;    // gas/brake -> vertical (signed trim)
 
+            // smoothed accel envelope for the Acceleration-pulse cue model (band-passed mag, never raw -> no strobe)
+            double cueMag = Math.Sqrt(lat * lat + fore * fore);
+            accelEnv += (Math.Clamp(cueMag / 3.0, 0, 1) - accelEnv) * 0.20;
+
             // --- auto-pause: judge "useful to show" ---
             // GPS speed is authoritative when the phone supplies it: motion sickness
             // needs real travel speed, and nobody feels ill crawling/parked — so hide
@@ -705,10 +890,12 @@ namespace OrbitOverlay
             dotsOpacity += (tgtOpacity - dotsOpacity) * opEase;
             if (Math.Abs(dotsOpacity - Opacity) > 0.001) Opacity = dotsOpacity;
 
-            if (DotScale != appliedScale) ApplyDotScale();
-
-            Render(near, offX, offY, W, H);
-            Render(far, offX * 0.55, offY * 0.55, W, H);
+            // hand the current flow state + live params to the renderer and repaint this frame
+            cue.OffX = offX; cue.OffY = offY; cue.VelX = velX; cue.VelY = velY; cue.AccelEnv = accelEnv;
+            cue.DotScale = DotScale; cue.DotStyle = DotStyle; cue.AccentColor = AccentColor;
+            cue.DotOpacity = DotOpacity; cue.Density = Density; cue.Placement = Placement;
+            cue.CueStyle = CueStyle; cue.CueModel = CueModel;
+            cue.InvalidateVisual();
 
             DebugText =
                 $"src:{(PhoneActive ? "PHONE" : (acc != null ? "laptop" : "none"))}  mode:{oriMode}  gReady:{(gReady ? 1 : 0)}\n" +
@@ -718,37 +905,6 @@ namespace OrbitOverlay
                 $"lat:{lat,7:0.00}  fore:{fore,7:0.00}\n" +
                 $"vel:{velX,7:0.0}  {velY,7:0.0}\n" +
                 $"act:{activityEma,6:0.000} jit:{jitterEma,5:0.00} spd:{(SpeedFresh ? (phoneSpeed * 3.6).ToString("0.0") + "km/h" : "--")}  {(AutoPause ? (autoStill ? "HIDDEN (stopped)" : "moving") : "autohide off")}";
-        }
-
-        static double Wrap(double v, double m) { v %= m; return v < 0 ? v + m : v; }
-
-        void Render(List<Dot> arr, double ox, double oy, double W, double H)
-        {
-            double op = Math.Clamp(DotOpacity, 0.2, 1.0);          // user brightness multiplier
-            foreach (var d in arr)
-            {
-                double x, y, fade;
-                if (d.side < 2)
-                {
-                    double local = Wrap(d.lx + ox, bandW);         // horizontal flow stays in the strip
-                    x = d.side == 0 ? local : (W - bandW + local);
-                    y = Wrap(d.y + oy, H);
-                    double t = Math.Min(1.0, Math.Min(y, H - y) / (H * 0.14));
-                    fade = 0.35 + 0.65 * t;                        // dim toward the corners
-                }
-                else
-                {
-                    x = Wrap(d.lx + ox, W);                        // top/bottom band: flow runs horizontally
-                    double localY = Wrap(d.y + oy, bandH);
-                    y = d.side == 2 ? localY : (H - bandH + localY);
-                    double t = Math.Min(1.0, Math.Min(x, W - x) / (W * 0.14));
-                    fade = 0.35 + 0.65 * t;                        // dim toward the left/right edges
-                }
-                d.el.Opacity = d.baseAlpha * fade * op;
-                double rr = d.r * DotScale;
-                Canvas.SetLeft(d.el, x - rr);
-                Canvas.SetTop(d.el, y - rr);
-            }
         }
 
         public void Recenter()
@@ -878,8 +1034,8 @@ namespace OrbitOverlay
             if (settings.Hotkeys != null)
                 foreach (var kv in settings.Hotkeys)
                     if (kv.Value != null && kv.Value.Vk != 0) hotkeys[kv.Key] = kv.Value;
-            Title = "Orbit";
-            try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/orbit.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
+            Title = "Orbital";
+            try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/orbital.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
             MinWidth = 360; MinHeight = 520;
             ResizeMode = ResizeMode.CanResize;
@@ -911,7 +1067,7 @@ namespace OrbitOverlay
                 Width = 14, Height = 14, Fill = Brush("AccentBrush"),
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 9, 0)
             });
-            brandRow.Children.Add(Styled(new TextBlock { Text = "Orbit", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            brandRow.Children.Add(Styled(new TextBlock { Text = "Orbital", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
             Grid.SetColumn(brandRow, 0);
             header.Children.Add(brandRow);
 
@@ -1018,6 +1174,64 @@ namespace OrbitOverlay
             motion.Children.Add(densitySlider);
             root.Children.Add(CardOf(motion));
 
+            // ---- CUE STYLE card (shared set with the Android app) ----
+            var cueCard = new StackPanel();
+            cueCard.Children.Add(SectionHead("CUE STYLE"));
+            var styleNames = new[] { "Dots", "Streaks", "Rails", "Horizon", "Flow", "Chevrons" };
+            var styleWrap = new WrapPanel();
+            var styleBtns = new Button[styleNames.Length];
+            void SelectStyle(int idx)
+            {
+                ov.SetCueStyle(idx);
+                for (int i = 0; i < styleBtns.Length; i++)
+                {
+                    styleBtns[i].Background = i == idx ? Brush("AccentBrush") : Brush("CardHiBrush");
+                    styleBtns[i].Foreground = i == idx ? Brush("BgBrush") : Brush("TextBrush");
+                }
+            }
+            for (int i = 0; i < styleNames.Length; i++)
+            {
+                int idx = i;
+                var b = Styled(new Button { Content = styleNames[i], Margin = new Thickness(0, 0, 6, 6), MinWidth = 84 }, "OrbitButton");
+                b.ToolTip = "Switch the shape of the peripheral motion cue.";
+                b.Click += (s, e) => { SelectStyle(idx); QueueSave(); };
+                styleBtns[i] = b;
+                styleWrap.Children.Add(b);
+            }
+            cueCard.Children.Add(styleWrap);
+
+            // motion model: velocity-flow (steady) vs acceleration-pulse (brightens on accel/brake)
+            cueCard.Children.Add(SubLabel("Motion model"));
+            var modelRow = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            modelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            modelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            modelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var modelNames = new[] { "Flow", "Pulse" };
+            var modelBtns = new Button[2];
+            void SelectModel(int m)
+            {
+                ov.SetCueModel(m);
+                for (int i = 0; i < modelBtns.Length; i++)
+                {
+                    modelBtns[i].Background = i == m ? Brush("AccentBrush") : Brush("CardHiBrush");
+                    modelBtns[i].Foreground = i == m ? Brush("BgBrush") : Brush("TextBrush");
+                }
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                int m = i;
+                var b = Styled(new Button { Content = modelNames[i] }, "OrbitButton");
+                b.ToolTip = m == 0 ? "Steady flow — constant brightness." : "Pulse — cue brightens with acceleration / braking.";
+                b.Click += (s, e) => { SelectModel(m); QueueSave(); };
+                Grid.SetColumn(b, m * 2);
+                modelBtns[i] = b;
+                modelRow.Children.Add(b);
+            }
+            cueCard.Children.Add(modelRow);
+            root.Children.Add(CardOf(cueCard));
+            SelectStyle(ov.CueStyle);            // reflect persisted style/model in the buttons
+            SelectModel(ov.CueModel);
+
             // ---- ADJUST card (toggle switches) ----
             var adjust = new StackPanel();
             adjust.Children.Add(SectionHead("ADJUST"));
@@ -1110,7 +1324,7 @@ namespace OrbitOverlay
             recenter.Click += (s, e) => ov.Recenter();
             Grid.SetColumn(recenter, 0);
             var quit = Styled(new Button { Content = "Quit" }, "OrbitButton");
-            quit.ToolTip = "Exit Orbit completely.";
+            quit.ToolTip = "Exit Orbital completely.";
             quit.Click += (s, e) => QuitApp();
             Grid.SetColumn(quit, 2);
             row2.Children.Add(recenter);
@@ -1183,7 +1397,7 @@ namespace OrbitOverlay
             phoneDetail.Children.Add(qrFrame);
             phoneDetail.Children.Add(Styled(new TextBlock
             {
-                Text = "Scan the QR to open the Orbit Phone app with the address pre-filled, then pick Bluetooth or Wi-Fi in it. Install the app once."
+                Text = "Scan the QR to open the Orbital Phone app with the address pre-filled, then pick Bluetooth or Wi-Fi in it. Install the app once."
             }, "FaintText"));
             SetPhoneExpander();
             root.Children.Add(CardOf(phone));
@@ -1268,7 +1482,7 @@ namespace OrbitOverlay
                 accentRow.Children.Add(sw);
             }
             Swatch(0xFF6FD8C6, "AccentBrush", "Teal");
-            Swatch(0xFFE0A24A, "AmberBrush", "Amber (signal)");
+            Swatch(0xFFE8B66F, "AccentAmberBrush", "Amber");
             Swatch(0xFF6FA8D8, "BlueBrush", "Blue");
             prefs.Children.Add(accentRow);
             if (ov.DotStyle == 3) dotColourVal.Text = "Accent";
@@ -1333,7 +1547,8 @@ namespace OrbitOverlay
                 slider.Value = 1.8; lonSlider.Value = 1.5; sizeSlider.Value = 1.0;
                 opacitySlider.Value = 1.0; densitySlider.Value = 1.0;
                 decaySlider.Value = 0.94; hideSlider.Value = 1.0;
-                ov.SetDotStyle(0); dotStyleSlider.Value = 0; dotColourVal.Text = dotNames[0];
+                ov.SetDotStyle(1); dotStyleSlider.Value = 1; dotColourVal.Text = dotNames[1];
+                SelectStyle(0); SelectModel(0);     // back to Dots + velocity-flow
                 placementTog.IsChecked = false;     // fires Unchecked -> Placement 0 + rebuild
                 ov.RebuildField();
                 QueueSave();
@@ -1382,7 +1597,7 @@ namespace OrbitOverlay
             }, "FaintText");
 
             var aboutLink = Styled(new Button { Content = "Keyboard shortcuts & about", HorizontalAlignment = HorizontalAlignment.Center }, "OrbitButton");
-            aboutLink.ToolTip = "How Orbit works, shortcuts, and version.";
+            aboutLink.ToolTip = "How Orbital works, shortcuts, and version.";
             aboutLink.Click += (s, e) => ShowHelp(true);
             aboutLink.Margin = new Thickness(0, 2, 0, 0);
             root.Children.Add(aboutLink);
@@ -1593,13 +1808,13 @@ namespace OrbitOverlay
             var col = new StackPanel();
             var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 2) };
             titleRow.Children.Add(new System.Windows.Shapes.Ellipse { Width = 12, Height = 12, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-            titleRow.Children.Add(Styled(new TextBlock { Text = "Orbit", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
+            titleRow.Children.Add(Styled(new TextBlock { Text = "Orbital", VerticalAlignment = VerticalAlignment.Center }, "Wordmark"));
             col.Children.Add(titleRow);
             col.Children.Add(Styled(new TextBlock { Text = "Version " + AppVersion() + " · early access", Margin = new Thickness(0, 0, 0, 12) }, "FaintText"));
 
             col.Children.Add(Styled(new TextBlock
             {
-                Text = "Orbit eases motion sickness by drifting faint cue dots along your screen edges, matching the motion your inner ear feels — so your eyes and your balance agree.",
+                Text = "Orbital eases motion sickness by drifting faint cue dots along your screen edges, matching the motion your inner ear feels — so your eyes and your balance agree.",
                 Margin = new Thickness(0, 0, 0, 12)
             }, "BodyText"));
 
@@ -1648,10 +1863,10 @@ namespace OrbitOverlay
         void ShowWelcome()
         {
             var col = new StackPanel();
-            col.Children.Add(Styled(new TextBlock { Text = "Welcome to Orbit", Margin = new Thickness(0, 0, 0, 8) }, "Wordmark"));
+            col.Children.Add(Styled(new TextBlock { Text = "Welcome to Orbital", Margin = new Thickness(0, 0, 0, 8) }, "Wordmark"));
             col.Children.Add(Styled(new TextBlock
             {
-                Text = "Orbit drifts faint dots along your screen edges to match the motion your body feels, easing car and motion sickness while you work.",
+                Text = "Orbital drifts faint dots along your screen edges to match the motion your body feels, easing car and motion sickness while you work.",
                 Margin = new Thickness(0, 0, 0, 10)
             }, "BodyText"));
             col.Children.Add(Styled(new TextBlock
@@ -1732,7 +1947,7 @@ namespace OrbitOverlay
 
             var left = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
             left.Children.Add(new System.Windows.Shapes.Ellipse { Width = 9, Height = 9, Fill = Brush("AccentBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
-            left.Children.Add(new TextBlock { Text = "Orbit", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
+            left.Children.Add(new TextBlock { Text = "Orbital", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center });
             Grid.SetColumn(left, 0);
             bar.Children.Add(left);
 
@@ -1984,7 +2199,7 @@ namespace OrbitOverlay
                 ? $"Pair this PC (\"{server.BtName}\") in your phone's Bluetooth settings, then pick Bluetooth in the app. No network needed."
                 : "Starting… " + (string.IsNullOrEmpty(server.BtError) ? "" : server.BtError);
             string appLink = string.IsNullOrEmpty(server.PrimaryIp) ? ""
-                : $"orbit://connect?host={server.PrimaryIp}&port={server.Port}";
+                : $"orbital://connect?host={server.PrimaryIp}&port={server.Port}";
             phoneUrl.Text = string.IsNullOrEmpty(server.PrimaryIp) ? "Waiting for a network address…"
                 : $"{server.PrimaryIp} : {server.Port}   ·   same Wi-Fi, hotspot, or USB tether\nBrowser fallback: {server.PrimaryUrl}  (shows a 'not secure' warning → Advanced ▸ proceed)";
             if (appLink != shownUrl)               // re-render the QR only when the target changes
@@ -2024,7 +2239,7 @@ namespace OrbitOverlay
         }
 
         // Centered "waiting for a network address" placeholder shown inside the white QR frame
-        // before any Wi-Fi address exists — a dashed teal ring around an Orbit dot reads as
+        // before any Wi-Fi address exists — a dashed teal ring around an Orbital dot reads as
         // "getting ready" rather than a blank/garbage QR. Dark-on-white (frame is white).
         UIElement BuildQrPlaceholder()
         {
@@ -2123,7 +2338,7 @@ namespace OrbitOverlay
             {
                 Icon = trayIcon,
                 Visible = true,
-                Text = "Orbit",
+                Text = "Orbital",
                 ContextMenuStrip = trayMenu
             };
             notify.DoubleClick += (s, e) => TogglePanel();
@@ -2133,7 +2348,7 @@ namespace OrbitOverlay
         {
             try   // prefer the real multi-res brand icon for crisp tray rendering
             {
-                var s = Application.GetResourceStream(new Uri("pack://application:,,,/orbit.ico", UriKind.Absolute))?.Stream;
+                var s = Application.GetResourceStream(new Uri("pack://application:,,,/orbital.ico", UriKind.Absolute))?.Stream;
                 if (s != null) using (s) return new System.Drawing.Icon(s, 32, 32);
             }
             catch { /* fall back to the drawn icon below */ }
@@ -2234,7 +2449,7 @@ namespace OrbitOverlay
         int clients;
 
         static string Dir => System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbit");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Orbital");
 
         public PhoneServer(Action<double, double, double, double, double, double, double, bool> onFrame)
         {
@@ -2370,7 +2585,7 @@ namespace OrbitOverlay
         static X509Certificate2 CreateCert(List<IPAddress> ips, string pfx, string ipsFile, string want)
         {
             using var rsa = RSA.Create(2048);
-            var req = new CertificateRequest("CN=Orbit Overlay", rsa,
+            var req = new CertificateRequest("CN=Orbital Overlay", rsa,
                 HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             var san = new SubjectAlternativeNameBuilder();
             san.AddDnsName("localhost");
@@ -2407,7 +2622,7 @@ namespace OrbitOverlay
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "netsh",
-                    Arguments = $"advfirewall firewall add rule name=\"Orbit Phone {proto} {Port}\" " +
+                    Arguments = $"advfirewall firewall add rule name=\"Orbital Phone {proto} {Port}\" " +
                                 $"dir=in action=allow protocol={proto} localport={Port}",
                     CreateNoWindow = true,
                     UseShellExecute = false,
@@ -2450,7 +2665,7 @@ namespace OrbitOverlay
                 var radio = BluetoothRadio.Default;
                 if (radio == null) { BtError = "no Bluetooth radio on this PC"; return; }
                 BtName = radio.Name;
-                btListener = new BluetoothListener(BtUuid) { ServiceName = "OrbitPhone" };
+                btListener = new BluetoothListener(BtUuid) { ServiceName = "OrbitalPhone" };
                 btListener.Start();
                 BtListening = true;
                 new Thread(BtAcceptLoop) { IsBackground = true, Name = "PhoneBT" }.Start();
@@ -2672,7 +2887,7 @@ namespace OrbitOverlay
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Orbit - phone sensor</title>
+<title>Orbital - phone sensor</title>
 <style>
   html,body{margin:0;height:100%;background:#10151e;color:#e8ecf2;
     font-family:-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none}
@@ -2703,7 +2918,7 @@ namespace OrbitOverlay
 <body>
 <canvas id="dots"></canvas>
 <div class="wrap">
-  <h1>ORBIT</h1>
+  <h1>ORBITAL</h1>
   <div id="setup">
     <p>Mount the phone in the car.<br>Tap to stream its motion to the laptop.</p>
     <button id="startbtn">Start</button>

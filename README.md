@@ -1,4 +1,4 @@
-# Orbit — overlay motion cues (Windows)
+# Orbital — overlay motion cues (Windows)
 
 A transparent, always-on-top, **click-through** overlay that floats drifting dots down the
 left and right edges of your screen to reduce car sickness while you work. It reads your
@@ -10,8 +10,8 @@ Clicks pass straight through the dots to whatever app is underneath — keep wor
 
 ## Run it
 
-**Easiest — the installer.** Download `Orbit-Setup.exe` and run it. It's a per-user install
-(no admin prompt) and **bundles the .NET runtime**, so nothing else to install. Orbit lands in
+**Easiest — the installer.** Download `Orbital-Setup.exe` and run it. It's a per-user install
+(no admin prompt) and **bundles the .NET runtime**, so nothing else to install. Orbital lands in
 Start and in Settings → Apps. First run shows a SmartScreen *"Windows protected your PC"* notice
 because the app is new/unsigned — click **More info → Run anyway**.
 
@@ -22,7 +22,7 @@ then from this folder:
 dotnet run
 ```
 
-Either way, two windows appear: the full-screen cue overlay, and a small **Orbit** control panel.
+Either way, two windows appear: the full-screen cue overlay, and a small **Orbital** control panel.
 
 > Tip: this is fastest to build, run, and tweak inside **Claude Code** — it runs on your
 > machine, so if the first build complains about anything it can fix and re-run immediately.
@@ -41,12 +41,12 @@ Either way, two windows appear: the full-screen cue overlay, and a small **Orbit
 - **Pause** — freeze the dots.
 - **Recenter** — re-zero everything after you've settled into your seat. Hold still for a
   moment after pressing it so it re-learns which way is down.
-- **Start with Windows** — launch Orbit automatically at sign-in (per-user, no admin). Starts
+- **Start with Windows** — launch Orbital automatically at sign-in (per-user, no admin). Starts
   with the dots suppressed until there's motion.
 - **Quit** — really exit (both windows). The window's **[X]** only hides to the tray.
 
 Strength, dot size, both flips and swap are **remembered between runs** (saved to
-`%AppData%\Orbit\settings.json`).
+`%AppData%\Orbital\settings.json`).
 
 ## Global hotkeys
 
@@ -62,21 +62,21 @@ and that one simply won't fire.
 
 ## System tray
 
-A small **Orbit** icon sits in the tray. Double-click it to show/hide the panel, or
+A small **Orbital** icon sits in the tray. Double-click it to show/hide the panel, or
 right-click for Show / Pause-Resume / Recenter / Quit. Closing the panel with **[X]** or
 **minimizing** it hides it to the tray; the overlay cues keep running. Use **Quit** (button or
 tray menu) to actually exit.
 
 ## Use your phone as the sensor
 
-Most laptops have no motion sensor. So Orbit can take its motion from a phone mounted in the
+Most laptops have no motion sensor. So Orbital can take its motion from a phone mounted in the
 car instead — **no internet / no cell signal needed**. The link between phone and laptop is
 local radio (or a cable); it works in the woods, in a dead zone, with mobile data off.
 
 The panel's **PHONE SENSOR** section shows both connection paths plus a **QR code**. There are
 two ways to stream:
 
-### The Orbit Phone app (recommended)
+### The Orbital Phone app (recommended)
 
 A small **Android app** (`android/` folder). Unlike the browser page it **keeps streaming with
 the screen off** — it runs as a foreground service — so the phone can sleep, mounted and
@@ -110,7 +110,7 @@ as the source; use them to match the phone's mounting orientation to the car.
 
 > The phone overrides the laptop sensor while it's streaming, and the laptop takes back over if
 > the phone drops. The QR/address updates automatically when a hotspot or tether comes up after
-> launch, so you can start Orbit first and connect the phone afterward. All three transports
+> launch, so you can start Orbital first and connect the phone afterward. All three transports
 > (Bluetooth, WiFi app, browser) send the same JSON frames — the laptop treats them identically.
 
 ## How the motion works
@@ -148,13 +148,13 @@ slide the laptop **forward/back** on the table — the dots should move **up/dow
   Windows shows the accelerometer under Settings → Privacy → Motion, or use the phone instead
   (see *Use your phone as the sensor*).
 - Phone won't connect over **WiFi/browser**? Windows Firewall may be blocking the port — allow
-  **OrbitOverlay** through the firewall when prompted (or once via an elevated run). Confirm both
+  **OrbitalOverlay** through the firewall when prompted (or once via an elevated run). Confirm both
   devices are on the same hotspot/tether, and (browser only) that you tapped *proceed anyway* past
   the certificate warning.
 - **Bluetooth** won't connect? Make sure the PC has a Bluetooth radio and the two are **paired**
   in Windows/Android settings first; then pick the PC in the app.
 - App stops streaming with the **screen off**? Some phones aggressively kill background apps —
-  exclude **Orbit Phone** from battery optimization (Settings → Apps → Orbit Phone → Battery →
+  exclude **Orbital Phone** from battery optimization (Settings → Apps → Orbital Phone → Battery →
   Unrestricted).
 - Tuning constants live near the top of `OverlayWindow` in `Program.cs`
   (`Sens`, `decay`, `gain`, `vmax`, dead-zone `dz`) and match the web prototype, so any feel
