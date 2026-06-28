@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj": {}
+    "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj": {}
   },
   "projects": {
-    "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj": {
+    "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj",
+        "projectUniqueName": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj",
         "projectName": "OrbitOverlay",
-        "projectPath": "C:\\Users\\simon\\Documents\\dev\\carsick\\OrbitOverlay.csproj",
+        "projectPath": "C:\\Users\\simon\\Documents\\dev\\orbital\\OrbitOverlay.csproj",
         "packagesPath": "C:\\Users\\simon\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\simon\\Documents\\dev\\carsick\\obj\\",
+        "outputPath": "C:\\Users\\simon\\Documents\\dev\\orbital\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

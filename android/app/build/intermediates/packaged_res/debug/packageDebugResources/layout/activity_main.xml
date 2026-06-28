@@ -17,12 +17,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
             <ImageView
-                android:src="@drawable/ic_steady_mark"
+                android:src="@drawable/ic_orbit_mark"
                 android:layout_marginEnd="12dp"
                 android:layout_width="34dp"
                 android:layout_height="34dp" />
             <TextView
-                android:text="Steady"
+                android:text="Orbit"
                 android:textColor="@color/text"
                 android:textSize="26sp"
                 android:textStyle="bold"
@@ -31,7 +31,7 @@
         </LinearLayout>
 
         <TextView
-            android:text="Sensor source for the Steady overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
+            android:text="Sensor source for the Orbit overlay on your laptop. Mount the phone in the car; this streams its motion over the local link."
             android:textColor="@color/muted"
             android:textSize="13sp"
             android:lineSpacingExtra="2dp"
@@ -132,13 +132,13 @@
                 android:layout_height="wrap_content">
                 <TextView
                     style="@style/FieldLabel"
-                    android:text="PC address (shown in the Steady panel under WiFi)"
+                    android:text="PC address (shown in the Orbit panel under WiFi)"
                     android:layout_marginTop="14dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
                 <EditText
                     android:id="@+id/host"
-                    style="@style/SteadyField"
+                    style="@style/OrbitField"
                     android:hint="192.168.x.x"
                     android:inputType="text"
                     android:layout_width="match_parent"
@@ -151,7 +151,7 @@
                     android:layout_height="wrap_content" />
                 <EditText
                     android:id="@+id/port"
-                    style="@style/SteadyField"
+                    style="@style/OrbitField"
                     android:hint="8443"
                     android:inputType="number"
                     android:layout_width="match_parent"
@@ -259,25 +259,52 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
+            <!-- ===== LIVE PREVIEW ===== -->
             <LinearLayout
                 style="@style/Card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
                 <TextView
                     style="@style/SectionLabel"
-                    android:text="PHONE MODE"
+                    android:text="PREVIEW"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
+                <FrameLayout
+                    android:id="@+id/previewContainer"
+                    android:background="@drawable/preview_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp">
+                    <com.orbit.phone.DotsView
+                        android:id="@+id/dotsPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                    <TextView
+                        android:id="@+id/demoPill"
+                        android:text="DEMO MOTION"
+                        android:textColor="@color/accent"
+                        android:textSize="10sp"
+                        android:letterSpacing="0.08"
+                        android:background="@drawable/demo_pill"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp"
+                        android:layout_margin="8dp"
+                        android:layout_gravity="top|end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </FrameLayout>
                 <TextView
-                    android:text="Float drifting cue dots over every app — read or browse normally while they ease motion sickness, driven by this phone's own motion sensor. No laptop needed."
-                    android:textColor="@color/muted"
-                    android:textSize="13sp"
+                    android:text="Demo motion — on the road the cue follows your real turns, acceleration and braking."
+                    android:textColor="@color/faint"
+                    android:textSize="12sp"
                     android:lineSpacingExtra="2dp"
+                    android:layout_marginTop="8dp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
-            <!-- live overlay settings (parity with the Windows panel) -->
+            <!-- ===== CUE STYLE ===== -->
             <LinearLayout
                 style="@style/Card"
                 android:layout_marginTop="14dp"
@@ -285,91 +312,99 @@
                 android:layout_height="wrap_content">
                 <TextView
                     style="@style/SectionLabel"
-                    android:text="OVERLAY SETTINGS"
+                    android:text="CUE STYLE"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
+                <HorizontalScrollView
+                    android:scrollbars="none"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <LinearLayout
+                        android:orientation="horizontal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content">
+                        <TextView android:id="@+id/styleDots" style="@style/StyleChip" android:text="Dots" />
+                        <TextView android:id="@+id/styleStreaks" style="@style/StyleChip" android:text="Streaks" />
+                        <TextView android:id="@+id/styleRails" style="@style/StyleChip" android:text="Rails" />
+                        <TextView android:id="@+id/styleHorizon" style="@style/StyleChip" android:text="Horizon" />
+                        <TextView android:id="@+id/styleGrid" style="@style/StyleChip" android:text="Flow" />
+                        <TextView android:id="@+id/styleChevrons" style="@style/StyleChip" android:text="Chevrons" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+                <TextView
+                    android:text="Every style follows your real motion — pick the look you like. Watch it above."
+                    android:textColor="@color/faint"
+                    android:textSize="12sp"
+                    android:layout_marginTop="8dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
 
-                <LinearLayout
+            <!-- ===== FEEL (intensity presets) ===== -->
+            <LinearLayout
+                style="@style/Card"
+                android:layout_marginTop="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    style="@style/SectionLabel"
+                    android:text="FEEL"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <RadioGroup
+                    android:id="@+id/rgPreset"
                     android:orientation="horizontal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
-                    <TextView
-                        style="@style/FieldLabel"
-                        android:text="Strength"
-                        android:layout_weight="1"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content" />
-                    <TextView
-                        android:id="@+id/tvStrengthVal"
-                        android:text="1.8×"
-                        android:textColor="@color/accent"
-                        android:textSize="13sp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-                <SeekBar
-                    android:id="@+id/seekStrength"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
+                    <RadioButton android:id="@+id/rbPresetCalm" style="@style/ChipRadio" android:text="Calm" />
+                    <RadioButton android:id="@+id/rbPresetBalanced" style="@style/ChipRadio" android:text="Balanced" />
+                    <RadioButton android:id="@+id/rbPresetStrong" style="@style/ChipRadio" android:text="Strong" />
+                    <RadioButton android:id="@+id/rbPresetCustom" style="@style/ChipRadio" android:text="Custom" />
+                </RadioGroup>
                 <LinearLayout
-                    android:orientation="horizontal"
-                    android:layout_marginTop="10dp"
+                    android:id="@+id/customBox"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_marginTop="6dp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
-                    <TextView
-                        style="@style/FieldLabel"
-                        android:text="Accel / brake response"
-                        android:layout_weight="1"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content" />
-                    <TextView
-                        android:id="@+id/tvLonVal"
-                        android:text="+1.5×"
-                        android:textColor="@color/accent"
-                        android:textSize="13sp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Movement" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvStrengthVal" style="@style/ValuePill" android:text="1.8×" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekStrength" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Opacity" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvOpacityVal" style="@style/ValuePill" android:text="100%" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekOpacity" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Density" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvDensityVal" style="@style/ValuePill" android:text="1.0×" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekDensity" android:layout_width="match_parent" android:layout_height="wrap_content" />
                 </LinearLayout>
-                <SeekBar
-                    android:id="@+id/seekLon"
-                    android:layout_width="match_parent"
+            </LinearLayout>
+
+            <!-- ===== APPEARANCE ===== -->
+            <LinearLayout
+                style="@style/Card"
+                android:layout_marginTop="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    style="@style/SectionLabel"
+                    android:text="APPEARANCE"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
+                <LinearLayout style="@style/RowLine">
+                    <TextView style="@style/FieldLabel" android:text="Size" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                    <TextView android:id="@+id/tvSizeVal" style="@style/ValuePill" android:text="1.0×" />
+                </LinearLayout>
+                <SeekBar android:id="@+id/seekSize" android:layout_width="match_parent" android:layout_height="wrap_content" />
                 <TextView
                     style="@style/FieldLabel"
-                    android:text="Drag right = accelerate sends dots down; left = up. Centre = off. Further out = stronger."
-                    android:textSize="11sp"
-                    android:layout_marginTop="2dp"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
-                <LinearLayout
-                    android:orientation="horizontal"
-                    android:layout_marginTop="10dp"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-                    <TextView
-                        style="@style/FieldLabel"
-                        android:text="Dot size"
-                        android:layout_weight="1"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content" />
-                    <TextView
-                        android:id="@+id/tvSizeVal"
-                        android:text="1.0×"
-                        android:textColor="@color/accent"
-                        android:textSize="13sp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-                <SeekBar
-                    android:id="@+id/seekSize"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
-                <TextView
-                    style="@style/FieldLabel"
-                    android:text="Dot colour"
+                    android:text="Colour"
                     android:layout_marginTop="12dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
@@ -379,53 +414,142 @@
                     android:layout_marginTop="4dp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
-                    <RadioButton
-                        android:id="@+id/rbLight"
-                        android:text="Light"
-                        android:textColor="@color/text"
-                        android:layout_marginEnd="20dp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                    <RadioButton
-                        android:id="@+id/rbMixed"
-                        android:text="Mixed"
-                        android:textColor="@color/text"
-                        android:checked="true"
-                        android:layout_marginEnd="20dp"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
-                    <RadioButton
-                        android:id="@+id/rbDark"
-                        android:text="Dark"
-                        android:textColor="@color/text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                    <RadioButton android:id="@+id/rbLight" style="@style/ChipRadio" android:text="Light" />
+                    <RadioButton android:id="@+id/rbMixed" style="@style/ChipRadio" android:text="Mixed" android:checked="true" />
+                    <RadioButton android:id="@+id/rbDark" style="@style/ChipRadio" android:text="Dark" />
+                    <RadioButton android:id="@+id/rbColorCustom" style="@style/ChipRadio" android:text="Accent" />
                 </RadioGroup>
-
-                <CheckBox
-                    android:id="@+id/cbAutoHide"
-                    android:text="Auto-hide dots when stopped"
-                    android:textColor="@color/text"
+                <LinearLayout
+                    android:id="@+id/accentRow"
+                    android:orientation="horizontal"
+                    android:visibility="gone"
                     android:layout_marginTop="8dp"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content">
+                    <TextView android:id="@+id/chipAccentTeal" style="@style/StyleChip" android:text="Teal" />
+                    <TextView android:id="@+id/chipAccentAmber" style="@style/StyleChip" android:text="Amber" />
+                    <TextView android:id="@+id/chipAccentBlue" style="@style/StyleChip" android:text="Blue" />
+                </LinearLayout>
+            </LinearLayout>
 
+            <!-- ===== COMFORT ===== -->
+            <LinearLayout
+                style="@style/Card"
+                android:layout_marginTop="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
                 <TextView
-                    android:text="Light reads on dark apps, Dark on light ones, Mixed works on either. Auto-hide fades the dots when the car is stopped."
+                    style="@style/SectionLabel"
+                    android:text="COMFORT"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <CheckBox
+                    android:id="@+id/cbAutoHide"
+                    android:text="Fade the cue when you stop"
+                    android:textColor="@color/text"
+                    android:buttonTint="@color/accent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+                <TextView
+                    android:text="Fades the cue when the vehicle is stopped — including underground where there's no GPS. Turn off to keep it always visible."
                     android:textColor="@color/faint"
                     android:textSize="12sp"
                     android:lineSpacingExtra="2dp"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="6dp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <!-- ===== ADVANCED (collapsed) ===== -->
+            <LinearLayout
+                style="@style/Card"
+                android:layout_marginTop="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    android:id="@+id/advancedToggle"
+                    android:text="Advanced ▾"
+                    android:textColor="@color/accent"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.04"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+                <LinearLayout
+                    android:id="@+id/advancedBox"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Accel / brake response" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvLonVal" style="@style/ValuePill" android:text="1.5×" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekLon" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="Higher = accel and braking move the cue more. Direction is automatic for any seat. 0 = no accel/brake cue."
+                        android:textSize="11sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <TextView style="@style/FieldLabel" android:text="Cue motion model" android:layout_marginTop="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    <RadioGroup
+                        android:id="@+id/rgCueModel"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <RadioButton android:id="@+id/rbModelFlow" style="@style/ChipRadio" android:text="Flow" android:checked="true" />
+                        <RadioButton android:id="@+id/rbModelPulse" style="@style/ChipRadio" android:text="Pulse" />
+                    </RadioGroup>
+
+                    <TextView style="@style/FieldLabel" android:text="Coverage" android:layout_marginTop="12dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    <RadioGroup
+                        android:id="@+id/rgPlacement"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <RadioButton android:id="@+id/rbPlaceStrips" style="@style/ChipRadio" android:text="Side strips" android:checked="true" />
+                        <RadioButton android:id="@+id/rbPlaceFull" style="@style/ChipRadio" android:text="Full frame" />
+                    </RadioGroup>
+
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Smoothness / trail" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvDecayVal" style="@style/ValuePill" android:text="0.92" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekDecay" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Hide sensitivity" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvHideVal" style="@style/ValuePill" android:text="1.0×" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekHide" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                    <Button
+                        android:id="@+id/btnReset"
+                        android:text="Reset to defaults"
+                        android:textColor="@color/accent"
+                        android:textAllCaps="false"
+                        android:background="@drawable/btn_outline"
+                        android:layout_marginTop="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/tvOverlayPerm"
-                android:text="Steady needs permission to draw over other apps. Tap Start and allow it."
-                android:textColor="@color/danger"
+                android:text="One-time setup: allow Orbit to draw over other apps when you tap Start."
+                android:textColor="@color/muted"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"
+                android:background="@drawable/info_card"
+                android:padding="12dp"
                 android:visibility="gone"
                 android:layout_marginTop="16dp"
                 android:layout_width="match_parent"
@@ -433,7 +557,7 @@
 
             <Button
                 android:id="@+id/btnOverlay"
-                android:text="Start dots overlay"
+                android:text="Start cue overlay"
                 android:textColor="@color/bg"
                 android:textStyle="bold"
                 android:textSize="16sp"

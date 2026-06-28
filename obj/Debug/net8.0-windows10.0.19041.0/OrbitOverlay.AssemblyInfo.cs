@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OrbitOverlay")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+38bdb94cd517c67e62249571fce0c473a4d023bc")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d398ed6c2a2ea1da08812cd42692941867d0d740")]
 [assembly: System.Reflection.AssemblyProductAttribute("OrbitOverlay")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OrbitOverlay")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

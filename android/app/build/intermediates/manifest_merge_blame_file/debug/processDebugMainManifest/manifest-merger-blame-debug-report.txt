@@ -1,6 +1,6 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-3    package="com.steady.phone"
+3    package="com.orbit.phone"
 4    android:versionCode="1"
 5    android:versionName="1.0" >
 6
@@ -9,138 +9,138 @@
 9        android:targetSdkVersion="34" />
 10
 11    <uses-permission android:name="android.permission.INTERNET" />
-11-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:5-67
-11-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:4:22-64
+11-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:4:5-67
+11-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:4:22-64
 12    <uses-permission android:name="android.permission.WAKE_LOCK" />
-12-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:5-68
-12-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:5:22-65
+12-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:5:5-68
+12-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:5:22-65
 13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-13-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:5-77
-13-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:6:22-74
+13-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:6:5-77
+13-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:6:22-74
 14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-14-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:5-87
-14-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:7:22-84
+14-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:7:5-87
+14-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:7:22-84
 15    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-15-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:5-77
-15-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:8:22-74
+15-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:8:5-77
+15-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:8:22-74
 16
 17    <!-- Phone mode: draw the cue dots as a system overlay on top of other apps -->
 18    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-18-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:5-78
-18-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:11:22-75
+18-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:11:5-78
+18-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:11:22-75
 19    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-19-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:5-89
-19-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:12:22-86
+19-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:12:5-89
+19-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:12:22-86
 20
 21    <!-- Optional GPS in-vehicle gate (framework LocationManager; degrades gracefully if denied) -->
 22    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-22-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:5-79
-22-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:15:22-76
+22-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:15:5-79
+22-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:15:22-76
 23    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-23-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:5-81
-23-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:16:22-78
+23-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:16:5-81
+23-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:16:22-78
 24    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:17:5-86
-24-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:17:22-83
+24-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:17:5-86
+24-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:17:22-83
 25
 26    <!-- Bluetooth transport (RFCOMM/SPP to the paired laptop) -->
 27    <uses-permission
-27-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:5-95
+27-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:20:5-95
 28        android:name="android.permission.BLUETOOTH"
-28-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:22-65
+28-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:20:22-65
 29        android:maxSdkVersion="30" />
-29-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:20:66-92
+29-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:20:66-92
 30    <uses-permission
-30-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:21:5-101
+30-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:21:5-101
 31        android:name="android.permission.BLUETOOTH_ADMIN"
-31-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:21:22-71
+31-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:21:22-71
 32        android:maxSdkVersion="30" />
-32-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:21:72-98
+32-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:21:72-98
 33    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-33-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:5-76
-33-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:22:22-73
+33-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:22:5-76
+33-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:22:22-73
 34
 35    <application
-35-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:24:5-63:19
+35-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:24:5-63:19
 36        android:allowBackup="true"
-36-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:25:9-35
+36-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:25:9-35
 37        android:debuggable="true"
 38        android:extractNativeLibs="false"
 39        android:icon="@mipmap/ic_launcher"
-39-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:26:9-43
-40        android:label="Steady Phone"
-40-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:28:9-37
+39-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:26:9-43
+40        android:label="Orbit"
+40-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:28:9-30
 41        android:roundIcon="@mipmap/ic_launcher_round"
-41-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:27:9-54
+41-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:27:9-54
 42        android:supportsRtl="true"
-42-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:29:9-35
-43        android:theme="@style/Theme.Steady" >
-43-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:30:9-44
+42-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:29:9-35
+43        android:theme="@style/Theme.Orbit" >
+43-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:30:9-43
 44        <activity
-44-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:32:9-47:20
-45            android:name="com.steady.phone.MainActivity"
-45-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:33:13-41
+44-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:32:9-47:20
+45            android:name="com.orbit.phone.MainActivity"
+45-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:33:13-41
 46            android:exported="true"
-46-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:35:13-36
+46-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:35:13-36
 47            android:launchMode="singleTop" >
-47-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:34:13-43
+47-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:34:13-43
 48            <intent-filter>
-48-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:36:13-39:29
+48-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:36:13-39:29
 49                <action android:name="android.intent.action.MAIN" />
-49-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:37:17-69
-49-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:37:25-66
+49-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:37:17-69
+49-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:37:25-66
 50
 51                <category android:name="android.intent.category.LAUNCHER" />
-51-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:38:17-77
-51-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:38:27-74
+51-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:38:17-77
+51-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:38:27-74
 52            </intent-filter>
-53            <!-- QR/link deep link: steady://connect?host=<ip>&port=<port> opens the app pre-filled -->
+53            <!-- QR/link deep link: orbit://connect?host=<ip>&port=<port> opens the app pre-filled -->
 54            <intent-filter>
-54-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:41:13-46:29
+54-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:41:13-46:29
 55                <action android:name="android.intent.action.VIEW" />
-55-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:17-69
-55-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:42:25-66
+55-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:42:17-69
+55-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:42:25-66
 56
 57                <category android:name="android.intent.category.DEFAULT" />
-57-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:17-76
-57-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:43:27-73
+57-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:43:17-76
+57-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:43:27-73
 58                <category android:name="android.intent.category.BROWSABLE" />
-58-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:44:17-78
-58-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:44:27-75
+58-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:44:17-78
+58-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:44:27-75
 59
 60                <data
-60-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:45:17-72
+60-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:45:17-71
 61                    android:host="connect"
-61-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:45:47-69
-62                    android:scheme="steady" />
-62-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:45:23-46
+61-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:45:46-68
+62                    android:scheme="orbit" />
+62-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:45:23-45
 63            </intent-filter>
 64        </activity>
 65
 66        <!-- Phone mode: system-wide click-through dots overlay driven by the phone's own sensor -->
 67        <service
-67-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:50:9-57:19
-68            android:name="com.steady.phone.OverlayService"
-68-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:51:13-43
+67-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:50:9-57:19
+68            android:name="com.orbit.phone.OverlayService"
+68-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:51:13-43
 69            android:exported="false"
-69-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:52:13-37
+69-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:52:13-37
 70            android:foregroundServiceType="specialUse|location" >
-70-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:53:13-64
+70-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:53:13-64
 71            <property
-71-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:54:13-56:296
+71-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:54:13-56:296
 72                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-72-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:55:17-76
+72-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:55:17-76
 73                android:value="Draws a cosmetic, click-through motion-sickness cue overlay (drifting dots) on top of other apps, driven by the device accelerometer, so the user can read or browse while reducing motion sickness in a moving vehicle. Stoppable from its persistent notification." />
-73-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:56:17-293
+73-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:56:17-293
 74        </service>
 75        <service
-75-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:59:9-62:65
-76            android:name="com.steady.phone.SensorService"
-76-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:60:13-42
+75-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:59:9-62:65
+76            android:name="com.orbit.phone.SensorService"
+76-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:60:13-42
 77            android:exported="false"
-77-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:61:13-37
+77-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:61:13-37
 78            android:foregroundServiceType="dataSync|location" />
-78-->C:\Users\simon\Documents\dev\carsick\android\app\src\main\AndroidManifest.xml:62:13-62
+78-->C:\Users\simon\Documents\dev\orbital\android\app\src\main\AndroidManifest.xml:62:13-62
 79    </application>
 80
 81</manifest>

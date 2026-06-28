@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.steady.phone"
+    package="com.orbit.phone"
     android:versionCode="1"
     android:versionName="1.0" >
 
@@ -37,12 +37,12 @@
         android:debuggable="true"
         android:extractNativeLibs="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="Steady Phone"
+        android:label="Orbit"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Steady" >
+        android:theme="@style/Theme.Orbit" >
         <activity
-            android:name="com.steady.phone.MainActivity"
+            android:name="com.orbit.phone.MainActivity"
             android:exported="true"
             android:launchMode="singleTop" >
             <intent-filter>
@@ -50,7 +50,7 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- QR/link deep link: steady://connect?host=<ip>&port=<port> opens the app pre-filled -->
+            <!-- QR/link deep link: orbit://connect?host=<ip>&port=<port> opens the app pre-filled -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -59,13 +59,13 @@
 
                 <data
                     android:host="connect"
-                    android:scheme="steady" />
+                    android:scheme="orbit" />
             </intent-filter>
         </activity>
 
         <!-- Phone mode: system-wide click-through dots overlay driven by the phone's own sensor -->
         <service
-            android:name="com.steady.phone.OverlayService"
+            android:name="com.orbit.phone.OverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse|location" >
             <property
@@ -73,7 +73,7 @@
                 android:value="Draws a cosmetic, click-through motion-sickness cue overlay (drifting dots) on top of other apps, driven by the device accelerometer, so the user can read or browse while reducing motion sickness in a moving vehicle. Stoppable from its persistent notification." />
         </service>
         <service
-            android:name="com.steady.phone.SensorService"
+            android:name="com.orbit.phone.SensorService"
             android:exported="false"
             android:foregroundServiceType="dataSync|location" />
     </application>
