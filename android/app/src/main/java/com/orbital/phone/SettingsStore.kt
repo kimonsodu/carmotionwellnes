@@ -41,8 +41,7 @@ object SettingsStore {
     const val K_FLIP_H = "ph_flipH"              // Bool reverse the horizontal (turn) cue direction
     const val K_SWAP = "ph_swap"                 // Bool swap which axis drives vertical vs horizontal
     const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..7 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill (test-only synthetic motion)
-    const val K_SIM_SIDE = "ph_simSide"          // Bool sim seating: side-facing (train, psi=90) — applies to any scenario
-    const val K_SIM_REAR = "ph_simRear"          // Bool sim seating: rear-facing (psi=180) — applies to any scenario
+    const val K_SIM_SEAT = "ph_simSeat"          // Int 0..3 sim seating orientation: 0 Forward / 1 Left side / 2 Right side / 3 Rear — applies to any scenario
 
     // ---- defaults ----
     const val DEF_STRENGTH = 1.8f
@@ -67,7 +66,7 @@ object SettingsStore {
     const val DEF_FLIP_GRADE = false
     const val DEF_FLIP_H = false
     const val DEF_SWAP = false
-    const val DEF_SIM_SEAT = false          // sim seating toggles default off (forward-facing)
+    const val DEF_SIM_SEAT = 0              // sim seating defaults to forward-facing
 
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -91,16 +90,14 @@ object SettingsStore {
     fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
     fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
     fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 7)
-    fun simSide(c: Context) = prefs(c).getBoolean(K_SIM_SIDE, DEF_SIM_SEAT)
-    fun simRear(c: Context) = prefs(c).getBoolean(K_SIM_REAR, DEF_SIM_SEAT)
+    fun simSeat(c: Context) = prefs(c).getInt(K_SIM_SEAT, DEF_SIM_SEAT).coerceIn(0, 3)
     fun flipV(c: Context) = prefs(c).getBoolean(K_FLIP_V, DEF_FLIP_V)
     fun flipGrade(c: Context) = prefs(c).getBoolean(K_FLIP_GRADE, DEF_FLIP_GRADE)
     fun flipH(c: Context) = prefs(c).getBoolean(K_FLIP_H, DEF_FLIP_H)
     fun swap(c: Context) = prefs(c).getBoolean(K_SWAP, DEF_SWAP)
 
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
-    fun setSimSide(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_SIM_SIDE, v).apply()
-    fun setSimRear(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_SIM_REAR, v).apply()
+    fun setSimSeat(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SEAT, v.coerceIn(0, 3)).apply()
     fun setFlipV(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_V, v).apply()
     fun setFlipGrade(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_GRADE, v).apply()
     fun setFlipH(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_H, v).apply()
@@ -164,7 +161,7 @@ object SettingsStore {
         K_CUE_STYLE, K_OPACITY, K_DENSITY, K_ACCENT_COLOR, K_CUE_MODEL, K_PLACEMENT, K_DECAY, K_HIDE_SENS,
         K_GRADE_GAIN, K_FLIP_V, K_FLIP_GRADE, K_FLIP_H, K_SWAP,
         K_SIM_SCENARIO,  // a running overlay switches between real-sensor and sim feed when this flips
-        K_SIM_SIDE, K_SIM_REAR   // sim seating heading — overlay re-reads and re-applies to the sim source
+        K_SIM_SEAT       // sim seating orientation — overlay re-reads and re-applies to the sim source
     )
 
     /** Immutable snapshot the overlay (and the in-app preview) consume when settings change. */

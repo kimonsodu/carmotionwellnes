@@ -578,17 +578,14 @@
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content" />
-                    <LinearLayout
-                        android:orientation="horizontal"
-                        android:layout_marginTop="4dp"
+                    <Spinner
+                        android:id="@+id/spSeat"
+                        android:layout_marginTop="6dp"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content">
-                        <CheckBox android:id="@+id/cbSimSide" android:text="Side-facing seat" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-                        <CheckBox android:id="@+id/cbSimRear" android:text="Rear-facing seat" android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-                    </LinearLayout>
+                        android:layout_height="wrap_content" />
                     <TextView
                         style="@style/FieldLabel"
-                        android:text="Seat orientation applied to the scenario above — test accel, turns, hills from a side-facing (train) or rear-facing seat."
+                        android:text="Which way the rider faces (applied to the scenario above) — test accel, turns and hills facing forward, left, right, or the rear."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

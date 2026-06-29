@@ -50,8 +50,7 @@ class MainActivity : Activity() {
     private lateinit var cbFlipGrade: CheckBox
     private lateinit var cbFlipH: CheckBox
     private lateinit var cbSwap: CheckBox
-    private lateinit var cbSimSide: CheckBox
-    private lateinit var cbSimRear: CheckBox
+    private lateinit var spSeat: Spinner
     private lateinit var seekSize: SeekBar
     private lateinit var rgColor: RadioGroup
     private lateinit var cbAutoHide: CheckBox
@@ -113,8 +112,7 @@ class MainActivity : Activity() {
         cbFlipGrade = findViewById(R.id.cbFlipGrade)
         cbFlipH = findViewById(R.id.cbFlipH)
         cbSwap = findViewById(R.id.cbSwap)
-        cbSimSide = findViewById(R.id.cbSimSide)
-        cbSimRear = findViewById(R.id.cbSimRear)
+        spSeat = findViewById(R.id.spSeat)
         seekSize = findViewById(R.id.seekSize)
         rgColor = findViewById(R.id.rgDotColor)
         cbAutoHide = findViewById(R.id.cbAutoHide)
@@ -388,13 +386,19 @@ class MainActivity : Activity() {
             }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
-        // Seating toggles: applied to ANY sim scenario above (side-facing 90°, rear-facing 180°).
-        cbSimSide.setOnCheckedChangeListener(null)
-        cbSimSide.isChecked = SettingsStore.simSide(this)
-        cbSimSide.setOnCheckedChangeListener { _, on -> SettingsStore.setSimSide(this, on) }
-        cbSimRear.setOnCheckedChangeListener(null)
-        cbSimRear.isChecked = SettingsStore.simRear(this)
-        cbSimRear.setOnCheckedChangeListener { _, on -> SettingsStore.setSimRear(this, on) }
+        // Seating orientation: applied to ANY sim scenario above (Forward / Left / Right / Rear).
+        val seatNames = listOf("Facing forward", "Facing left", "Facing right", "Facing rear")
+        val seatAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, seatNames)
+        seatAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spSeat.adapter = seatAdapter
+        spSeat.onItemSelectedListener = null
+        spSeat.setSelection(SettingsStore.simSeat(this), false)
+        spSeat.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                SettingsStore.setSimSeat(this@MainActivity, pos)
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
 
         // ---- Advanced: reset ----
         btnReset.setOnClickListener {

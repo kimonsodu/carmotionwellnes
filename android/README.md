@@ -65,11 +65,12 @@ scenario:
 
 - **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades — so you
   can watch every axis respond in turn.
-- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill) ease in and hold so
-  you can study one motion.
-- **Seat orientation** — the *Side-facing* and *Rear-facing* tick-boxes apply to whatever scenario
-  is selected, so you can run accel/turns/hills as if seated sideways (train) or facing the rear.
-  Both = the other side.
+- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill) repeat on a short
+  loop (maneuver → rest) so you can study one motion — and clearly see it mirror between the left
+  and right seats — instead of the cue fading after a second.
+- **Seat orientation** — which way the rider faces (*forward / left / right / rear*), applied to
+  whatever scenario is selected, so you can run accel/turns/hills from any seat (facing left and
+  facing right are the two sideways/train cases).
 
 Simulation feeds synthetic IMU through the *same* motion pipeline as the real sensors (gravity
 removal, gates, smoothing and the cue render are all exercised), and **overrides** the real

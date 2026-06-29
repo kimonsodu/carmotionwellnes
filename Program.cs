@@ -466,6 +466,8 @@ namespace OrbitalOverlay
         const double Deg = Math.PI / 180.0;
         const double Ramp = 0.6;            // smoothstep ease-in/out per active phase (s) so the cue glides
         const double GradeRate = 4.5;       // deg/s max road-grade pitch rate -> stays under the lid-tilt reject knee (6)
+        const double SingleOn = 2.6, SingleOff = 1.8;   // a single held scenario loops [maneuver -> rest] so its
+                                                        // transient re-fires (a constant accel is absorbed by the gravity estimate)
 
         public SimScenario Scenario = SimScenario.Off;
         // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
@@ -544,9 +546,17 @@ namespace OrbitalOverlay
             else
             {
                 var p = Single(Scenario);
-                double s = SmoothStep(0, Ramp, t);      // ease in, then hold
-                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
-                gradeTarget = p.Grade; PhaseName = p.Name;
+                double cyc = t % (SingleOn + SingleOff);     // loop maneuver -> rest so the cue re-fires
+                if (cyc < SingleOn)
+                {
+                    double s = Math.Min(SmoothStep(0, Ramp, cyc), SmoothStep(0, Ramp, SingleOn - cyc));  // ease in + out
+                    aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
+                    gradeTarget = p.Grade; PhaseName = p.Name;
+                }
+                else
+                {
+                    aFwd = 0; aRight = 0; yaw = 0; gradeTarget = 0; PhaseName = "Rest";
+                }
             }
             psi = SeatPsi;                              // seating heading applies to whatever scenario is running
 
@@ -561,12 +571,16 @@ namespace OrbitalOverlay
             // ψ=0 -> x = aRight, y = aFwd (normal car seat); ψ=90 -> forward lands on device-x (train).
             double pr = psi * Deg, th = grade * Deg;
             double sinp = Math.Sin(pr), cosp = Math.Cos(pr);
-            double lx = aFwd * sinp + aRight * cosp;
-            double ly = aFwd * cosp - aRight * sinp;
+            // Grade leans gravity along VEHICLE-FORWARD (sinp,cosp), which the seating heading rotates
+            // too — so a side-facing seat puts the hill cue on the lateral axis (90°), like accel/brake.
+            double leanFwd = -G * Math.Sin(th);
+            double lx = aFwd * sinp + aRight * cosp + leanFwd * sinp;
+            double ly = aFwd * cosp - aRight * sinp + leanFwd * cosp;
             Ax = lx;
-            Ay = -G * Math.Sin(th) + ly;                    // road-grade longitudinal component via the gravity path
+            Ay = ly;
             Az = G * Math.Cos(th);
-            Gx = pitchRate; Gy = 0; Gz = yaw;               // gyro: pitch about x during grade ramp, yaw about z
+            // pitch gyro about the vehicle-RIGHT axis (cosp,-sinp) so it rotates with the seat; yaw about z
+            Gx = pitchRate * cosp; Gy = -pitchRate * sinp; Gz = yaw;
         }
     }
 
@@ -1142,11 +1156,16 @@ namespace OrbitalOverlay
             }
         }
 
-        // Seating heading for the simulator: side-facing (train) and/or rear-facing add 90°/180°.
-        // Both = 270° (the other side). Applies to whatever scenario is running.
-        public void SetSimSeating(bool sideFacing, bool rearFacing)
+        // Seating orientation for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) /
+        // 3 Rear (180°). Applies to whatever scenario is running.
+        public void SetSimSeat(int seat)
         {
-            sim.SeatPsi = (sideFacing ? 90 : 0) + (rearFacing ? 180 : 0);
+            sim.SeatPsi = seat switch { 1 => 90, 2 => 270, 3 => 180, _ => 0 };
+            // The accel/turn cue is a transient that decays as the gravity estimate is absorbed, so
+            // flipping the seat mid-hold would just flip an already-zero residual (looks like "no
+            // change"). Replay the maneuver from the start with a re-armed pipeline so it re-fires in
+            // the new seat's mirrored direction.
+            if (Simulating) { sim.Reset(); ArmForNewSource(); }
         }
 
         // Synthesize one frame and write it into the raw fields — mirrors FeedPhone
@@ -1849,22 +1868,35 @@ namespace OrbitalOverlay
             }
             simCard.Children.Add(simWrap);
 
-            // Seating: orthogonal toggles applied to ANY scenario above, so you can test accel/turn/
-            // hills from a side-facing (train) or rear-facing seat. Both on = the other side (270°).
+            // Seating: orthogonal selector applied to ANY scenario above, so you can test accel/turn/
+            // hills from a forward, left-side, right-side or rear-facing seat (train).
             simCard.Children.Add(Styled(new TextBlock
             {
                 Text = "Seat orientation (applies to every scenario):",
                 Margin = new Thickness(0, 6, 0, 4)
             }, "FaintText"));
-            var simSeatSide = Toggle("Side-facing seat (train)");
-            var simSeatRear = Toggle("Rear-facing seat");
-            simSeatSide.ToolTip = "Run the chosen scenario as if seated sideways (forward motion lands on the left/right channel).";
-            simSeatRear.ToolTip = "Run the chosen scenario as if seated facing the rear.";
-            void ApplySeat() => ov.SetSimSeating(simSeatSide.IsChecked == true, simSeatRear.IsChecked == true);
-            simSeatSide.Checked += (s, e) => ApplySeat(); simSeatSide.Unchecked += (s, e) => ApplySeat();
-            simSeatRear.Checked += (s, e) => ApplySeat(); simSeatRear.Unchecked += (s, e) => ApplySeat();
-            simCard.Children.Add(simSeatSide);
-            simCard.Children.Add(simSeatRear);
+            var seatLabels = new[] { "Facing fwd", "Facing left", "Facing right", "Facing rear" };
+            var seatWrap = new WrapPanel();
+            var seatBtns = new Button[seatLabels.Length];
+            void HighlightSeat(int idx)
+            {
+                for (int i = 0; i < seatBtns.Length; i++)
+                {
+                    seatBtns[i].Background = i == idx ? Brush("AccentBrush") : Brush("CardHiBrush");
+                    seatBtns[i].Foreground = i == idx ? Brush("BgBrush") : Brush("TextBrush");
+                }
+            }
+            for (int i = 0; i < seatLabels.Length; i++)
+            {
+                int idx = i;
+                var b = Styled(new Button { Content = seatLabels[i], Margin = new Thickness(0, 0, 6, 6), MinWidth = 84 }, "OrbitButton");
+                b.ToolTip = "Run the chosen scenario seated " + seatLabels[idx].ToLower() + " (which way the rider looks).";
+                b.Click += (s, e) => { HighlightSeat(idx); ov.SetSimSeat(idx); };
+                seatBtns[i] = b;
+                seatWrap.Children.Add(b);
+            }
+            simCard.Children.Add(seatWrap);
+            HighlightSeat(0);
 
             var simPhaseLbl = Styled(new TextBlock { Text = "Off", Margin = new Thickness(2, 6, 0, 0) }, "FaintText");
             simCard.Children.Add(simPhaseLbl);

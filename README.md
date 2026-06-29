@@ -64,12 +64,11 @@ auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the 
 - **Off** (default every launch) — the real sensor drives the dots, exactly as normal.
 - **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
   uphill/downhill (road grade). The active phase name shows live under the buttons.
-- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) to hold it
-  continuously for focused testing.
-- **Seat orientation** — two toggles (*Side-facing*, *Rear-facing*) apply to *whatever* scenario
-  is running, so you can test accel/turns/hills as if seated sideways on a train or facing the
-  rear. Both on = the other side. (Sideways seating shows forward motion on the left/right
-  channel; rear-facing reverses it.)
+- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) — it repeats on a
+  short loop (maneuver → rest) for focused testing, so the cue keeps re-firing instead of fading.
+- **Seat orientation** — which way the rider faces (*forward / left / right / rear*), applied to
+  *whatever* scenario is running, so you can test accel/turns/hills from any seat. Facing left or
+  right shows forward motion (and hills) on the left/right channel; facing rear reverses it.
 
 While a scenario other than Off is selected the simulation **overrides the real sensor**; switch
 back to **Off** to return to it. Simulation is a test aid — it's never persisted, so the app

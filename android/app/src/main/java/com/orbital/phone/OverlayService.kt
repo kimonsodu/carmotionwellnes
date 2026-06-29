@@ -62,7 +62,6 @@ class OverlayService : Service(), SensorEventListener,
     @Volatile private var haveR = false
     // ---- Simulation Mode (test aid): synthetic IMU OVERRIDES the real sensors while ON ----
     private val sim = MotionSimulator()
-    private val Ridentity = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)   // device flat / screen up = ENU
     @Volatile private var simScenario = MotionSimulator.OFF   // 0 = Off -> original real-sensor behaviour
     @Volatile private var simRunning = false
     private var lm: LocationManager? = null
@@ -202,7 +201,7 @@ class OverlayService : Service(), SensorEventListener,
             val s = sim.step()
             simPhase = s.phase                             // surface the active scenario phase to the app UI
             vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
-            val o = vf.onAccel(s.accel, false, Ridentity, System.nanoTime())   // raw accel incl. gravity, R = identity
+            val o = vf.onAccel(s.accel, false, s.R, System.nanoTime())   // raw accel + R from sim (grade+seat), so the hill cue fires like a real rotation-vector phone
             view?.feed(o.screenX, o.screenY, o.grade, o.enable)
             sensorHandler?.postDelayed(this, 16L)          // ~62 Hz self-repost
         }
@@ -273,23 +272,27 @@ class OverlayService : Service(), SensorEventListener,
 
     // Live settings: any overlay key changes -> push a fresh snapshot on the UI thread.
     override fun onSharedPreferenceChanged(sp: SharedPreferences?, key: String?) {
-        if (key == SettingsStore.K_SIM_SCENARIO) {
-            // Switch the feed live on the sensor thread so it serialises with the running sim/IMU loop.
-            val newScn = SettingsStore.simScenario(this)
+        // A sim scenario OR seat change restarts the source cleanly on the sensor thread (serialises
+        // with the running loop). The seat case also REPLAYS the maneuver from the start with a fresh
+        // filter — the accel/turn cue is a transient that decays as gravity is absorbed, so flipping
+        // the seat mid-hold would otherwise just flip an already-zero residual (looks like "no change /
+        // both seats the same"). Replaying re-fires the transient in the new seat's mirrored direction.
+        if (key == SettingsStore.K_SIM_SCENARIO || key == SettingsStore.K_SIM_SEAT) {
+            val seatOnly = key == SettingsStore.K_SIM_SEAT
             sensorHandler?.post {
-                simScenario = newScn
-                sim.setScenario(newScn)
-                if (sensing) {                              // tear down the current source, bring up the right one
+                simScenario = SettingsStore.simScenario(this)
+                applySimSeat()
+                sim.setScenario(simScenario)                // clock back to 0 -> the maneuver replays
+                // A seat-only change while in real-sensor mode (scenario=Off) is a no-op — don't tear
+                // down the live IMU/GPS. Otherwise restart the source (sim<->real switch, or replay).
+                if (sensing && !(seatOnly && simScenario == MotionSimulator.OFF)) {
                     stopSimLoop()
                     try { sm?.unregisterListener(this) } catch (_: Exception) {}
                     stopGps()
-                    haveR = false
-                    if (newScn != MotionSimulator.OFF) startSimLoop() else { registerSensors(); startGps() }
+                    vf.reset(); haveR = false               // fresh gravity/baseline so the replay isn't masked by stale state
+                    if (simScenario != MotionSimulator.OFF) startSimLoop() else { registerSensors(); startGps() }
                 }
             }
-        }
-        if (key == SettingsStore.K_SIM_SIDE || key == SettingsStore.K_SIM_REAR) {
-            sensorHandler?.post { applySimSeat() }              // re-apply seating to the running sim source
         }
         if (key in SettingsStore.LIVE_KEYS) {
             val snap = SettingsStore.snapshot(this)
@@ -297,10 +300,9 @@ class OverlayService : Service(), SensorEventListener,
         }
     }
 
-    /** Seating heading for the simulator from the two seat toggles (side 90° + rear 180°). */
+    /** Seating heading for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) / 3 Rear (180°). */
     private fun applySimSeat() {
-        sim.seatPsiDeg = (if (SettingsStore.simSide(this)) 90f else 0f) +
-                         (if (SettingsStore.simRear(this)) 180f else 0f)
+        sim.seatPsiDeg = when (SettingsStore.simSeat(this)) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
     }
 
     private fun startForegroundNotification() {

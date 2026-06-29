@@ -77,6 +77,20 @@ class VehicleFilter {
     @Volatile private var gpsBearingRad = 0f
     @Volatile private var haveBearing = false
 
+    /** Clear all integrator/gravity/baseline state so the next sample starts fresh (no carried-over
+     *  gravity estimate or settled accel). Used when the source switches (e.g. a sim seat/scenario
+     *  change) so a held maneuver REPLAYS its transient cleanly instead of reading a decayed residual.
+     *  Leaves externally-owned screenRot + GPS fields untouched. */
+    fun reset() {
+        grav[0] = 0f; grav[1] = 0f; grav[2] = 0f; gravInit = false
+        lpF = 0f; lpR = 0f; baseF = 0f; baseR = 0f
+        lpX = 0f; lpY = 0f; baseX = 0f; baseY = 0f; prevSX = 0f; prevSY = 0f
+        fPrevX = 0f; fPrevY = 1f; fPrevZ = 0f
+        gradeBase = 0f; gradeInit = false; gradeSig = 0f
+        hdgE = 0f; hdgN = 1f; yawLp = 0f; gmag = 0f
+        prevLon = 0f; prevLat = 0f; moveOn = false; moveFrames = 0; gainEnv = 0f; lastNs = 0L
+    }
+
     /** Gyro sample (rad/s, device frame). z ~ vehicle vertical -> yaw. */
     fun onGyro(gx: Float, gy: Float, gz: Float) {
         val m = sqrt(gx * gx + gy * gy + gz * gz)

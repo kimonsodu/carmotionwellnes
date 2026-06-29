@@ -157,7 +157,9 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         } else {
             sx = inScreenX; sy = inScreenY; enable = inEnable.coerceIn(0f, 1f)
         }
-        val grade = if (demoMode) 0f else inGrade   // hill cue (0 in the desk preview)
+        // hill cue. In the desk preview synthesize a slow grade (out of phase with accel/brake) so the
+        // Hill/grade strength and Flip ⛰ controls are actually visible there; live overlay uses inGrade.
+        val grade = if (demoMode) 1.1f * sin(demoT / 60f * 0.4f + 2.2f) else inGrade
 
         // Inputs are ALREADY screen-relative, band-passed, gyro-gated, jerk-limited, deadbanded by
         // VehicleFilter — DotsView only integrates to drift. Direction is AUTOMATIC for any seat:

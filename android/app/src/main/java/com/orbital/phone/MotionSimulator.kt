@@ -11,9 +11,12 @@ import kotlin.math.sin
  * [OverlayService] feeds these samples into the SAME [VehicleFilter] entry points the real sensors
  * use (see SIM_SPEC.md). Identical physics to the Windows build so both platforms test the same.
  *
- * Frame: device flat / screen up = world ENU, R = identity. x=right(East), y=forward(North), z=up,
+ * Frame: device flat / screen up = world ENU. x=right(East), y=forward(North), z=up,
  * G=9.81. Resting accel (gravity reaction) = (0,0,+G). Accel reading = pitched-gravity + linear
- * accel rotated into the device frame by the seating heading psi.
+ * accel rotated into the device frame by the seating heading psi. Each sample ALSO carries a
+ * device->world rotation matrix R built from the SAME grade+seat, so the filter's R-based grade
+ * path sees the exact pitch the accel encodes — like a real rotation-vector phone, NOT identity
+ * (identity claims "flat" and zeroes the hill cue even though accel leans).
  *
  * Single-threaded: [step]/[setScenario] are called from OverlayService's sensor HandlerThread.
  */
@@ -30,6 +33,11 @@ class MotionSimulator {
         private const val G = 9.81f
         private const val RAMP = 0.6f      // smoothstep ease-in/out so the cue glides (spec)
         private const val DT = 1f / 62f    // synthetic step matches the ~62 Hz drive loop
+        // A SINGLE held scenario loops [maneuver -> rest] instead of holding: a constant accel is
+        // absorbed by the gravity self-split (cue decays in ~1.5 s), so re-firing keeps the cue alive
+        // and makes seat mirroring obvious without watching a one-shot transient.
+        private const val SINGLE_ON = 2.6f
+        private const val SINGLE_OFF = 1.8f
     }
 
     /** One driving phase. dur is only used by the looping "All" script (single-hold ignores it). */
@@ -39,9 +47,11 @@ class MotionSimulator {
         @JvmField val gradeDeg: Float, @JvmField val psiDeg: Float
     )
 
-    /** Synthetic sample: device-frame accel incl. gravity (m/s^2) + gyro (rad/s) + phase label. */
+    /** Synthetic sample: device-frame accel incl. gravity (m/s^2) + gyro (rad/s) + phase label +
+     *  device->world (ENU) rotation matrix R (row-major) consistent with the baked-in grade+seat. */
     class Sample(
-        @JvmField val accel: FloatArray, @JvmField val gyro: FloatArray, @JvmField val phase: String
+        @JvmField val accel: FloatArray, @JvmField val gyro: FloatArray, @JvmField val phase: String,
+        @JvmField val R: FloatArray
     )
 
     // The "All" script (table in SIM_SPEC.md). Loops forever; after the last Rest it returns to #1
@@ -99,9 +109,15 @@ class MotionSimulator {
             aFwd = ph.aFwd * s; aRight = ph.aRight * s; yawDeg = ph.yawDeg * s; gradeDeg = ph.gradeDeg * s
         } else {
             clock += DT
-            val s = smoothstep(clock / RAMP)                  // single scenario: ease in, then hold target
-            name = single.name
-            aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
+            val cyc = clock % (SINGLE_ON + SINGLE_OFF)         // single scenario: loop maneuver -> rest
+            if (cyc < SINGLE_ON) {
+                val s = min(smoothstep(cyc / RAMP), smoothstep((SINGLE_ON - cyc) / RAMP))  // ease in AND out
+                name = single.name
+                aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
+            } else {
+                name = "Rest"
+                aFwd = 0f; aRight = 0f; yawDeg = 0f; gradeDeg = 0f
+            }
         }
         psiDeg = seatPsiDeg                                   // seating applies to whatever scenario is running
 
@@ -112,16 +128,31 @@ class MotionSimulator {
         val gradeRad = Math.toRadians(gradeDeg.toDouble()).toFloat()
         // Road grade pitches gravity about device-x: g' = (0, -G·sinθ, G·cosθ) — a longitudinal grav
         // component drives the fore cue via the gravity path (distinct from accel/brake linear accel).
-        val ax = aFwd * sinP + aRight * cosP
-        val ay = -G * sin(gradeRad) + aFwd * cosP - aRight * sinP
-        val az = G * cos(gradeRad)
-        // gyro = (pitchRate_x, 0, yawRate_z) rad/s. pitchRate is the grade ramp's derivative; yawRate
-        // is the cornering rate. Emitted so the filter's gyro gate sees the matching rotation.
+        // The road grade leans gravity along the VEHICLE-FORWARD axis, which the seating heading
+        // rotates too — so a side-facing seat puts the hill cue on the lateral axis (90°), just like
+        // accel/brake. leanFwd is that longitudinal gravity component; (sinP,cosP) is vehicle-forward
+        // in the device frame.
+        val sinG = sin(gradeRad); val cosG = cos(gradeRad)
+        val leanFwd = -G * sinG
+        val ax = aFwd * sinP + aRight * cosP + leanFwd * sinP
+        val ay = aFwd * cosP - aRight * sinP + leanFwd * cosP
+        val az = G * cosG
+        // device->world (ENU) row-major: rows = world East / North / Up expressed in device coords.
+        // Row 2 (Up) = the gravity-reaction direction baked into (ax,ay,az)/G, so the filter's
+        // R-based grade path reads the SAME pitch the accel encodes (flat -> identity, no regression;
+        // hill -> leans, so the cue fires; rear-facing psi=180 flips its sign, just like real life).
+        val R = floatArrayOf(
+            cosP,         -sinP,        0f,
+            cosG * sinP,   cosG * cosP, sinG,
+           -sinG * sinP,  -sinG * cosP, cosG
+        )
+        // gyro rad/s: pitchRate is the grade ramp's derivative about the vehicle-RIGHT axis
+        // (cosP,-sinP) so it rotates with the seat too; yawRate is the cornering rate about z.
         val pitchRate = (gradeRad - prevGradeRad) / DT; prevGradeRad = gradeRad
         val yawRate = Math.toRadians(yawDeg.toDouble()).toFloat()
 
         currentPhase = name
-        return Sample(floatArrayOf(ax, ay, az), floatArrayOf(pitchRate, 0f, yawRate), name)
+        return Sample(floatArrayOf(ax, ay, az), floatArrayOf(pitchRate * cosP, -pitchRate * sinP, yawRate), name, R)
     }
 
     // Hermite smoothstep, clamped — gentle ease so the grade ramp stays under Windows' tilt-reject.

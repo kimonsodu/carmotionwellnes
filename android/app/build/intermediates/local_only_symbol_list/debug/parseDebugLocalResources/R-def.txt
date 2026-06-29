@@ -44,8 +44,6 @@ id cbFlipH
 id cbFlipV
 id cbLaptop
 id cbPhone
-id cbSimRear
-id cbSimSide
 id cbSwap
 id chipAccentAmber
 id chipAccentBlue
@@ -86,6 +84,7 @@ id seekLon
 id seekOpacity
 id seekSize
 id seekStrength
+id spSeat
 id spSim
 id status
 id styleChevrons
