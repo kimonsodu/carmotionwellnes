@@ -47,8 +47,11 @@ class MainActivity : Activity() {
     private lateinit var seekGrade: SeekBar
     private lateinit var tvGradeVal: TextView
     private lateinit var cbFlipV: CheckBox
+    private lateinit var cbFlipGrade: CheckBox
     private lateinit var cbFlipH: CheckBox
     private lateinit var cbSwap: CheckBox
+    private lateinit var cbSimSide: CheckBox
+    private lateinit var cbSimRear: CheckBox
     private lateinit var seekSize: SeekBar
     private lateinit var rgColor: RadioGroup
     private lateinit var cbAutoHide: CheckBox
@@ -107,8 +110,11 @@ class MainActivity : Activity() {
         seekGrade = findViewById(R.id.seekGrade)
         tvGradeVal = findViewById(R.id.tvGradeVal)
         cbFlipV = findViewById(R.id.cbFlipV)
+        cbFlipGrade = findViewById(R.id.cbFlipGrade)
         cbFlipH = findViewById(R.id.cbFlipH)
         cbSwap = findViewById(R.id.cbSwap)
+        cbSimSide = findViewById(R.id.cbSimSide)
+        cbSimRear = findViewById(R.id.cbSimRear)
         seekSize = findViewById(R.id.seekSize)
         rgColor = findViewById(R.id.rgDotColor)
         cbAutoHide = findViewById(R.id.cbAutoHide)
@@ -332,6 +338,9 @@ class MainActivity : Activity() {
         cbFlipV.setOnCheckedChangeListener(null)
         cbFlipV.isChecked = SettingsStore.flipV(this)
         cbFlipV.setOnCheckedChangeListener { _, on -> SettingsStore.setFlipV(this, on); refreshPreview() }
+        cbFlipGrade.setOnCheckedChangeListener(null)
+        cbFlipGrade.isChecked = SettingsStore.flipGrade(this)
+        cbFlipGrade.setOnCheckedChangeListener { _, on -> SettingsStore.setFlipGrade(this, on); refreshPreview() }
         cbFlipH.setOnCheckedChangeListener(null)
         cbFlipH.isChecked = SettingsStore.flipH(this)
         cbFlipH.setOnCheckedChangeListener { _, on -> SettingsStore.setFlipH(this, on); refreshPreview() }
@@ -367,8 +376,7 @@ class MainActivity : Activity() {
         // real sensors while a running overlay is up). Persisted via K_SIM_SCENARIO (in LIVE_KEYS). ----
         val simNames = listOf(
             "Off (real sensors)", "All scenarios", "Accelerate", "Brake", "Turn left",
-            "Turn right", "Uphill", "Downhill", "Sideways (train)", "Reverse (driving back)",
-            "Rear-facing seat")
+            "Turn right", "Uphill", "Downhill")
         val simAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, simNames)
         simAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spSim.adapter = simAdapter
@@ -380,6 +388,13 @@ class MainActivity : Activity() {
             }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
+        // Seating toggles: applied to ANY sim scenario above (side-facing 90°, rear-facing 180°).
+        cbSimSide.setOnCheckedChangeListener(null)
+        cbSimSide.isChecked = SettingsStore.simSide(this)
+        cbSimSide.setOnCheckedChangeListener { _, on -> SettingsStore.setSimSide(this, on) }
+        cbSimRear.setOnCheckedChangeListener(null)
+        cbSimRear.isChecked = SettingsStore.simRear(this)
+        cbSimRear.setOnCheckedChangeListener { _, on -> SettingsStore.setSimRear(this, on) }
 
         // ---- Advanced: reset ----
         btnReset.setOnClickListener {

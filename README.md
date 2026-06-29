@@ -36,9 +36,11 @@ Either way, two windows appear: the full-screen cue overlay, and a small **Orbit
   Accel/Brake and Flip vertical — slide left of centre to reverse the hill direction, centre = off.
 - **Dot size** — how big the dots are. Bump it up if they're too subtle to catch in your
   peripheral vision, down if they're distracting.
-- **Flip ↕ / Flip ↔** — reverse vertical / horizontal direction. The accelerometer's mounting
-  orientation varies by machine, so if the dots flow the *wrong* way during a turn or when
-  braking, toggle these.
+- **Flip ↕ / Flip ↔** — reverse vertical (accel/brake) / horizontal (turn) direction. The
+  accelerometer's mounting orientation varies by machine, so if the dots flow the *wrong* way
+  during a turn or when braking, toggle these.
+- **Flip hill ⛰** — reverse *only* the hill/grade cue (uphill vs downhill) without touching
+  accel/brake, so you can correct one direction independently of the other.
 - **Swap ↕↔** — swap which axis drives up/down vs left/right. If gas/brake moves the dots
   *sideways* (or turns move them up/down), the device is rotated relative to the car — flip
   this and it sorts the channels out.
@@ -61,12 +63,13 @@ auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the 
 
 - **Off** (default every launch) — the real sensor drives the dots, exactly as normal.
 - **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
-  uphill/downhill (road grade), a *sideways-seating* set (e.g. on a train, where forward motion
-  shows on the left/right channel), **reverse** (driving backwards), and a **rear-facing** seat
-  (facing the back of a train, where accel drifts the dots the opposite way). The active phase
-  name shows live under the buttons.
-- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill, Sideways, Reverse,
-  Rear-facing) to hold it continuously for focused testing.
+  uphill/downhill (road grade). The active phase name shows live under the buttons.
+- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) to hold it
+  continuously for focused testing.
+- **Seat orientation** — two toggles (*Side-facing*, *Rear-facing*) apply to *whatever* scenario
+  is running, so you can test accel/turns/hills as if seated sideways on a train or facing the
+  rear. Both on = the other side. (Sideways seating shows forward motion on the left/right
+  channel; rear-facing reverses it.)
 
 While a scenario other than Off is selected the simulation **overrides the real sensor**; switch
 back to **Off** to return to it. Simulation is a test aid — it's never persisted, so the app

@@ -39,10 +39,13 @@ id btnOverlay
 id btnPick
 id btnReset
 id cbAutoHide
+id cbFlipGrade
 id cbFlipH
 id cbFlipV
 id cbLaptop
 id cbPhone
+id cbSimRear
+id cbSimSide
 id cbSwap
 id chipAccentAmber
 id chipAccentBlue

@@ -513,13 +513,19 @@
                         android:layout_marginTop="4dp"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content">
-                        <CheckBox android:id="@+id/cbFlipV" android:text="Flip ↕" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-                        <CheckBox android:id="@+id/cbFlipH" android:text="Flip ↔" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        <CheckBox android:id="@+id/cbFlipV" android:text="Flip ↕ accel" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        <CheckBox android:id="@+id/cbFlipGrade" android:text="Flip ⛰ hill" android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:orientation="horizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <CheckBox android:id="@+id/cbFlipH" android:text="Flip ↔ turn" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                         <CheckBox android:id="@+id/cbSwap" android:text="Swap ↕↔" android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                     </LinearLayout>
                     <TextView
                         style="@style/FieldLabel"
-                        android:text="The cue direction is automatic for any seat. Use these only if accel/brake or turns drift the wrong way: Flip ↕ reverses up/down, Flip ↔ reverses left/right, Swap exchanges the two."
+                        android:text="The cue direction is automatic for any seat. Use these only if something drifts the wrong way: Flip ↕ reverses accel/brake, Flip ⛰ reverses ONLY the hill cue (independent of accel/brake), Flip ↔ reverses turns, Swap exchanges the two axes."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"
@@ -568,6 +574,21 @@
                     <TextView
                         style="@style/FieldLabel"
                         android:text="Plays synthetic driving motion so you can verify the cue without driving — start the overlay, then pick a scenario. Off = your real sensors."
+                        android:textSize="11sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <LinearLayout
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <CheckBox android:id="@+id/cbSimSide" android:text="Side-facing seat" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        <CheckBox android:id="@+id/cbSimRear" android:text="Rear-facing seat" android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    </LinearLayout>
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="Seat orientation applied to the scenario above — test accel, turns, hills from a side-facing (train) or rear-facing seat."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

@@ -77,6 +77,7 @@ namespace OrbitalOverlay
         public double Sens { get; set; } = 1.8;
         public double LonGain { get; set; } = 1.5;         // accel/brake trim: SIGN = direction, |v| = sensitivity, 0 = off
         public double GradeGain { get; set; } = 1.0;       // hill/grade trim: SIGN = direction, |v| = sensitivity, 0 = off (independent of LonGain)
+        public int InvertGrade { get; set; } = 1;          // dedicated hill flip (±1) — reverses only the grade cue
         public int InvertX { get; set; } = 1;
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
@@ -122,7 +123,7 @@ namespace OrbitalOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, GradeGain = ov.GradeGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, GradeGain = ov.GradeGain, InvertGrade = ov.InvertGrade, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -457,7 +458,7 @@ namespace OrbitalOverlay
     // Device is assumed flat, screen up (R = identity): x = right (East),
     // y = forward (North), z = up; resting reading = (0, 0, +G).
     // ---------------------------------------------------------------
-    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill, Sideways, Reverse, Backward }
+    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill }
 
     public class MotionSimulator
     {
@@ -467,6 +468,9 @@ namespace OrbitalOverlay
         const double GradeRate = 4.5;       // deg/s max road-grade pitch rate -> stays under the lid-tilt reject knee (6)
 
         public SimScenario Scenario = SimScenario.Off;
+        // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
+        // 0 = forward, 90 = side-facing (train), 180 = rear-facing, 270 = both (other side).
+        public double SeatPsi = 0;
         public string PhaseName { get; private set; } = "";
 
         // outputs, written each Tick — mirror a real sensor frame
@@ -497,18 +501,10 @@ namespace OrbitalOverlay
             P("Uphill",         3.5,  0.4,  0,    0,   9,  0),
             P("Rest",           1.5,  0,    0,    0,   0,  0),
             P("Downhill",       3.5, -0.4,  0,    0,  -9,  0),
-            P("Rest",           1.5,  0,    0,    0,   0,  0),
-            P("Sideways accel", 3.0,  2.5,  0,    0,   0,  90),
-            P("Sideways brake", 3.0, -3.0,  0,    0,   0,  90),
-            P("Sideways turn",  3.0,  0,    2.6,  24,  0,  90),
-            P("Rest",           1.5,  0,    0,    0,   0,  0),
-            P("Reverse accel",  3.0, -2.5,  0,    0,   0,  0),    // driving backwards: travel rearward
-            P("Reverse brake",  3.0,  2.5,  0,    0,   0,  0),    // braking out of reverse pushes forward
-            P("Rest",           1.5,  0,    0,    0,   0,  0),
-            P("Backward accel", 3.0,  2.5,  0,    0,   0, 180),   // REAR-FACING seat: fwd accel -> dots the other way
-            P("Backward brake", 3.0, -3.0,  0,    0,   0, 180),
             P("Rest",           2.0,  0,    0,    0,   0,  0),
         };
+        // Seating (side/rear-facing) is now an orthogonal toggle (SeatPsi) applied to EVERY phase,
+        // so each motion above can be tested in any seat — no separate sideways/rear phases needed.
 
         // A single held scenario: ease in over Ramp, then hold its target indefinitely (no rest/loop).
         static Phase Single(SimScenario s) => s switch
@@ -519,9 +515,6 @@ namespace OrbitalOverlay
             SimScenario.TurnRight  => P("Turn right",     0,  0,  -2.8, -28,  0,  0),
             SimScenario.Uphill     => P("Uphill",         0,  0.4, 0,    0,   9,  0),
             SimScenario.Downhill   => P("Downhill",       0, -0.4, 0,    0,  -9,  0),
-            SimScenario.Sideways   => P("Sideways accel", 0,  2.5, 0,    0,   0,  90),
-            SimScenario.Reverse    => P("Reverse",        0, -2.5, 0,    0,   0,  0),    // driving backwards
-            SimScenario.Backward   => P("Rear-facing",    0,  2.5, 0,    0,   0, 180),   // rear-facing seat
             _                      => P("Rest",           0,  0,   0,    0,   0,  0),
         };
 
@@ -546,15 +539,16 @@ namespace OrbitalOverlay
                 double s = Math.Min(SmoothStep(0, Ramp, tt), SmoothStep(0, Ramp, p.Dur - tt));  // ease in + out
                 aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
                 gradeTarget = p.Grade;                  // grade is rate-limited below, not smoothstepped
-                psi = p.Psi; PhaseName = p.Name;
+                PhaseName = p.Name;
             }
             else
             {
                 var p = Single(Scenario);
                 double s = SmoothStep(0, Ramp, t);      // ease in, then hold
                 aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
-                gradeTarget = p.Grade; psi = p.Psi; PhaseName = p.Name;
+                gradeTarget = p.Grade; PhaseName = p.Name;
             }
+            psi = SeatPsi;                              // seating heading applies to whatever scenario is running
 
             // Road grade: move the pitch angle toward target at a gentle rate so the emitted
             // pitch gyro stays under Windows' lid-tilt reject knee (tiltRate > 6) — otherwise
@@ -593,6 +587,7 @@ namespace OrbitalOverlay
         public double Sens = 1.8;
         public double LonGain = 1.5;             // signed accel/brake trim: sign = direction, |v| = sensitivity (composes with InvertY), 0 = off
         public double GradeGain = 1.0;           // signed HILL/grade trim: sign = direction, |v| = sensitivity, 0 = off. Independent of LonGain + InvertY.
+        public int InvertGrade = 1;              // dedicated HILL flip (±1): reverses ONLY the grade cue, independent of Flip vertical (accel/brake).
         public int InvertX = 1;
         public int InvertY = 1;
         public bool Paused = false;
@@ -715,6 +710,7 @@ namespace OrbitalOverlay
             Sens = double.IsFinite(s.Sens) ? Math.Clamp(s.Sens, 0.3, 6) : 1.8;  // keep model in slider range
             LonGain = double.IsFinite(s.LonGain) ? Math.Clamp(s.LonGain, -4, 4) : 1.5;  // signed accel/brake trim
             GradeGain = double.IsFinite(s.GradeGain) ? Math.Clamp(s.GradeGain, -4, 4) : 1.0;  // signed hill/grade trim
+            InvertGrade = s.InvertGrade < 0 ? -1 : 1;
             InvertX = s.InvertX < 0 ? -1 : 1;
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
@@ -971,7 +967,7 @@ namespace OrbitalOverlay
             // gas/brake -> vertical (signed trim), PLUS the hill/grade cue on the same vertical axis
             // with its own independent signed gain (GradeGain), so a slope drifts the dots even at a
             // steady speed where there's no linear accel.
-            double aY = SoftDead(fore, dz) * InvertY * LonGain + SoftDead(gradeSig, dz) * GradeGain;
+            double aY = SoftDead(fore, dz) * InvertY * LonGain + SoftDead(gradeSig, dz) * InvertGrade * GradeGain;
 
             // smoothed accel envelope for the Acceleration-pulse cue model (band-passed mag, never raw -> no strobe)
             double cueMag = Math.Sqrt(lat * lat + fore * fore);
@@ -1146,6 +1142,13 @@ namespace OrbitalOverlay
             }
         }
 
+        // Seating heading for the simulator: side-facing (train) and/or rear-facing add 90°/180°.
+        // Both = 270° (the other side). Applies to whatever scenario is running.
+        public void SetSimSeating(bool sideFacing, bool rearFacing)
+        {
+            sim.SeatPsi = (sideFacing ? 90 : 0) + (rearFacing ? 180 : 0);
+        }
+
         // Synthesize one frame and write it into the raw fields — mirrors FeedPhone
         // (and the laptop ReadingChanged handlers) so the pipeline is identical.
         void SimTick()
@@ -1206,7 +1209,7 @@ namespace OrbitalOverlay
         readonly PhoneServer server;
         Slider slider, sizeSlider, lonSlider, gradeSlider, opacitySlider, densitySlider, decaySlider, hideSlider;
         StackPanel accentRow;
-        CheckBox pause, flipV, flipH, swap, dbg, placementTog;
+        CheckBox pause, flipV, flipGrade, flipH, swap, dbg, placementTog;
         TextBlock hotkeyHint, dbgText;
         StackPanel autoHideStatusRow;            // live gate indicator under the auto-hide toggle
         System.Windows.Shapes.Ellipse autoHideDot;
@@ -1583,6 +1586,13 @@ namespace OrbitalOverlay
             flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
             direction.Children.Add(flipV);
             direction.Children.Add(Divider());
+            flipGrade = Toggle("Flip hill  ⛰");
+            flipGrade.ToolTip = "Reverse ONLY the hill/grade cue (uphill vs downhill), without touching accel/brake.";
+            flipGrade.Checked += (s, e) => { ov.InvertGrade = -1; QueueSave(); };
+            flipGrade.Unchecked += (s, e) => { ov.InvertGrade = 1; QueueSave(); };
+            flipGrade.IsChecked = ov.InvertGrade == -1;
+            direction.Children.Add(flipGrade);
+            direction.Children.Add(Divider());
             flipH = Toggle("Flip horizontal  ↔");
             flipH.ToolTip = "Reverse left/right dot drift (Ctrl+Alt+H).";
             flipH.Checked += (s, e) => { ov.InvertX = -1; QueueSave(); };
@@ -1814,10 +1824,9 @@ namespace OrbitalOverlay
             var simScenarios = new[]
             {
                 SimScenario.Off, SimScenario.All, SimScenario.Accelerate, SimScenario.Brake,
-                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill,
-                SimScenario.Sideways, SimScenario.Reverse, SimScenario.Backward
+                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill
             };
-            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill", "Sideways", "Reverse", "Rear-facing" };
+            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill" };
             var simWrap = new WrapPanel();
             var simBtns = new Button[simScenarios.Length];
             void HighlightSim(int idx)
@@ -1839,6 +1848,24 @@ namespace OrbitalOverlay
                 simWrap.Children.Add(b);
             }
             simCard.Children.Add(simWrap);
+
+            // Seating: orthogonal toggles applied to ANY scenario above, so you can test accel/turn/
+            // hills from a side-facing (train) or rear-facing seat. Both on = the other side (270°).
+            simCard.Children.Add(Styled(new TextBlock
+            {
+                Text = "Seat orientation (applies to every scenario):",
+                Margin = new Thickness(0, 6, 0, 4)
+            }, "FaintText"));
+            var simSeatSide = Toggle("Side-facing seat (train)");
+            var simSeatRear = Toggle("Rear-facing seat");
+            simSeatSide.ToolTip = "Run the chosen scenario as if seated sideways (forward motion lands on the left/right channel).";
+            simSeatRear.ToolTip = "Run the chosen scenario as if seated facing the rear.";
+            void ApplySeat() => ov.SetSimSeating(simSeatSide.IsChecked == true, simSeatRear.IsChecked == true);
+            simSeatSide.Checked += (s, e) => ApplySeat(); simSeatSide.Unchecked += (s, e) => ApplySeat();
+            simSeatRear.Checked += (s, e) => ApplySeat(); simSeatRear.Unchecked += (s, e) => ApplySeat();
+            simCard.Children.Add(simSeatSide);
+            simCard.Children.Add(simSeatRear);
+
             var simPhaseLbl = Styled(new TextBlock { Text = "Off", Margin = new Thickness(2, 6, 0, 0) }, "FaintText");
             simCard.Children.Add(simPhaseLbl);
             root.Children.Add(CardOf(simCard));

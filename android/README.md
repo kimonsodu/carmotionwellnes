@@ -53,8 +53,9 @@ climb/descent even at a steady speed, independently of Accel/brake. Centre = off
 reverse the uphill/downhill direction.
 
 The cue direction is automatic for any seat, but **Advanced → Direction** has manual overrides if
-something drifts the wrong way for your mount: **Flip ↕** reverses up/down (accel/brake), **Flip
-↔** reverses left/right (turns), and **Swap ↕↔** exchanges the two axes.
+something drifts the wrong way for your mount: **Flip ↕** reverses accel/brake, **Flip ⛰** reverses
+*only* the hill cue (independent of accel/brake), **Flip ↔** reverses turns, and **Swap ↕↔**
+exchanges the two axes.
 
 ## Test it without driving — Simulation
 
@@ -62,11 +63,13 @@ Want to confirm the cue reacts before you hit the road? Tick **Where the dots go
 phone**, tap **Start cue overlay**, then open **Advanced → Simulation (test motion)** and pick a
 scenario:
 
-- **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades, a
-  sideways "train" seating case, **reverse** (driving backwards), and a **rear-facing** seat — so
-  you can watch every axis respond in turn.
-- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill, Sideways, Reverse,
-  Rear-facing seat) ease in and hold so you can study one motion.
+- **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades — so you
+  can watch every axis respond in turn.
+- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill) ease in and hold so
+  you can study one motion.
+- **Seat orientation** — the *Side-facing* and *Rear-facing* tick-boxes apply to whatever scenario
+  is selected, so you can run accel/turns/hills as if seated sideways (train) or facing the rear.
+  Both = the other side.
 
 Simulation feeds synthetic IMU through the *same* motion pipeline as the real sensors (gravity
 removal, gates, smoothing and the cue render are all exercised), and **overrides** the real

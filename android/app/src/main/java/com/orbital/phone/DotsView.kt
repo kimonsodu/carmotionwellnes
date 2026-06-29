@@ -37,6 +37,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var gradeGain = SettingsStore.DEF_GRADE_GAIN // hill/grade sensitivity; SIGNED (direction)
     private var invertX = 1f             // -1 = flip horizontal (turn) direction
     private var invertY = 1f             // -1 = flip vertical (accel/brake) direction
+    private var invertGrade = 1f         // -1 = flip ONLY the hill/grade cue (independent of accel/brake)
     private var swapAxes = false         // swap which axis drives vertical vs horizontal
     private var sizeScale = SettingsStore.DEF_DOT_SIZE
     private var colorMode = SettingsStore.DEF_DOT_COLOR
@@ -122,6 +123,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         gradeGain = p.gradeGain
         invertX = if (p.flipH) -1f else 1f
         invertY = if (p.flipV) -1f else 1f
+        invertGrade = if (p.flipGrade) -1f else 1f
         swapAxes = p.swap
         sizeScale = p.dotSize
         colorMode = p.colorMode
@@ -172,7 +174,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         // lonGain scales ONLY the screen-vertical axis to preserve the original fore/aft-vs-lateral feel.
         // The hill/grade cue rides the SAME vertical axis with its own SIGNED gain (gradeGain), so a
         // slope drifts the dots even at steady speed; sign flips uphill/downhill direction.
-        velY = velY * decay + driveY * lonGain * gain * invertY + driveG * gradeGain * gain
+        velY = velY * decay + driveY * lonGain * gain * invertY + driveG * gradeGain * gain * invertGrade
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)

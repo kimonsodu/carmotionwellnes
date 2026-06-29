@@ -20,13 +20,12 @@ import kotlin.math.sin
 class MotionSimulator {
 
     companion object {
-        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..10)
+        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..7). Seating (side/rear-facing)
+        // is a SEPARATE orthogonal toggle (seatPsiDeg), applied to whichever scenario runs.
         const val OFF = 0; const val ALL = 1
         const val ACCELERATE = 2; const val BRAKE = 3; const val TURN_LEFT = 4; const val TURN_RIGHT = 5
-        const val UPHILL = 6; const val DOWNHILL = 7; const val SIDEWAYS = 8
-        const val REVERSE = 9      // driving backwards (reverse gear): travel rearward, seat faces forward
-        const val BACKWARD = 10    // sitting backwards (rear-facing train seat): psi=180, fwd accel -> screen-back
-        const val MAX = BACKWARD
+        const val UPHILL = 6; const val DOWNHILL = 7
+        const val MAX = DOWNHILL
 
         private const val G = 9.81f
         private const val RAMP = 0.6f      // smoothstep ease-in/out so the cue glides (spec)
@@ -60,21 +59,16 @@ class MotionSimulator {
         Phase("Uphill", 3.5f, 0.4f, 0f, 0f, 9f, 0f),
         Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
         Phase("Downhill", 3.5f, -0.4f, 0f, 0f, -9f, 0f),
-        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
-        Phase("Sideways acc", 3.0f, 2.5f, 0f, 0f, 0f, 90f),    // TRAIN: fwd accel lands on screen-X
-        Phase("Sideways brk", 3.0f, -3.0f, 0f, 0f, 0f, 90f),
-        Phase("Sideways turn", 3.0f, 0f, 2.6f, 24f, 0f, 90f),
-        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
-        Phase("Reverse acc", 3.0f, -2.5f, 0f, 0f, 0f, 0f),     // driving backwards: travel rearward
-        Phase("Reverse brk", 3.0f, 2.5f, 0f, 0f, 0f, 0f),      // braking out of reverse pushes forward
-        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
-        Phase("Backward acc", 3.0f, 2.5f, 0f, 0f, 0f, 180f),   // REAR-FACING seat: fwd accel -> screen-back
-        Phase("Backward brk", 3.0f, -3.0f, 0f, 0f, 0f, 180f),
         Phase("Rest", 2.0f, 0f, 0f, 0f, 0f, 0f)                // loop back to #1
     )
+    // Seating (side/rear-facing) is an orthogonal toggle (seatPsiDeg) applied to every phase, so each
+    // motion can be tested from any seat — no dedicated sideways/rear phases needed.
 
     private var scenario = OFF
     private var single = singleFor(OFF)
+    // Seating heading (deg), set from the app's seat toggles: 0 forward, 90 side-facing (train),
+    // 180 rear-facing, 270 both. Applied to whatever scenario runs.
+    @Volatile @JvmField var seatPsiDeg = 0f
     private var idx = 0                 // current "All" phase
     private var clock = 0f              // seconds into the current phase (or into the held ramp)
     private var prevGradeRad = 0f       // for the analytic pitch-rate gyro about device-x
@@ -102,13 +96,14 @@ class MotionSimulator {
             }
             val s = min(smoothstep(clock / RAMP), smoothstep((ph.dur - clock) / RAMP))  // ease in AND out
             name = ph.name
-            aFwd = ph.aFwd * s; aRight = ph.aRight * s; yawDeg = ph.yawDeg * s; gradeDeg = ph.gradeDeg * s; psiDeg = ph.psiDeg
+            aFwd = ph.aFwd * s; aRight = ph.aRight * s; yawDeg = ph.yawDeg * s; gradeDeg = ph.gradeDeg * s
         } else {
             clock += DT
             val s = smoothstep(clock / RAMP)                  // single scenario: ease in, then hold target
             name = single.name
-            aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s; psiDeg = single.psiDeg
+            aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
         }
+        psiDeg = seatPsiDeg                                   // seating applies to whatever scenario is running
 
         // Seating heading psi rotates the vehicle linear accel into the device frame (psi=0 -> x=right,
         // y=forward; psi=90 -> fwd accel lands on device-x, proving sideways/train seating is handled).
@@ -140,9 +135,6 @@ class MotionSimulator {
         TURN_RIGHT -> Phase("Turn right", 0f, 0f, -2.8f, -28f, 0f, 0f)
         UPHILL -> Phase("Uphill", 0f, 0.4f, 0f, 0f, 9f, 0f)
         DOWNHILL -> Phase("Downhill", 0f, -0.4f, 0f, 0f, -9f, 0f)
-        SIDEWAYS -> Phase("Sideways", 0f, 2.5f, 0f, 0f, 0f, 90f)   // TRAIN: cue on the lateral/screenX channel
-        REVERSE -> Phase("Reverse", 0f, -2.5f, 0f, 0f, 0f, 0f)     // driving backwards (rearward travel)
-        BACKWARD -> Phase("Rear-facing", 0f, 2.5f, 0f, 0f, 0f, 180f) // rear-facing seat: fwd accel -> screen-back
         else -> Phase("Off", 0f, 0f, 0f, 0f, 0f, 0f)
     }
 }

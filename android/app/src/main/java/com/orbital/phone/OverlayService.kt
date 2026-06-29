@@ -92,7 +92,7 @@ class OverlayService : Service(), SensorEventListener,
         // restart; addView would throw BadTokenException without it (and on some OEMs even with it).
         if (!Settings.canDrawOverlays(this) || !addOverlay()) { stopSelf(); return START_NOT_STICKY }
         // Read the sim scenario BEFORE the first resumeSensing so it picks the sim-vs-real feed path.
-        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario)
+        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario); applySimSeat()
         startSensors()
         SettingsStore.prefs(this).registerOnSharedPreferenceChangeListener(this)
         running = true
@@ -288,10 +288,19 @@ class OverlayService : Service(), SensorEventListener,
                 }
             }
         }
+        if (key == SettingsStore.K_SIM_SIDE || key == SettingsStore.K_SIM_REAR) {
+            sensorHandler?.post { applySimSeat() }              // re-apply seating to the running sim source
+        }
         if (key in SettingsStore.LIVE_KEYS) {
             val snap = SettingsStore.snapshot(this)
             ui.post { view?.applyParams(snap) }
         }
+    }
+
+    /** Seating heading for the simulator from the two seat toggles (side 90° + rear 180°). */
+    private fun applySimSeat() {
+        sim.seatPsiDeg = (if (SettingsStore.simSide(this)) 90f else 0f) +
+                         (if (SettingsStore.simRear(this)) 180f else 0f)
     }
 
     private fun startForegroundNotification() {
