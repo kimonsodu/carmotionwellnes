@@ -20,3 +20,8 @@ C:\Users\simon\Documents\dev\orbital\obj\Debug\net8.0-windows10.0.19041.0\refint
 C:\Users\simon\Documents\dev\orbital\obj\Debug\net8.0-windows10.0.19041.0\OrbitalOverlay.pdb
 C:\Users\simon\Documents\dev\orbital\obj\Debug\net8.0-windows10.0.19041.0\OrbitalOverlay.genruntimeconfig.cache
 C:\Users\simon\Documents\dev\orbital\obj\Debug\net8.0-windows10.0.19041.0\ref\OrbitalOverlay.dll
+C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.exe
+C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.deps.json
+C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.runtimeconfig.json
+C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.dll
+C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.pdb

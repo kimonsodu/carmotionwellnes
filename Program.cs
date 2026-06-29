@@ -1033,7 +1033,7 @@ namespace OrbitalOverlay
             hotkeys = DefaultHotkeys();                 // start from defaults, then layer any saved bindings on top
             if (settings.Hotkeys != null)
                 foreach (var kv in settings.Hotkeys)
-                    if (kv.Value != null && kv.Value.Vk != 0) hotkeys[kv.Key] = kv.Value;
+                    if (kv.Value != null) hotkeys[kv.Key] = kv.Value;   // honour saved entries incl. an explicit unset (Vk==0 = user removed it)
             Title = "Orbital";
             try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/orbital.ico", UriKind.Absolute)); } catch { /* icon is cosmetic */ }
             Width = 420; Height = 820;
@@ -1082,97 +1082,12 @@ namespace OrbitalOverlay
             root.Children.Add(status);
             ov.StatusChanged += t => Dispatcher.Invoke(() => status.Text = t);
 
-            // ---- MOTION card ----
-            var motion = new StackPanel();
-            motion.Children.Add(SectionHead("MOTION"));
-
-            // quick feel presets — these just drive the underlying sliders (Android parity);
-            // nothing extra is persisted, the sliders' own handlers do the saving.
-            var presetRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            for (int pc = 0; pc < 5; pc++)
-                presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = pc % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(6) });
-            void AddPreset(int col, string name, double sens, double lon, double den, double op)
-            {
-                var b = Styled(new Button { Content = name }, "OrbitButton");
-                b.ToolTip = $"Preset: strength {sens:0.0}×, density {den:0.0}×, opacity {(int)(op * 100)}%.";
-                b.Click += (s, e) =>
-                {
-                    slider.Value = sens; lonSlider.Value = lon;
-                    densitySlider.Value = den; opacitySlider.Value = op;
-                };
-                Grid.SetColumn(b, col);
-                presetRow.Children.Add(b);
-            }
-            AddPreset(0, "Calm", 1.0, 1.0, 0.7, 0.6);
-            AddPreset(2, "Balanced", 1.8, 1.5, 1.0, 1.0);
-            AddPreset(4, "Strong", 3.0, 2.2, 1.4, 1.0);
-            motion.Children.Add(presetRow);
-
-            motion.Children.Add(FieldHead("Strength", out var strengthVal));
-            slider = Styled(new Slider
-            {
-                Minimum = 0.3, Maximum = 6, Value = ov.Sens,
-                TickFrequency = 0.1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 12)
-            }, "OrbitSlider");
-            slider.ToolTip = "How far the dots drift for a given motion. Higher = stronger cue.";
-            slider.ValueChanged += (s, e) => { ov.Sens = e.NewValue; strengthVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
-            strengthVal.Text = ov.Sens.ToString("0.0") + "×";
-            motion.Children.Add(slider);
-
-            // --- Accel / Brake trim (longitudinal): bipolar -4..4, sign = direction, 0 = off (mirrors Android).
-            // Sign composes with the "Flip vertical" toggle below; centre is off. ---
-            motion.Children.Add(FieldHead("Accel / Brake", out var lonVal));
-            lonSlider = Styled(new Slider
-            {
-                Minimum = -4, Maximum = 4, Value = ov.LonGain,
-                TickFrequency = 0.1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 12)
-            }, "OrbitSlider");
-            lonSlider.ToolTip = "Forward/back cue trim. Sign sets direction (accelerate = dots down); centre is off.";
-            lonSlider.ValueChanged += (s, e) => { ov.LonGain = e.NewValue; lonVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
-            lonVal.Text = Math.Abs(ov.LonGain) < 0.05 ? "off" : ov.LonGain.ToString("+0.0;-0.0") + "×";
-            motion.Children.Add(lonSlider);
-
-            motion.Children.Add(FieldHead("Dot size", out var sizeVal));
-            sizeSlider = Styled(new Slider
-            {
-                Minimum = 0.4, Maximum = 3.0, Value = ov.DotScale,
-                TickFrequency = 0.1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 0)
-            }, "OrbitSlider");
-            sizeSlider.ToolTip = "Diameter of the drifting dots.";
-            sizeSlider.ValueChanged += (s, e) => { ov.DotScale = e.NewValue; sizeVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
-            sizeVal.Text = ov.DotScale.ToString("0.0") + "×";
-            sizeSlider.Margin = new Thickness(0, 4, 0, 12);
-            motion.Children.Add(sizeSlider);
-
-            // --- Opacity: per-dot brightness (composes with the auto-hide fade, never fights it) ---
-            motion.Children.Add(FieldHead("Opacity", out var opacityVal));
-            opacitySlider = Styled(new Slider
-            {
-                Minimum = 0.2, Maximum = 1.0, Value = ov.DotOpacity,
-                TickFrequency = 0.05, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 12)
-            }, "OrbitSlider");
-            opacitySlider.ToolTip = "How bright the dots are. Lower for a subtler cue.";
-            opacitySlider.ValueChanged += (s, e) => { ov.DotOpacity = e.NewValue; opacityVal.Text = ((int)Math.Round(e.NewValue * 100)) + "%"; QueueSave(); };
-            opacityVal.Text = ((int)Math.Round(ov.DotOpacity * 100)) + "%";
-            motion.Children.Add(opacitySlider);
-
-            // --- Density: how many dots are drawn (rebuilds the field) ---
-            motion.Children.Add(FieldHead("Density", out var densityVal));
-            densitySlider = Styled(new Slider
-            {
-                Minimum = 0.5, Maximum = 2.0, Value = ov.Density,
-                TickFrequency = 0.1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 0)
-            }, "OrbitSlider");
-            densitySlider.ToolTip = "How many dots are drawn.";
-            densitySlider.ValueChanged += (s, e) => { ov.Density = e.NewValue; densityVal.Text = e.NewValue.ToString("0.0") + "×"; ov.RebuildField(); QueueSave(); };
-            densityVal.Text = ov.Density.ToString("0.0") + "×";
-            motion.Children.Add(densitySlider);
-            root.Children.Add(CardOf(motion));
+            // ============================================================
+            //  Cards are grouped by what the user is trying to do, so each
+            //  setting is easy to find: CUE STYLE (shape) → FEEL (response)
+            //  → APPEARANCE (looks) → DIRECTION (axes) → COMFORT (auto-hide)
+            //  → PHONE SENSOR → STARTUP → SHORTCUTS → DIAGNOSTICS.
+            // ============================================================
 
             // ---- CUE STYLE card (shared set with the Android app) ----
             var cueCard = new StackPanel();
@@ -1232,15 +1147,252 @@ namespace OrbitalOverlay
             SelectStyle(ov.CueStyle);            // reflect persisted style/model in the buttons
             SelectModel(ov.CueModel);
 
-            // ---- ADJUST card (toggle switches) ----
-            var adjust = new StackPanel();
-            adjust.Children.Add(SectionHead("ADJUST"));
+            // ---- FEEL card: how strongly the cue responds ----
+            var feel = new StackPanel();
+            feel.Children.Add(SectionHead("FEEL"));
+
+            // quick feel presets — these just drive the underlying sliders (Android parity);
+            // nothing extra is persisted, the sliders' own handlers do the saving.
+            var presetRow = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            for (int pc = 0; pc < 5; pc++)
+                presetRow.ColumnDefinitions.Add(new ColumnDefinition { Width = pc % 2 == 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(6) });
+            void AddPreset(int col, string name, double sens, double lon, double den, double op)
+            {
+                var b = Styled(new Button { Content = name }, "OrbitButton");
+                b.ToolTip = $"Preset: strength {sens:0.0}×, density {den:0.0}×, opacity {(int)(op * 100)}%.";
+                b.Click += (s, e) =>
+                {
+                    slider.Value = sens; lonSlider.Value = lon;
+                    densitySlider.Value = den; opacitySlider.Value = op;
+                };
+                Grid.SetColumn(b, col);
+                presetRow.Children.Add(b);
+            }
+            AddPreset(0, "Calm", 1.0, 1.0, 0.7, 0.6);
+            AddPreset(2, "Balanced", 1.8, 1.5, 1.0, 1.0);
+            AddPreset(4, "Strong", 3.0, 2.2, 1.4, 1.0);
+            feel.Children.Add(presetRow);
+
+            feel.Children.Add(FieldHead("Strength", out var strengthVal));
+            slider = Styled(new Slider
+            {
+                Minimum = 0.3, Maximum = 6, Value = ov.Sens,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            slider.ToolTip = "How far the dots drift for a given motion. Higher = stronger cue.";
+            slider.ValueChanged += (s, e) => { ov.Sens = e.NewValue; strengthVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            strengthVal.Text = ov.Sens.ToString("0.0") + "×";
+            feel.Children.Add(slider);
+
+            // --- Accel / Brake trim (longitudinal): bipolar -4..4, sign = direction, 0 = off (mirrors Android).
+            // Sign composes with the "Flip vertical" toggle below; centre is off. ---
+            feel.Children.Add(FieldHead("Accel / Brake", out var lonVal));
+            lonSlider = Styled(new Slider
+            {
+                Minimum = -4, Maximum = 4, Value = ov.LonGain,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            lonSlider.ToolTip = "Forward/back cue trim. Sign sets direction (accelerate = dots down); centre is off.";
+            lonSlider.ValueChanged += (s, e) => { ov.LonGain = e.NewValue; lonVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
+            lonVal.Text = Math.Abs(ov.LonGain) < 0.05 ? "off" : ov.LonGain.ToString("+0.0;-0.0") + "×";
+            feel.Children.Add(lonSlider);
+
+            // --- Smoothness / trail (flow decay) — how long the flow persists ---
+            feel.Children.Add(FieldHead("Smoothness / trail", out var decayVal));
+            decaySlider = Styled(new Slider
+            {
+                Minimum = 0.80, Maximum = 0.97, Value = ov.Decay,
+                TickFrequency = 0.01, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            }, "OrbitSlider");
+            decaySlider.ToolTip = "How long the dot flow persists. Higher = smoother, longer trails.";
+            decaySlider.ValueChanged += (s, e) => { ov.Decay = e.NewValue; decayVal.Text = e.NewValue.ToString("0.00"); QueueSave(); };
+            decayVal.Text = ov.Decay.ToString("0.00");
+            feel.Children.Add(decaySlider);
+            root.Children.Add(CardOf(feel));
+
+            // ---- APPEARANCE card: how the cue looks ----
+            var appearance = new StackPanel();
+            appearance.Children.Add(SectionHead("APPEARANCE"));
+
+            appearance.Children.Add(FieldHead("Dot size", out var sizeVal));
+            sizeSlider = Styled(new Slider
+            {
+                Minimum = 0.4, Maximum = 3.0, Value = ov.DotScale,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            sizeSlider.ToolTip = "Diameter of the drifting dots.";
+            sizeSlider.ValueChanged += (s, e) => { ov.DotScale = e.NewValue; sizeVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            sizeVal.Text = ov.DotScale.ToString("0.0") + "×";
+            appearance.Children.Add(sizeSlider);
+
+            // --- Opacity: per-dot brightness (composes with the auto-hide fade, never fights it) ---
+            appearance.Children.Add(FieldHead("Opacity", out var opacityVal));
+            opacitySlider = Styled(new Slider
+            {
+                Minimum = 0.2, Maximum = 1.0, Value = ov.DotOpacity,
+                TickFrequency = 0.05, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            opacitySlider.ToolTip = "How bright the dots are. Lower for a subtler cue.";
+            opacitySlider.ValueChanged += (s, e) => { ov.DotOpacity = e.NewValue; opacityVal.Text = ((int)Math.Round(e.NewValue * 100)) + "%"; QueueSave(); };
+            opacityVal.Text = ((int)Math.Round(ov.DotOpacity * 100)) + "%";
+            appearance.Children.Add(opacitySlider);
+
+            // --- Density: how many dots are drawn (rebuilds the field) ---
+            appearance.Children.Add(FieldHead("Density", out var densityVal));
+            densitySlider = Styled(new Slider
+            {
+                Minimum = 0.5, Maximum = 2.0, Value = ov.Density,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            densitySlider.ToolTip = "How many dots are drawn.";
+            densitySlider.ValueChanged += (s, e) => { ov.Density = e.NewValue; densityVal.Text = e.NewValue.ToString("0.0") + "×"; ov.RebuildField(); QueueSave(); };
+            densityVal.Text = ov.Density.ToString("0.0") + "×";
+            appearance.Children.Add(densitySlider);
+
+            appearance.Children.Add(Divider());
+            appearance.Children.Add(FieldHead("Dot colour", out var dotColourVal));
+            string[] dotNames = { "Light", "Mixed", "Dark" };
+            var dotStyleSlider = Styled(new Slider
+            {
+                Minimum = 0, Maximum = 2, Value = ov.DotStyle,
+                TickFrequency = 1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 2)
+            }, "OrbitSlider");
+            dotStyleSlider.ToolTip = "Light reads on dark windows, Dark reads on light ones, Mixed works on either.";
+            dotStyleSlider.ValueChanged += (s, e) =>
+            {
+                int v = (int)Math.Round(e.NewValue);
+                ov.SetDotStyle(v);
+                dotColourVal.Text = dotNames[Math.Clamp(v, 0, 2)];
+                QueueSave();
+            };
+            dotColourVal.Text = dotNames[Math.Clamp(ov.DotStyle, 0, 2)];
+            appearance.Children.Add(dotStyleSlider);
+            var dotLabels = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            void DotLab(string t, int col, HorizontalAlignment ha)
+            {
+                var tb = Styled(new TextBlock { Text = t, HorizontalAlignment = ha }, "FaintText");
+                Grid.SetColumn(tb, col);
+                dotLabels.Children.Add(tb);
+            }
+            DotLab("Light", 0, HorizontalAlignment.Left);
+            DotLab("Mixed", 1, HorizontalAlignment.Center);
+            DotLab("Dark", 2, HorizontalAlignment.Right);
+            appearance.Children.Add(dotLabels);
+
+            // Accent colour: a 4th dot style — teal / amber / blue (Android parity).
+            // Picking a swatch switches to the Accent style; moving the slider above leaves it.
+            appearance.Children.Add(SubLabel("Accent colour"));
+            accentRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 2) };
+            void Swatch(uint argb, string brushKey, string tip)
+            {
+                var sw = new System.Windows.Shapes.Ellipse
+                {
+                    Width = 26, Height = 26, Margin = new Thickness(0, 0, 10, 0),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    Fill = Brush(brushKey), Stroke = Brush("BorderBrush2"), StrokeThickness = 1,
+                    ToolTip = tip
+                };
+                sw.MouseLeftButtonUp += (s, e) => { ov.SetAccentColor(argb); dotColourVal.Text = "Accent"; QueueSave(); };
+                accentRow.Children.Add(sw);
+            }
+            Swatch(0xFF6FD8C6, "AccentBrush", "Teal");
+            Swatch(0xFFE8B66F, "AccentAmberBrush", "Amber");
+            Swatch(0xFF6FA8D8, "BlueBrush", "Blue");
+            appearance.Children.Add(accentRow);
+            if (ov.DotStyle == 3) dotColourVal.Text = "Accent";
+
+            // --- Coverage: side strips vs full peripheral frame ---
+            appearance.Children.Add(Divider());
+            placementTog = Toggle("Frame the whole screen");
+            placementTog.ToolTip = "Add top and bottom dot bands for a full peripheral frame (default: side strips only).";
+            placementTog.IsChecked = ov.Placement == 1;
+            placementTog.Checked += (s, e) => { ov.Placement = 1; ov.RebuildField(); QueueSave(); };
+            placementTog.Unchecked += (s, e) => { ov.Placement = 0; ov.RebuildField(); QueueSave(); };
+            appearance.Children.Add(placementTog);
+
+            // --- Reset every visual/motion tunable to its default ---
+            var resetVis = Styled(new Button { Content = "Reset visuals to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "OrbitButton");
+            resetVis.ToolTip = "Restore strength, accel/brake, size, opacity, density, colour, style, smoothness and hide sensitivity to defaults.";
+            resetVis.Click += (s, e) =>
+            {
+                slider.Value = 1.8; lonSlider.Value = 1.5; sizeSlider.Value = 1.0;
+                opacitySlider.Value = 1.0; densitySlider.Value = 1.0;
+                decaySlider.Value = 0.94; hideSlider.Value = 1.0;
+                ov.SetDotStyle(1); dotStyleSlider.Value = 1; dotColourVal.Text = dotNames[1];
+                SelectStyle(0); SelectModel(0);     // back to Dots + velocity-flow
+                placementTog.IsChecked = false;     // fires Unchecked -> Placement 0 + rebuild
+                ov.RebuildField();
+                QueueSave();
+            };
+            appearance.Children.Add(resetVis);
+            root.Children.Add(CardOf(appearance));
+
+            // ---- DIRECTION card: fix which way the dots move ----
+            var direction = new StackPanel();
+            direction.Children.Add(SectionHead("DIRECTION"));
             pause = Toggle("Pause");
             pause.ToolTip = "Freeze the dots (Ctrl+Alt+P).";
             pause.Checked += (s, e) => ov.Paused = true;
             pause.Unchecked += (s, e) => ov.Paused = false;
-            adjust.Children.Add(pause);
-            adjust.Children.Add(Divider());
+            direction.Children.Add(pause);
+            direction.Children.Add(Divider());
+            flipV = Toggle("Flip vertical  ↕");
+            flipV.ToolTip = "Reverse up/down dot drift (Ctrl+Alt+V).";
+            flipV.Checked += (s, e) => { ov.InvertY = -1; QueueSave(); };
+            flipV.Unchecked += (s, e) => { ov.InvertY = 1; QueueSave(); };
+            flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
+            direction.Children.Add(flipV);
+            direction.Children.Add(Divider());
+            flipH = Toggle("Flip horizontal  ↔");
+            flipH.ToolTip = "Reverse left/right dot drift (Ctrl+Alt+H).";
+            flipH.Checked += (s, e) => { ov.InvertX = -1; QueueSave(); };
+            flipH.Unchecked += (s, e) => { ov.InvertX = 1; QueueSave(); };
+            flipH.IsChecked = ov.InvertX == -1;
+            direction.Children.Add(flipH);
+            direction.Children.Add(Divider());
+            swap = Toggle("Swap ↕↔");
+            swap.ToolTip = "Exchange the vertical and horizontal axes if the dots move the wrong way.";
+            swap.Checked += (s, e) => { ov.SwapAxes = true; QueueSave(); };
+            swap.Unchecked += (s, e) => { ov.SwapAxes = false; QueueSave(); };
+            swap.IsChecked = ov.SwapAxes;            // reflect persisted setting
+            direction.Children.Add(swap);
+            direction.Children.Add(Styled(new TextBlock
+            {
+                Text = "Turn on Swap if gas/brake moves the dots sideways.",
+                Margin = new Thickness(0, 2, 0, 0)
+            }, "FaintText"));
+            root.Children.Add(CardOf(direction));
+
+            // ---- action buttons ----
+            var row2 = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var recenter = Styled(new Button { Content = "Recenter" }, "OrbitButtonPrimary");
+            recenter.ToolTip = "Reset the dots to centre — use after settling into your seat (Ctrl+Alt+R).";
+            recenter.Click += (s, e) => ov.Recenter();
+            Grid.SetColumn(recenter, 0);
+            var quit = Styled(new Button { Content = "Quit" }, "OrbitButton");
+            quit.ToolTip = "Exit Orbital completely.";
+            quit.Click += (s, e) => QuitApp();
+            Grid.SetColumn(quit, 2);
+            row2.Children.Add(recenter);
+            row2.Children.Add(quit);
+            root.Children.Add(row2);
+
+            // ---- COMFORT card: auto-hide when stopped ----
+            var comfort = new StackPanel();
+            comfort.Children.Add(SectionHead("COMFORT"));
             autoPauseTog = Toggle("Auto-hide dots when stopped");
             autoPauseTog.ToolTip = "Fade the dots away when the vehicle is parked, bring them back on motion.";
             autoPauseTog.IsChecked = ov.AutoPause;
@@ -1263,7 +1415,7 @@ namespace OrbitalOverlay
                 if (autoHideTip != null) autoHideTip.Visibility = Visibility.Collapsed;
                 QueueSave();
             };
-            adjust.Children.Add(autoPauseTog);
+            comfort.Children.Add(autoPauseTog);
 
             // live drive-test indicator (plain-language gate state), only visible while auto-hide is on
             autoHideDot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = Brush("MutedBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
@@ -1272,7 +1424,7 @@ namespace OrbitalOverlay
             autoHideStatusRow.Children.Add(autoHideDot);
             autoHideStatusRow.Children.Add(autoHideStatusText);
             autoHideStatusRow.Visibility = ov.AutoPause ? Visibility.Visible : Visibility.Collapsed;
-            adjust.Children.Add(autoHideStatusRow);
+            comfort.Children.Add(autoHideStatusRow);
 
             autoHideTip = Styled(new TextBlock
             {
@@ -1280,56 +1432,25 @@ namespace OrbitalOverlay
                 Margin = new Thickness(2, 4, 0, 0),
                 Visibility = (ov.AutoPause && !autoHideTipSeen) ? Visibility.Visible : Visibility.Collapsed
             }, "FaintText");
-            adjust.Children.Add(autoHideTip);
+            comfort.Children.Add(autoHideTip);
             // Auto-hide already on from a prior session: the Checked handler never fired for the
             // construction-time IsChecked assignment, so consume the one-time flag here (else the
             // tip nags on every launch).
             if (ov.AutoPause && !autoHideTipSeen) { autoHideTipSeen = true; QueueSave(); }
 
-            adjust.Children.Add(Divider());
-            flipV = Toggle("Flip vertical  ↕");
-            flipV.ToolTip = "Reverse up/down dot drift (Ctrl+Alt+V).";
-            flipV.Checked += (s, e) => { ov.InvertY = -1; QueueSave(); };
-            flipV.Unchecked += (s, e) => { ov.InvertY = 1; QueueSave(); };
-            flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
-            adjust.Children.Add(flipV);
-            adjust.Children.Add(Divider());
-            flipH = Toggle("Flip horizontal  ↔");
-            flipH.ToolTip = "Reverse left/right dot drift (Ctrl+Alt+H).";
-            flipH.Checked += (s, e) => { ov.InvertX = -1; QueueSave(); };
-            flipH.Unchecked += (s, e) => { ov.InvertX = 1; QueueSave(); };
-            flipH.IsChecked = ov.InvertX == -1;
-            adjust.Children.Add(flipH);
-            adjust.Children.Add(Divider());
-            swap = Toggle("Swap ↕↔");
-            swap.ToolTip = "Exchange the vertical and horizontal axes if the dots move the wrong way.";
-            swap.Checked += (s, e) => { ov.SwapAxes = true; QueueSave(); };
-            swap.Unchecked += (s, e) => { ov.SwapAxes = false; QueueSave(); };
-            swap.IsChecked = ov.SwapAxes;            // reflect persisted setting
-            adjust.Children.Add(swap);
-            adjust.Children.Add(Styled(new TextBlock
+            // --- Hide sensitivity (auto-hide knee scale) ---
+            comfort.Children.Add(FieldHead("Hide sensitivity", out var hideVal));
+            hideSlider = Styled(new Slider
             {
-                Text = "Turn on Swap if gas/brake moves the dots sideways.",
-                Margin = new Thickness(0, 2, 0, 0)
-            }, "FaintText"));
-            root.Children.Add(CardOf(adjust));
-
-            // ---- action buttons ----
-            var row2 = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-            row2.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var recenter = Styled(new Button { Content = "Recenter" }, "OrbitButtonPrimary");
-            recenter.ToolTip = "Reset the dots to centre — use after settling into your seat (Ctrl+Alt+R).";
-            recenter.Click += (s, e) => ov.Recenter();
-            Grid.SetColumn(recenter, 0);
-            var quit = Styled(new Button { Content = "Quit" }, "OrbitButton");
-            quit.ToolTip = "Exit Orbital completely.";
-            quit.Click += (s, e) => QuitApp();
-            Grid.SetColumn(quit, 2);
-            row2.Children.Add(recenter);
-            row2.Children.Add(quit);
-            root.Children.Add(row2);
+                Minimum = 0.5, Maximum = 2.0, Value = ov.HideSensitivity,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 0)
+            }, "OrbitSlider");
+            hideSlider.ToolTip = "How eagerly the dots hide when you stop. Higher = hide sooner.";
+            hideSlider.ValueChanged += (s, e) => { ov.HideSensitivity = e.NewValue; hideVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
+            hideVal.Text = ov.HideSensitivity.ToString("0.0") + "×";
+            comfort.Children.Add(hideSlider);
+            root.Children.Add(CardOf(comfort));
 
             // ---- PHONE SENSOR card ----
             var phone = new StackPanel();
@@ -1402,7 +1523,57 @@ namespace OrbitalOverlay
             SetPhoneExpander();
             root.Children.Add(CardOf(phone));
 
-            // ---- DEBUG card ----
+            // ---- STARTUP card ----
+            var startup = new StackPanel();
+            startup.Children.Add(SectionHead("STARTUP"));
+            startMin = Toggle("Start minimized to tray");
+            startMin.IsChecked = settings.StartMinimized;
+            startMin.Checked += (s, e) => QueueSave();
+            startMin.Unchecked += (s, e) => QueueSave();
+            startup.Children.Add(startMin);
+            startup.Children.Add(Divider());
+            autoStart = Toggle("Start with Windows");
+            autoStart.IsChecked = AutoStart.IsEnabled();
+            autoStart.Checked += (s, e) => AutoStart.Set(true);
+            autoStart.Unchecked += (s, e) => AutoStart.Set(false);
+            startup.Children.Add(autoStart);
+            root.Children.Add(CardOf(startup));
+
+            // ---- SHORTCUTS card: remappable global hotkeys ----
+            var shortcuts = new StackPanel();
+            shortcuts.Children.Add(SectionHead("SHORTCUTS"));
+            shortcuts.Children.Add(Styled(new TextBlock
+            {
+                Text = "Global shortcuts work anywhere. Click a binding, then press the new key combo (Esc cancels).",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
+            }, "FaintText"));
+            bool firstHkRow = true;
+            foreach (var a in HotkeyActions)
+            {
+                if (!firstHkRow) shortcuts.Children.Add(Divider());
+                firstHkRow = false;
+                var hkRow = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var hkLbl = SubLabel(a.Label);
+                hkLbl.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(hkLbl, 0);
+                hkRow.Children.Add(hkLbl);
+                var hkBtn = BuildHotkeyButton(a.Key);
+                Grid.SetColumn(hkBtn, 1);
+                hkRow.Children.Add(hkBtn);
+                var hkClear = BuildHotkeyClear(a.Key);
+                Grid.SetColumn(hkClear, 2);
+                hkRow.Children.Add(hkClear);
+                shortcuts.Children.Add(hkRow);
+            }
+            var hkReset = Styled(new Button { Content = "Reset shortcuts to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "OrbitButton");
+            hkReset.Click += (s, e) => { hotkeys = DefaultHotkeys(); RefreshHotkeyButtons(); ReapplyHotKeys(); QueueSave(); };
+            shortcuts.Children.Add(hkReset);
+            root.Children.Add(CardOf(shortcuts));
+
+            // ---- DIAGNOSTICS card ----
             var debug = new StackPanel();
             debug.Children.Add(SectionHead("DIAGNOSTICS"));
             dbg = Toggle("Debug readout");
@@ -1428,160 +1599,6 @@ namespace OrbitalOverlay
                 if (ov.AutoPause) UpdateAutoHideStatus();
             };
             dbgTimer.Start();
-
-            // ---- APPEARANCE & STARTUP card ----
-            var prefs = new StackPanel();
-            prefs.Children.Add(SectionHead("APPEARANCE & STARTUP"));
-            prefs.Children.Add(FieldHead("Dot colour", out var dotColourVal));
-            string[] dotNames = { "Light", "Mixed", "Dark" };
-            var dotStyleSlider = Styled(new Slider
-            {
-                Minimum = 0, Maximum = 2, Value = ov.DotStyle,
-                TickFrequency = 1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 2)
-            }, "OrbitSlider");
-            dotStyleSlider.ToolTip = "Light reads on dark windows, Dark reads on light ones, Mixed works on either.";
-            dotStyleSlider.ValueChanged += (s, e) =>
-            {
-                int v = (int)Math.Round(e.NewValue);
-                ov.SetDotStyle(v);
-                dotColourVal.Text = dotNames[Math.Clamp(v, 0, 2)];
-                QueueSave();
-            };
-            dotColourVal.Text = dotNames[Math.Clamp(ov.DotStyle, 0, 2)];
-            prefs.Children.Add(dotStyleSlider);
-            var dotLabels = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            dotLabels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            void DotLab(string t, int col, HorizontalAlignment ha)
-            {
-                var tb = Styled(new TextBlock { Text = t, HorizontalAlignment = ha }, "FaintText");
-                Grid.SetColumn(tb, col);
-                dotLabels.Children.Add(tb);
-            }
-            DotLab("Light", 0, HorizontalAlignment.Left);
-            DotLab("Mixed", 1, HorizontalAlignment.Center);
-            DotLab("Dark", 2, HorizontalAlignment.Right);
-            prefs.Children.Add(dotLabels);
-
-            // Accent colour: a 4th dot style — teal / amber signal / blue (Android parity).
-            // Picking a swatch switches to the Accent style; moving the slider above leaves it.
-            prefs.Children.Add(SubLabel("Accent colour"));
-            accentRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 2) };
-            void Swatch(uint argb, string brushKey, string tip)
-            {
-                var sw = new System.Windows.Shapes.Ellipse
-                {
-                    Width = 26, Height = 26, Margin = new Thickness(0, 0, 10, 0),
-                    Cursor = System.Windows.Input.Cursors.Hand,
-                    Fill = Brush(brushKey), Stroke = Brush("BorderBrush2"), StrokeThickness = 1,
-                    ToolTip = tip
-                };
-                sw.MouseLeftButtonUp += (s, e) => { ov.SetAccentColor(argb); dotColourVal.Text = "Accent"; QueueSave(); };
-                accentRow.Children.Add(sw);
-            }
-            Swatch(0xFF6FD8C6, "AccentBrush", "Teal");
-            Swatch(0xFFE8B66F, "AccentAmberBrush", "Amber");
-            Swatch(0xFF6FA8D8, "BlueBrush", "Blue");
-            prefs.Children.Add(accentRow);
-            if (ov.DotStyle == 3) dotColourVal.Text = "Accent";
-
-            prefs.Children.Add(Divider());
-            startMin = Toggle("Start minimized to tray");
-            startMin.IsChecked = settings.StartMinimized;
-            startMin.Checked += (s, e) => QueueSave();
-            startMin.Unchecked += (s, e) => QueueSave();
-            prefs.Children.Add(startMin);
-            prefs.Children.Add(Divider());
-            autoStart = Toggle("Start with Windows");
-            autoStart.IsChecked = AutoStart.IsEnabled();
-            autoStart.Checked += (s, e) => AutoStart.Set(true);
-            autoStart.Unchecked += (s, e) => AutoStart.Set(false);
-            prefs.Children.Add(autoStart);
-            root.Children.Add(CardOf(prefs));
-
-            // ---- ADVANCED card: remappable global hotkeys ----
-            var advanced = new StackPanel();
-            advanced.Children.Add(SectionHead("ADVANCED"));
-
-            // --- Smoothness / trail (flow decay) ---
-            advanced.Children.Add(FieldHead("Smoothness / trail", out var decayVal));
-            decaySlider = Styled(new Slider
-            {
-                Minimum = 0.80, Maximum = 0.97, Value = ov.Decay,
-                TickFrequency = 0.01, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 12)
-            }, "OrbitSlider");
-            decaySlider.ToolTip = "How long the dot flow persists. Higher = smoother, longer trails.";
-            decaySlider.ValueChanged += (s, e) => { ov.Decay = e.NewValue; decayVal.Text = e.NewValue.ToString("0.00"); QueueSave(); };
-            decayVal.Text = ov.Decay.ToString("0.00");
-            advanced.Children.Add(decaySlider);
-
-            // --- Hide sensitivity (auto-hide knee scale) ---
-            advanced.Children.Add(FieldHead("Hide sensitivity", out var hideVal));
-            hideSlider = Styled(new Slider
-            {
-                Minimum = 0.5, Maximum = 2.0, Value = ov.HideSensitivity,
-                TickFrequency = 0.1, IsSnapToTickEnabled = true,
-                Margin = new Thickness(0, 4, 0, 12)
-            }, "OrbitSlider");
-            hideSlider.ToolTip = "How eagerly the dots hide when you stop. Higher = hide sooner.";
-            hideSlider.ValueChanged += (s, e) => { ov.HideSensitivity = e.NewValue; hideVal.Text = e.NewValue.ToString("0.0") + "×"; QueueSave(); };
-            hideVal.Text = ov.HideSensitivity.ToString("0.0") + "×";
-            advanced.Children.Add(hideSlider);
-
-            // --- Coverage: side strips vs full peripheral frame ---
-            placementTog = Toggle("Frame the whole screen");
-            placementTog.ToolTip = "Add top and bottom dot bands for a full peripheral frame (default: side strips only).";
-            placementTog.IsChecked = ov.Placement == 1;
-            placementTog.Checked += (s, e) => { ov.Placement = 1; ov.RebuildField(); QueueSave(); };
-            placementTog.Unchecked += (s, e) => { ov.Placement = 0; ov.RebuildField(); QueueSave(); };
-            advanced.Children.Add(placementTog);
-
-            // --- Reset every visual/motion tunable to its default ---
-            var resetVis = Styled(new Button { Content = "Reset visuals to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 14) }, "OrbitButton");
-            resetVis.ToolTip = "Restore strength, accel/brake, size, opacity, density, colour, smoothness and hide sensitivity to defaults.";
-            resetVis.Click += (s, e) =>
-            {
-                slider.Value = 1.8; lonSlider.Value = 1.5; sizeSlider.Value = 1.0;
-                opacitySlider.Value = 1.0; densitySlider.Value = 1.0;
-                decaySlider.Value = 0.94; hideSlider.Value = 1.0;
-                ov.SetDotStyle(1); dotStyleSlider.Value = 1; dotColourVal.Text = dotNames[1];
-                SelectStyle(0); SelectModel(0);     // back to Dots + velocity-flow
-                placementTog.IsChecked = false;     // fires Unchecked -> Placement 0 + rebuild
-                ov.RebuildField();
-                QueueSave();
-            };
-            advanced.Children.Add(resetVis);
-            advanced.Children.Add(Divider());
-
-            advanced.Children.Add(Styled(new TextBlock
-            {
-                Text = "Global shortcuts work anywhere. Click a binding, then press the new key combo (Esc cancels).",
-                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
-            }, "FaintText"));
-            bool firstHkRow = true;
-            foreach (var a in HotkeyActions)
-            {
-                if (!firstHkRow) advanced.Children.Add(Divider());
-                firstHkRow = false;
-                var hkRow = new Grid { Margin = new Thickness(0, 2, 0, 2) };
-                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                hkRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var hkLbl = SubLabel(a.Label);
-                hkLbl.VerticalAlignment = VerticalAlignment.Center;
-                Grid.SetColumn(hkLbl, 0);
-                hkRow.Children.Add(hkLbl);
-                var hkBtn = BuildHotkeyButton(a.Key);
-                Grid.SetColumn(hkBtn, 1);
-                hkRow.Children.Add(hkBtn);
-                advanced.Children.Add(hkRow);
-            }
-            var hkReset = Styled(new Button { Content = "Reset shortcuts to defaults", HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 12, 0, 0) }, "OrbitButton");
-            hkReset.Click += (s, e) => { hotkeys = DefaultHotkeys(); RefreshHotkeyButtons(); ReapplyHotKeys(); QueueSave(); };
-            advanced.Children.Add(hkReset);
-            root.Children.Add(CardOf(advanced));
 
             // The full shortcut list lives in the About flyout now; build it here so
             // RegisterHotKeys can still append any "key in use" warnings to it.
@@ -2091,6 +2108,21 @@ namespace OrbitalOverlay
                 QueueSave();
             };
             hotkeyButtons[actionKey] = btn;
+            return btn;
+        }
+
+        // small "✕" next to each binding: clears it (unbinds the shortcut). Re-add by capturing a new combo.
+        Button BuildHotkeyClear(string actionKey)
+        {
+            var btn = Styled(new Button { Content = "✕", MinWidth = 34, Margin = new Thickness(6, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Right }, "OrbitButton");
+            btn.ToolTip = "Remove this shortcut (leave it unbound).";
+            btn.Click += (s, e) =>
+            {
+                hotkeys[actionKey] = new Hotkey(0, 0);     // Vk==0 -> unregistered + shows "Unset"
+                if (hotkeyButtons.TryGetValue(actionKey, out var capBtn)) capBtn.Content = ComboText(null);
+                ReapplyHotKeys();                          // drop the live registration immediately
+                QueueSave();
+            };
             return btn;
         }
 
