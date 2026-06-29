@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.orbital.phone.app-mergeDebugResources-2:/values/values.xml",
+            "outputFile": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-mergeDebugResources-2:\\values\\values.xml",
             "map": [
                 {
                     "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\themes.xml",
@@ -66,6 +66,76 @@
                         "startOffsets": "55",
                         "endColumns": "56",
                         "endOffsets": "107"
+                    },
+                    "to": {
+                        "startLines": "12",
+                        "startColumns": "4",
+                        "startOffsets": "475",
+                        "endColumns": "56",
+                        "endOffsets": "527"
+                    }
+                }
+            ]
+        },
+        {
+            "outputFile": "com.orbital.phone.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\themes.xml",
+                    "from": {
+                        "startLines": "-1",
+                        "startColumns": "-1",
+                        "startOffsets": "-1"
+                    },
+                    "to": {
+                        "startLines": "82",
+                        "startColumns": "4",
+                        "startOffsets": "3837",
+                        "endLines": "94",
+                        "endColumns": "12",
+                        "endOffsets": "4644"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\styles.xml",
+                    "from": {
+                        "startLines": "-1,37,-1,-1,-1,-1,-1,-1",
+                        "startColumns": "-1,4,-1,-1,-1,-1,-1,-1",
+                        "startOffsets": "-1,1501,-1,-1,-1,-1,-1,-1",
+                        "endLines": "-1,52,-1,-1,-1,-1,-1,-1",
+                        "endColumns": "-1,12,-1,-1,-1,-1,-1,-1",
+                        "endOffsets": "-1,2306,-1,-1,-1,-1,-1,-1"
+                    },
+                    "to": {
+                        "startLines": "18,23,39,43,53,60,67,95",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "745,950,1760,1912,2410,2752,3074,4649",
+                        "endLines": "22,38,42,52,59,66,81,105",
+                        "endColumns": "12,12,12,12,12,12,12,12",
+                        "endOffsets": "945,1755,1907,2405,2747,3069,3832,5199"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\colors.xml",
+                    "from": {
+                        "startLines": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+                        "startColumns": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1",
+                        "startOffsets": "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,13,14,15,16,17",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,96,143,189,234,271,313,352,394,435,532,572,613,659,706",
+                        "endColumns": "40,46,45,44,36,41,38,41,40,39,39,40,45,46,38",
+                        "endOffsets": "91,138,184,229,266,308,347,389,430,470,567,608,654,701,740"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\ic_launcher_background.xml",
+                    "from": {
+                        "startLines": "-1",
+                        "startColumns": "-1",
+                        "startOffsets": "-1"
                     },
                     "to": {
                         "startLines": "12",

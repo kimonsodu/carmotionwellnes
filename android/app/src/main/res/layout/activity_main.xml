@@ -53,7 +53,7 @@
                 android:layout_height="wrap_content" />
 
             <LinearLayout
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
                 <CheckBox
@@ -61,16 +61,13 @@
                     android:text="Stream to laptop"
                     android:textColor="@color/text"
                     android:checked="true"
-                    android:layout_marginEnd="12dp"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
                 <CheckBox
                     android:id="@+id/cbPhone"
                     android:text="Cue on this phone"
                     android:textColor="@color/text"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
