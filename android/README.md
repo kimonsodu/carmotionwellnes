@@ -41,12 +41,22 @@ Either way: the phone shows live numbers + Hz, the laptop panel flips to **Phone
 and the **screen can then turn off** — the notification keeps it streaming.
 
 Tune feel on the laptop as usual (Strength / Flip / **Swap ↕↔** / Recenter) to match how the
-phone is mounted. Dots react to real *acceleration* (turns, gas, brake), not tilt.
+phone is mounted. Dots react to real *acceleration* (turns, gas, brake) — plus an optional
+**Hill / grade** cue (Advanced) that drifts the dots on slopes from the pitch of gravity.
+
+**Stream and show dots at once.** *Where the dots go* is two independent tick-boxes, not a
+choice: enable **Stream to laptop**, **Cue on this phone**, or **both**. With both ticked the
+phone drives the laptop overlay *and* shows its own dots — start each from its own button.
+
+The **Hill / grade** slider (Advanced) is a separate, signed control: it drifts the dots on a
+climb/descent even at a steady speed, independently of Accel/brake. Centre = off; slide left to
+reverse the uphill/downhill direction.
 
 ## Test it without driving — Simulation
 
-Want to confirm the cue reacts before you hit the road? Switch **Where the dots go → This phone**,
-tap **Start cue overlay**, then open **Advanced → Simulation (test motion)** and pick a scenario:
+Want to confirm the cue reacts before you hit the road? Tick **Where the dots go → Cue on this
+phone**, tap **Start cue overlay**, then open **Advanced → Simulation (test motion)** and pick a
+scenario:
 
 - **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades, and a
   sideways "train" seating case — so you can watch every axis respond in turn.

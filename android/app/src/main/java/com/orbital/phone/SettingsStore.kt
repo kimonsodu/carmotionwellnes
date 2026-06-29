@@ -19,6 +19,7 @@ object SettingsStore {
     // ---- existing keys ----
     const val K_STRENGTH = "ph_strength"     // Float 0.3..6.0  (drift sensitivity multiplier)
     const val K_LON_GAIN = "ph_lonGain"      // Float 0..4 fore/aft (accel/brake) sensitivity; 0 = off. Direction is automatic (screen-relative cue); legacy signed values read as |v|.
+    const val K_GRADE_GAIN = "ph_gradeGain"  // Float -4..4 hill/grade sensitivity; SIGN = direction (uphill/downhill), 0 = off. Independent of accel/brake.
     const val K_DOT_SIZE = "ph_dotSize"      // Float 0.4..3.0  (element size scale)
     const val K_DOT_COLOR = "ph_dotColor"    // Int   0/1/2/3 = Light / Mixed / Dark / Custom(accent)
     const val K_AUTO_HIDE = "ph_autoHide"    // Bool  fade the cue when the phone is still
@@ -39,6 +40,7 @@ object SettingsStore {
     // ---- defaults ----
     const val DEF_STRENGTH = 1.8f
     const val DEF_LON_GAIN = 1.5f            // fore/aft sensitivity magnitude; direction is automatic
+    const val DEF_GRADE_GAIN = 1.0f          // hill/grade sensitivity (signed); flip the sign to reverse uphill/downhill
     const val DEF_DOT_SIZE = 1.0f
     const val DEF_DOT_COLOR = 1              // Mixed — contrasts over any app
     const val DEF_AUTO_HIDE = true          // hands-off: fade at stops even with no GPS (subway/tunnel)
@@ -61,6 +63,7 @@ object SettingsStore {
     // abs(): a legacy negative value (the old "reversed for backward seating" hack) becomes the
     // correct magnitude — direction is now handled automatically by the screen-relative cue.
     fun lonGain(c: Context) = kotlin.math.abs(prefs(c).getFloat(K_LON_GAIN, DEF_LON_GAIN)).coerceIn(0f, 4.0f)
+    fun gradeGain(c: Context) = prefs(c).getFloat(K_GRADE_GAIN, DEF_GRADE_GAIN).coerceIn(-4.0f, 4.0f)   // signed
     fun dotSize(c: Context) = prefs(c).getFloat(K_DOT_SIZE, DEF_DOT_SIZE).coerceIn(0.4f, 3.0f)
     fun dotColor(c: Context) = prefs(c).getInt(K_DOT_COLOR, DEF_DOT_COLOR).coerceIn(0, 3)
     fun autoHide(c: Context) = prefs(c).getBoolean(K_AUTO_HIDE, DEF_AUTO_HIDE)
@@ -79,6 +82,7 @@ object SettingsStore {
 
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
     fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(0f, 4.0f)).apply()
+    fun setGradeGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_GRADE_GAIN, v.coerceIn(-4.0f, 4.0f)).apply()
     fun setDotSize(c: Context, v: Float) = prefs(c).edit().putFloat(K_DOT_SIZE, v.coerceIn(0.4f, 3.0f)).apply()
     fun setDotColor(c: Context, v: Int) = prefs(c).edit().putInt(K_DOT_COLOR, v.coerceIn(0, 3)).apply()
     fun setAutoHide(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_AUTO_HIDE, v).apply()
@@ -123,6 +127,7 @@ object SettingsStore {
             .putInt(K_ACCENT_COLOR, DEF_ACCENT_COLOR).putInt(K_CUE_MODEL, DEF_CUE_MODEL)
             .putInt(K_PLACEMENT, DEF_PLACEMENT).putFloat(K_DECAY, DEF_DECAY)
             .putFloat(K_HIDE_SENS, DEF_HIDE_SENS).putInt(K_PRESET, DEF_PRESET)
+            .putFloat(K_GRADE_GAIN, DEF_GRADE_GAIN)
             .apply()
     }
 
@@ -131,6 +136,7 @@ object SettingsStore {
     val LIVE_KEYS = setOf(
         K_STRENGTH, K_LON_GAIN, K_DOT_SIZE, K_DOT_COLOR, K_AUTO_HIDE,
         K_CUE_STYLE, K_OPACITY, K_DENSITY, K_ACCENT_COLOR, K_CUE_MODEL, K_PLACEMENT, K_DECAY, K_HIDE_SENS,
+        K_GRADE_GAIN,
         K_SIM_SCENARIO   // a running overlay switches between real-sensor and sim feed when this flips
     )
 
@@ -138,6 +144,7 @@ object SettingsStore {
     data class Params(
         val strength: Float,
         val lonGain: Float,    // fore/aft (accel/brake) sensitivity (magnitude; direction is automatic)
+        val gradeGain: Float,  // hill/grade sensitivity (signed; direction = sign)
         val dotSize: Float,
         val colorMode: Int,    // 0 Light, 1 Mixed, 2 Dark, 3 Custom(accent)
         val autoHide: Boolean,
@@ -152,7 +159,7 @@ object SettingsStore {
     )
 
     fun snapshot(c: Context) = Params(
-        strength(c), lonGain(c), dotSize(c), dotColor(c), autoHide(c),
+        strength(c), lonGain(c), gradeGain(c), dotSize(c), dotColor(c), autoHide(c),
         cueStyle(c), opacity(c), density(c), accentColor(c), cueModel(c), placement(c), decay(c), hideSensitivity(c)
     )
 }

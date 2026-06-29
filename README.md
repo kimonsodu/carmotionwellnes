@@ -30,6 +30,10 @@ Either way, two windows appear: the full-screen cue overlay, and a small **Orbit
 ## Controls (the small panel)
 
 - **Strength** — how strongly the dots react. Start around the middle and push it up.
+- **Accel / Brake** — fore/aft cue trim. Sign sets direction (accelerate = dots down); centre is off.
+- **Hill / grade** — a *separate* cue for slopes, driven by the pitch of gravity rather than
+  acceleration, so the dots drift on a climb/descent even at a steady speed. Independent of
+  Accel/Brake and Flip vertical — slide left of centre to reverse the hill direction, centre = off.
 - **Dot size** — how big the dots are. Bump it up if they're too subtle to catch in your
   peripheral vision, down if they're distracting.
 - **Flip ↕ / Flip ↔** — reverse vertical / horizontal direction. The accelerometer's mounting

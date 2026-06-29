@@ -37,14 +37,15 @@ class MainActivity : Activity() {
     private lateinit var toggle: Button
     private lateinit var status: TextView
     private lateinit var readout: TextView
-    private lateinit var dotsTarget: RadioGroup
-    private lateinit var rbLaptop: View
-    private lateinit var rbPhone: View
+    private lateinit var cbLaptop: CheckBox
+    private lateinit var cbPhone: CheckBox
     private lateinit var laptopBox: View
     private lateinit var phoneBox: View
     private lateinit var btnOverlay: Button
     private lateinit var seekStrength: SeekBar
     private lateinit var seekLon: SeekBar
+    private lateinit var seekGrade: SeekBar
+    private lateinit var tvGradeVal: TextView
     private lateinit var seekSize: SeekBar
     private lateinit var rgColor: RadioGroup
     private lateinit var cbAutoHide: CheckBox
@@ -93,14 +94,15 @@ class MainActivity : Activity() {
         toggle = findViewById(R.id.toggle)
         status = findViewById(R.id.status)
         readout = findViewById(R.id.readout)
-        dotsTarget = findViewById(R.id.dotsTarget)
-        rbLaptop = findViewById(R.id.rbLaptop)
-        rbPhone = findViewById(R.id.rbPhone)
+        cbLaptop = findViewById(R.id.cbLaptop)
+        cbPhone = findViewById(R.id.cbPhone)
         laptopBox = findViewById(R.id.laptopBox)
         phoneBox = findViewById(R.id.phoneBox)
         btnOverlay = findViewById(R.id.btnOverlay)
         seekStrength = findViewById(R.id.seekStrength)
         seekLon = findViewById(R.id.seekLon)
+        seekGrade = findViewById(R.id.seekGrade)
+        tvGradeVal = findViewById(R.id.tvGradeVal)
         seekSize = findViewById(R.id.seekSize)
         rgColor = findViewById(R.id.rgDotColor)
         cbAutoHide = findViewById(R.id.cbAutoHide)
@@ -148,14 +150,19 @@ class MainActivity : Activity() {
             .let { (it as android.widget.RadioButton).isChecked = true }
         applyMode(bt)
 
-        // Laptop (stream sensor to PC) vs Phone (draw dots on this phone) — Laptop is the default
-        val phoneDots = p.getString("dots", "laptop") == "phone"
-        (if (phoneDots) rbPhone else rbLaptop).let { (it as android.widget.RadioButton).isChecked = true }
-        applyDotsTarget(phoneDots)
-        dotsTarget.setOnCheckedChangeListener { _, id ->
-            val phone = id == R.id.rbPhone
-            applyDotsTarget(phone)
-            p.edit().putString("dots", if (phone) "phone" else "laptop").apply()
+        // Stream-to-laptop and cue-on-this-phone are now INDEPENDENT — either or both. (Old single
+        // "dots" choice migrates: phone-only -> phone on / laptop off; anything else -> laptop on.)
+        val legacy = p.getString("dots", null)
+        val wantLaptop = p.getBoolean("dotsLaptop", legacy != "phone")
+        val wantPhone = p.getBoolean("dotsPhone", legacy == "phone")
+        cbLaptop.isChecked = wantLaptop
+        cbPhone.isChecked = wantPhone
+        applyDotsBoxes()
+        cbLaptop.setOnCheckedChangeListener { _, on ->
+            p.edit().putBoolean("dotsLaptop", on).apply(); applyDotsBoxes()
+        }
+        cbPhone.setOnCheckedChangeListener { _, on ->
+            p.edit().putBoolean("dotsPhone", on).apply(); applyDotsBoxes()
         }
         bindPhoneSettings()
         btnOverlay.setOnClickListener { onOverlayToggle() }
@@ -200,10 +207,10 @@ class MainActivity : Activity() {
         btBox.visibility = if (bt) View.VISIBLE else View.GONE
     }
 
-    private fun applyDotsTarget(phone: Boolean) {
-        laptopBox.visibility = if (phone) View.GONE else View.VISIBLE
-        phoneBox.visibility = if (phone) View.VISIBLE else View.GONE
-        if (phone) dotsPreview.start() else dotsPreview.stop()   // the live preview only runs in phone mode
+    private fun applyDotsBoxes() {
+        laptopBox.visibility = if (cbLaptop.isChecked) View.VISIBLE else View.GONE
+        phoneBox.visibility = if (cbPhone.isChecked) View.VISIBLE else View.GONE
+        if (cbPhone.isChecked) dotsPreview.start() else dotsPreview.stop()   // live preview only when the phone section is shown
     }
 
     private fun refreshPreview() { dotsPreview.applyParams(SettingsStore.snapshot(this)) }
@@ -307,6 +314,14 @@ class MainActivity : Activity() {
             val v = prog / 10f; SettingsStore.setLonGain(this, v); tvLonVal.text = fmtLon(v); refreshPreview()
         })
 
+        // ---- Advanced: hill / grade (SIGNED -4..4; centre = off, left = reversed) ----
+        val grade = SettingsStore.gradeGain(this)
+        seekGrade.max = 80; seekGrade.progress = ((grade + 4f) * 10f).toInt().coerceIn(0, 80)
+        tvGradeVal.text = fmtGrade(grade)
+        seekGrade.setOnSeekBarChangeListener(simpleSeek { prog ->
+            val v = prog / 10f - 4f; SettingsStore.setGradeGain(this, v); tvGradeVal.text = fmtGrade(v); refreshPreview()
+        })
+
         // ---- Advanced: cue motion model / coverage ----
         rgCueModel.setOnCheckedChangeListener(null)
         rgCueModel.check(if (SettingsStore.cueModel(this) == 1) R.id.rbModelPulse else R.id.rbModelFlow)
@@ -360,6 +375,11 @@ class MainActivity : Activity() {
     private fun fmtLon(v: Float): String =
         if (v < 0.05f) "off"
         else String.format(java.util.Locale.US, "%.1f×", v)
+
+    // signed: "off" near centre, else "+1.0×" / "-1.0×" (sign = uphill/downhill direction)
+    private fun fmtGrade(v: Float): String =
+        if (kotlin.math.abs(v) < 0.05f) "off"
+        else String.format(java.util.Locale.US, "%+.1f×", v)
 
     private inline fun simpleSeek(crossinline onChange: (Int) -> Unit) =
         object : SeekBar.OnSeekBarChangeListener {
@@ -476,8 +496,9 @@ class MainActivity : Activity() {
         // setEnabled on the RadioGroup doesn't reach its children — disable the buttons directly
         rbWifi.isEnabled = en; rbBt.isEnabled = en
         host.isEnabled = en; port.isEnabled = en; btnPick.isEnabled = en
-        // don't let the Laptop/Phone switch hide the Stop button mid-stream
-        rbLaptop.isEnabled = en; rbPhone.isEnabled = en
+        // don't let a toggle hide a section whose Stop button is live: lock Stream while streaming,
+        // lock Cue-on-phone while the overlay runs.
+        cbLaptop.isEnabled = en; cbPhone.isEnabled = !OverlayService.running
 
         // phone-mode overlay button + permission notice
         val ov = OverlayService.running

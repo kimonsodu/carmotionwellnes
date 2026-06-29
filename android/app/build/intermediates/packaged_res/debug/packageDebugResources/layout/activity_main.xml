@@ -52,29 +52,28 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
 
-            <RadioGroup
-                android:id="@+id/dotsTarget"
+            <LinearLayout
                 android:orientation="horizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
-                <RadioButton
-                    android:id="@+id/rbLaptop"
-                    android:text="The laptop"
+                <CheckBox
+                    android:id="@+id/cbLaptop"
+                    android:text="Stream to laptop"
                     android:textColor="@color/text"
                     android:checked="true"
-                    android:layout_marginEnd="28dp"
+                    android:layout_marginEnd="20dp"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
-                <RadioButton
-                    android:id="@+id/rbPhone"
-                    android:text="This phone"
+                <CheckBox
+                    android:id="@+id/cbPhone"
+                    android:text="Cue on this phone"
                     android:textColor="@color/text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
-            </RadioGroup>
+            </LinearLayout>
 
             <TextView
-                android:text="Laptop: this phone is the sensor — dots show on the laptop. Phone: dots show here, driven by this phone's own motion."
+                android:text="Tick either or both. Stream to laptop: this phone is the sensor, dots show on the PC. Cue on this phone: dots show here, driven by this phone's own motion. Both can run at once."
                 android:textColor="@color/faint"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"
@@ -491,6 +490,19 @@
                     <TextView
                         style="@style/FieldLabel"
                         android:text="Higher = accel and braking move the cue more. Direction is automatic for any seat. 0 = no accel/brake cue."
+                        android:textSize="11sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
+                    <LinearLayout style="@style/RowLine">
+                        <TextView style="@style/FieldLabel" android:text="Hill / grade" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvGradeVal" style="@style/ValuePill" android:text="+1.0×" />
+                    </LinearLayout>
+                    <SeekBar android:id="@+id/seekGrade" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="Drives the cue on slopes (uphill/downhill), separately from accel/brake. Slide left of centre to reverse the hill direction; centre = off."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

@@ -76,6 +76,7 @@ namespace OrbitalOverlay
     {
         public double Sens { get; set; } = 1.8;
         public double LonGain { get; set; } = 1.5;         // accel/brake trim: SIGN = direction, |v| = sensitivity, 0 = off
+        public double GradeGain { get; set; } = 1.0;       // hill/grade trim: SIGN = direction, |v| = sensitivity, 0 = off (independent of LonGain)
         public int InvertX { get; set; } = 1;
         public int InvertY { get; set; } = 1;
         public double DotScale { get; set; } = 1.0;
@@ -121,7 +122,7 @@ namespace OrbitalOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, GradeGain = ov.GradeGain, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -583,6 +584,7 @@ namespace OrbitalOverlay
         // --- tunables (mirror the web version) ---
         public double Sens = 1.8;
         public double LonGain = 1.5;             // signed accel/brake trim: sign = direction, |v| = sensitivity (composes with InvertY), 0 = off
+        public double GradeGain = 1.0;           // signed HILL/grade trim: sign = direction, |v| = sensitivity, 0 = off. Independent of LonGain + InvertY.
         public int InvertX = 1;
         public int InvertY = 1;
         public bool Paused = false;
@@ -624,6 +626,7 @@ namespace OrbitalOverlay
         double accelEnv;                        // smoothed 0..1 accel envelope (Acceleration-pulse model)
         double lat, fore, yaw;                   // resolved motion
         double fwd1, fwd2 = 1;                    // inertial forward-axis unit estimate (horizontal plane); default (0,1) = old fixed mapping
+        double gradeSig, gradeBase; bool gradeBaseSet;   // road-grade (hill) channel: gravity lean along forward, baselined
         double gx, gy, gz; bool gReady;          // gravity estimate
         int oriMode = -1;                        // locked axis mapping (-1 = not yet detected)
         int settleFrames;                        // frames since (re)arm — gates the lock
@@ -703,6 +706,7 @@ namespace OrbitalOverlay
         {
             Sens = double.IsFinite(s.Sens) ? Math.Clamp(s.Sens, 0.3, 6) : 1.8;  // keep model in slider range
             LonGain = double.IsFinite(s.LonGain) ? Math.Clamp(s.LonGain, -4, 4) : 1.5;  // signed accel/brake trim
+            GradeGain = double.IsFinite(s.GradeGain) ? Math.Clamp(s.GradeGain, -4, 4) : 1.0;  // signed hill/grade trim
             InvertX = s.InvertX < 0 ? -1 : 1;
             InvertY = s.InvertY < 0 ? -1 : 1;
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
@@ -894,6 +898,21 @@ namespace OrbitalOverlay
 
             if (SwapAxes) (nlat, nfore) = (nfore, nlat);           // manual override if polarity reads wrong
 
+            // --- Road grade (hill) channel: SEPARATE from accel/brake. Accel/brake is the residual
+            // linear accel (dx,dy,dz); grade is the GRAVITY vector's lean along the travel-forward
+            // axis — the sustained pitch the gravity estimate converges to on a slope. A slow
+            // baseline removes a constant resting tilt (a propped-up 2-in-1) so only real grade
+            // *changes* drive the cue. Always drives the VERTICAL channel; its own signed gain
+            // (GradeGain) flips hill direction independently of Accel/Brake and Flip vertical.
+            double gh1, gh2;
+            if (mode == 0) { gh1 = gx; gh2 = gy; }                 // gravity components in the same axis pair as h1,h2
+            else if (mode == 1) { gh1 = gx; gh2 = gz; }
+            else { gh1 = gy; gh2 = gz; }
+            double gradeRaw = gh1 * fwd1 + gh2 * fwd2;             // gravity lean along forward (~9.81·sinθ, m/s²)
+            if (!gradeBaseSet) { gradeBase = gradeRaw; gradeBaseSet = true; }
+            gradeBase += (gradeRaw - gradeBase) * 0.0007;          // ~25 s baseline -> zeroes a constant resting mount tilt
+            gradeSig += (gradeRaw - gradeBase - gradeSig) * 0.05;  // smooth (grade changes slowly)
+
             lat += (nlat - lat) * 0.25;              // a touch more smoothing -> road wiggle doesn't reach the dots
             fore += (nfore - fore) * 0.25;
             yaw += (yawRate - yaw) * 0.3;            // yaw about gravity, not raw device-Z
@@ -941,7 +960,10 @@ namespace OrbitalOverlay
             // Longitudinal (gas/brake) axis: LonGain is the signed accel/brake trim — its SIGN sets
             // direction and its magnitude sets sensitivity (mirrors Android's lonGain). It COMPOSES
             // with InvertY so the "Flip vertical" toggle still reverses the whole Y axis as before.
-            double aY = SoftDead(fore, dz) * InvertY * LonGain;    // gas/brake -> vertical (signed trim)
+            // gas/brake -> vertical (signed trim), PLUS the hill/grade cue on the same vertical axis
+            // with its own independent signed gain (GradeGain), so a slope drifts the dots even at a
+            // steady speed where there's no linear accel.
+            double aY = SoftDead(fore, dz) * InvertY * LonGain + SoftDead(gradeSig, dz) * GradeGain;
 
             // smoothed accel envelope for the Acceleration-pulse cue model (band-passed mag, never raw -> no strobe)
             double cueMag = Math.Sqrt(lat * lat + fore * fore);
@@ -1030,7 +1052,7 @@ namespace OrbitalOverlay
                 $"in  a:{rawX,7:0.0}{rawY,7:0.0}{rawZ,7:0.0}   |a|:{Math.Sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ),5:0.0}\n" +
                 $"grav :{gx,7:0.0}{gy,7:0.0}{gz,7:0.0}\n" +
                 $"gyro :{rawGyroX,7:0.0}{rawGyroY,7:0.0}{rawYaw,7:0.0}\n" +
-                $"lat:{lat,7:0.00}  fore:{fore,7:0.00}\n" +
+                $"lat:{lat,7:0.00}  fore:{fore,7:0.00}  grade:{gradeSig,6:0.00}\n" +
                 $"vel:{velX,7:0.0}  {velY,7:0.0}\n" +
                 $"act:{activityEma,6:0.000} jit:{jitterEma,5:0.00} spd:{(SpeedFresh ? (phoneSpeed * 3.6).ToString("0.0") + "km/h" : "--")}  {(AutoPause ? (autoStill ? "HIDDEN (stopped)" : "moving") : "autohide off")}" +
                 (Simulating ? $"\nSIM phase: {sim.PhaseName}" : "");
@@ -1043,6 +1065,7 @@ namespace OrbitalOverlay
             settleFrames = 0;                       // re-arm the warm-up gate before re-locking
             tiltHold = 0;
             lat = fore = yaw = 0;
+            gradeSig = 0; gradeBaseSet = false;     // re-zero the hill baseline to the new resting tilt
             fwd1 = 0; fwd2 = 1;                     // re-learn the forward axis from scratch
             velX = velY = offX = offY = 0;
             startupSuppress = false;                // an explicit recenter means "show me the dots now"
@@ -1070,6 +1093,7 @@ namespace OrbitalOverlay
             settleFrames = 0;
             tiltHold = 0;
             lat = fore = yaw = 0;
+            gradeSig = 0; gradeBaseSet = false;     // re-zero the hill baseline for the new source's resting tilt
             fwd1 = 0; fwd2 = 1;                     // laptop and phone differ in mount -> re-learn forward
             velX = velY = 0;
             if (!startupSuppress) autoStill = false;                 // a source switch (e.g. phone connect) must NOT
@@ -1172,7 +1196,7 @@ namespace OrbitalOverlay
 
         readonly OverlayWindow ov;
         readonly PhoneServer server;
-        Slider slider, sizeSlider, lonSlider, opacitySlider, densitySlider, decaySlider, hideSlider;
+        Slider slider, sizeSlider, lonSlider, gradeSlider, opacitySlider, densitySlider, decaySlider, hideSlider;
         StackPanel accentRow;
         CheckBox pause, flipV, flipH, swap, dbg, placementTog;
         TextBlock hotkeyHint, dbgText;
@@ -1381,6 +1405,21 @@ namespace OrbitalOverlay
             lonSlider.ValueChanged += (s, e) => { ov.LonGain = e.NewValue; lonVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
             lonVal.Text = Math.Abs(ov.LonGain) < 0.05 ? "off" : ov.LonGain.ToString("+0.0;-0.0") + "×";
             feel.Children.Add(lonSlider);
+
+            // --- Hill / grade trim: bipolar -4..4, sign = direction, 0 = off. INDEPENDENT of Accel/Brake
+            // and Flip vertical — drives the dots on slopes (where there's no linear accel) from the
+            // pitch of gravity. Flip the sign if uphill/downhill drift the wrong way. ---
+            feel.Children.Add(FieldHead("Hill / grade", out var gradeVal));
+            gradeSlider = Styled(new Slider
+            {
+                Minimum = -4, Maximum = 4, Value = ov.GradeGain,
+                TickFrequency = 0.1, IsSnapToTickEnabled = true,
+                Margin = new Thickness(0, 4, 0, 12)
+            }, "OrbitSlider");
+            gradeSlider.ToolTip = "Hill cue. Drives the dots on slopes (uphill/downhill) separately from accelerate/brake. Sign sets direction; centre is off.";
+            gradeSlider.ValueChanged += (s, e) => { ov.GradeGain = e.NewValue; gradeVal.Text = Math.Abs(e.NewValue) < 0.05 ? "off" : e.NewValue.ToString("+0.0;-0.0") + "×"; QueueSave(); };
+            gradeVal.Text = Math.Abs(ov.GradeGain) < 0.05 ? "off" : ov.GradeGain.ToString("+0.0;-0.0") + "×";
+            feel.Children.Add(gradeSlider);
 
             // --- Smoothness / trail (flow decay) — how long the flow persists ---
             feel.Children.Add(FieldHead("Smoothness / trail", out var decayVal));

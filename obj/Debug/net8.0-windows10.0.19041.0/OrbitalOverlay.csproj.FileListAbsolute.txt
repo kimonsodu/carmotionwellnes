@@ -25,3 +25,8 @@ C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.deps.
 C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.runtimeconfig.json
 C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.dll
 C:\Users\simon\AppData\Local\Temp\claude\orbital-buildcheck\OrbitalOverlay.pdb
+C:\Users\simon\AppData\Local\Temp\orbital_buildcheck\OrbitalOverlay.exe
+C:\Users\simon\AppData\Local\Temp\orbital_buildcheck\OrbitalOverlay.deps.json
+C:\Users\simon\AppData\Local\Temp\orbital_buildcheck\OrbitalOverlay.runtimeconfig.json
+C:\Users\simon\AppData\Local\Temp\orbital_buildcheck\OrbitalOverlay.dll
+C:\Users\simon\AppData\Local\Temp\orbital_buildcheck\OrbitalOverlay.pdb

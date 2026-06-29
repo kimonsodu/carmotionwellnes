@@ -1,154 +1,158 @@
 [
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-mdpi_ic_launcher_foreground.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-mdpi/ic_launcher_foreground.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_value_pill.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\value_pill.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-mdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-mdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxxhdpi/ic_launcher_foreground.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_foreground.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xhdpi_ic_launcher.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xhdpi/ic_launcher.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xhdpi_ic_launcher_monochrome.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xhdpi\\ic_launcher_monochrome.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-hdpi_ic_launcher_foreground.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-hdpi/ic_launcher_foreground.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_ic_orbit_notify.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\ic_orbit_notify.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_ic_orbit_notify.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/ic_orbit_notify.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxhdpi\\ic_launcher_round.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_readout_bg.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/readout_bg.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xhdpi_ic_launcher_foreground.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xhdpi\\ic_launcher_foreground.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_btn_primary.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/btn_primary.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xhdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-anydpi-v26/ic_launcher.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_field.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\field.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-hdpi_ic_launcher_round.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-hdpi/ic_launcher_round.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-hdpi_ic_launcher_monochrome.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-hdpi\\ic_launcher_monochrome.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_ic_orbit_mark.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/ic_orbit_mark.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_preview_bg.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\preview_bg.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxxhdpi/ic_launcher_round.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xhdpi\\ic_launcher_round.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-hdpi_ic_launcher_monochrome.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-hdpi/ic_launcher_monochrome.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxxhdpi_ic_launcher_monochrome.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_monochrome.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-mdpi_ic_launcher.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-mdpi/ic_launcher.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-mdpi_ic_launcher_monochrome.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-mdpi\\ic_launcher_monochrome.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_info_card.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/info_card.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_btn_secondary.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\btn_secondary.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxhdpi_ic_launcher_monochrome.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxhdpi/ic_launcher_monochrome.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxxhdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxhdpi_ic_launcher_foreground.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxhdpi/ic_launcher_foreground.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\layout\\activity_main.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxxhdpi_ic_launcher_monochrome.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxxhdpi/ic_launcher_monochrome.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\color_chip_text.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\color\\chip_text.xml"
+    },
+    {
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_info_card.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\info_card.xml"
     },
     {
         "merged": "com.orbital.phone.app-debug-4:/layout_activity_main.xml.flat",
         "source": "com.orbital.phone.app-main-6:/layout/activity_main.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xhdpi_ic_launcher_foreground.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xhdpi/ic_launcher_foreground.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxhdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-mdpi_ic_launcher_round.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-mdpi/ic_launcher_round.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-hdpi_ic_launcher_foreground.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-hdpi\\ic_launcher_foreground.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_chip_bg.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/chip_bg.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-mdpi_ic_launcher_foreground.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-mdpi\\ic_launcher_foreground.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_value_pill.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/value_pill.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_field.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/field.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_round.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_bg_app.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/bg_app.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_readout_bg.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\readout_bg.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_card.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/card.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_btn_primary.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\btn_primary.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_preview_bg.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/preview_bg.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-hdpi\\ic_launcher_round.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-hdpi_ic_launcher.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-hdpi/ic_launcher.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_ic_orbit_mark.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\ic_orbit_mark.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-mdpi_ic_launcher_monochrome.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-mdpi/ic_launcher_monochrome.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_card.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\card.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxhdpi_ic_launcher.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxhdpi/ic_launcher.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-hdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-hdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xhdpi_ic_launcher_round.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xhdpi/ic_launcher_round.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_demo_pill.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\demo_pill.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xhdpi_ic_launcher_monochrome.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xhdpi/ic_launcher_monochrome.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxhdpi_ic_launcher_foreground.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxhdpi\\ic_launcher_foreground.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/color_chip_text.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/color/chip_text.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_chip_bg.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\chip_bg.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_demo_pill.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/demo_pill.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_bg_app.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\bg_app.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-xxhdpi_ic_launcher_round.png.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-xxhdpi/ic_launcher_round.png"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-mdpi\\ic_launcher_round.png"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_btn_outline.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/btn_outline.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\drawable_btn_outline.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\drawable\\btn_outline.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/mipmap-anydpi-v26/ic_launcher_round.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-anydpi-v26\\ic_launcher.xml"
     },
     {
-        "merged": "com.orbital.phone.app-debug-4:/drawable_btn_secondary.xml.flat",
-        "source": "com.orbital.phone.app-main-6:/drawable/btn_secondary.xml"
+        "merged": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-debug-4:\\mipmap-xxhdpi_ic_launcher_monochrome.png.flat",
+        "source": "C:\\Users\\simon\\.gradle\\daemon\\8.9\\com.orbital.phone.app-main-6:\\mipmap-xxhdpi\\ic_launcher_monochrome.png"
     }
 ]

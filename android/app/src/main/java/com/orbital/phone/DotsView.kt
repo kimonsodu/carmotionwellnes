@@ -28,11 +28,13 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     // --- cleaned vehicle-motion drive (computed by the shared VehicleFilter in OverlayService) ---
     @Volatile private var inScreenX = 0f // screen-relative accel m/s^2: + = felt accel toward screen-right
     @Volatile private var inScreenY = 0f // screen-relative accel m/s^2: + = felt accel toward screen-forward (accelerate)
+    @Volatile private var inGrade = 0f   // road-grade (hill) cue m/s^2, baselined; drives the vertical axis
     @Volatile private var inEnable = 1f  // 0..1 in-vehicle/GPS enable (also cue fade target)
 
     // --- live params (defaults mirror the original behaviour) ---
     private var strength = SettingsStore.DEF_STRENGTH
     private var lonGain = SettingsStore.DEF_LON_GAIN   // fore/aft (accel/brake) sensitivity; magnitude only
+    private var gradeGain = SettingsStore.DEF_GRADE_GAIN // hill/grade sensitivity; SIGNED (direction)
     private var sizeScale = SettingsStore.DEF_DOT_SIZE
     private var colorMode = SettingsStore.DEF_DOT_COLOR
     private var autoHide = SettingsStore.DEF_AUTO_HIDE
@@ -104,7 +106,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
      * screenX = + toward screen-right, screenY = + toward screen-forward (accelerate), enable = 0..1.
      * Screen-relative means seating orientation (forward/back/sideways) is already handled — no sign.
      */
-    fun feed(screenX: Float, screenY: Float, enable: Float) { inScreenX = screenX; inScreenY = screenY; inEnable = enable }
+    fun feed(screenX: Float, screenY: Float, grade: Float, enable: Float) { inScreenX = screenX; inScreenY = screenY; inGrade = grade; inEnable = enable }
 
     /** Preview only: synthesize a gentle motion so the settings screen animates at a desk. Never set
      *  by OverlayService, so the real overlay can't run on synthetic values. */
@@ -114,6 +116,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val rebuild = density != p.density || placement != p.placement   // geometry (field counts/bands) changed
         strength = p.strength
         lonGain = p.lonGain
+        gradeGain = p.gradeGain
         sizeScale = p.dotSize
         colorMode = p.colorMode
         cueStyle = p.cueStyle
@@ -146,6 +149,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         } else {
             sx = inScreenX; sy = inScreenY; enable = inEnable.coerceIn(0f, 1f)
         }
+        val grade = if (demoMode) 0f else inGrade   // hill cue (0 in the desk preview)
 
         // Inputs are ALREADY screen-relative, band-passed, gyro-gated, jerk-limited, deadbanded by
         // VehicleFilter — DotsView only integrates to drift. Direction is AUTOMATIC for any seat:
@@ -153,15 +157,19 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val gain = 0.12f * strength
         val driveX = sx * enable
         val driveY = sy * enable
+        val driveG = grade * enable
         velX = velX * decay - driveX * gain
         // lonGain scales ONLY the screen-vertical axis to preserve the original fore/aft-vs-lateral feel.
-        velY = velY * decay + driveY * lonGain * gain
+        // The hill/grade cue rides the SAME vertical axis with its own SIGNED gain (gradeGain), so a
+        // slope drifts the dots even at steady speed; sign flips uphill/downhill direction.
+        velY = velY * decay + driveY * lonGain * gain + driveG * gradeGain * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
 
         // --- auto-hide energy gate (driven by the cleaned magnitude; ~0 unless real vehicle motion) ---
-        val mag = sqrt(driveX * driveX + driveY * driveY)
+        // include the grade drive so a sustained slope at steady speed keeps the cue awake.
+        val mag = sqrt(driveX * driveX + driveY * driveY + driveG * driveG)
         // accel envelope for the Acceleration-pulse model — fed from the already band-passed/deadbanded
         // mag (never raw), and smoothed, so brightness can't strobe (photosensitivity guard).
         accelEnv += ((mag / 3.0f).coerceIn(0f, 1f) - accelEnv) * 0.20f

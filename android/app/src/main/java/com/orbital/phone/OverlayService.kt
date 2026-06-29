@@ -203,7 +203,7 @@ class OverlayService : Service(), SensorEventListener,
             simPhase = s.phase                             // surface the active scenario phase to the app UI
             vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
             val o = vf.onAccel(s.accel, false, Ridentity, System.nanoTime())   // raw accel incl. gravity, R = identity
-            view?.feed(o.screenX, o.screenY, o.enable)
+            view?.feed(o.screenX, o.screenY, o.grade, o.enable)
             sensorHandler?.postDelayed(this, 16L)          // ~62 Hz self-repost
         }
     }
@@ -260,11 +260,11 @@ class OverlayService : Service(), SensorEventListener,
                 vf.onGyro(e.values[0], e.values[1], e.values[2])
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 val o = vf.onAccel(e.values, true, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.enable)
+                view?.feed(o.screenX, o.screenY, o.grade, o.enable)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.enable)
+                view?.feed(o.screenX, o.screenY, o.grade, o.enable)
             }
         }
     }

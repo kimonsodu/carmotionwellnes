@@ -39,13 +39,14 @@ id btnOverlay
 id btnPick
 id btnReset
 id cbAutoHide
+id cbLaptop
+id cbPhone
 id chipAccentAmber
 id chipAccentBlue
 id chipAccentTeal
 id customBox
 id demoPill
 id dotsPreview
-id dotsTarget
 id host
 id laptopBox
 id modeGroup
@@ -55,12 +56,10 @@ id previewContainer
 id rbBt
 id rbColorCustom
 id rbDark
-id rbLaptop
 id rbLight
 id rbMixed
 id rbModelFlow
 id rbModelPulse
-id rbPhone
 id rbPlaceFull
 id rbPlaceStrips
 id rbPresetBalanced
@@ -75,6 +74,7 @@ id rgPlacement
 id rgPreset
 id seekDecay
 id seekDensity
+id seekGrade
 id seekHide
 id seekLon
 id seekOpacity
@@ -92,6 +92,7 @@ id toggle
 id tvBt
 id tvDecayVal
 id tvDensityVal
+id tvGradeVal
 id tvHideVal
 id tvLonVal
 id tvOpacityVal
