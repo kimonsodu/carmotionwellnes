@@ -18,7 +18,7 @@ object SettingsStore {
 
     // ---- existing keys ----
     const val K_STRENGTH = "ph_strength"     // Float 0.3..6.0  (drift sensitivity multiplier)
-    const val K_LON_GAIN = "ph_lonGain"      // Float 0..4 fore/aft (accel/brake) sensitivity; 0 = off. Direction is automatic (screen-relative cue); legacy signed values read as |v|.
+    const val K_LON_GAIN = "ph_lonGain"      // Float -4..4 fore/aft (accel/brake) trim; SIGN = direction (accelerate = dots down), |v| = sensitivity, 0 = off. Mirrors Windows; independent of Hill/grade.
     const val K_GRADE_GAIN = "ph_gradeGain"  // Float -4..4 hill/grade sensitivity; SIGN = direction (uphill/downhill), 0 = off. Independent of accel/brake.
     const val K_DOT_SIZE = "ph_dotSize"      // Float 0.4..3.0  (element size scale)
     const val K_DOT_COLOR = "ph_dotColor"    // Int   0/1/2/3 = Light / Mixed / Dark / Custom(accent)
@@ -67,9 +67,9 @@ object SettingsStore {
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun strength(c: Context) = prefs(c).getFloat(K_STRENGTH, DEF_STRENGTH).coerceIn(0.3f, 6.0f)
-    // abs(): a legacy negative value (the old "reversed for backward seating" hack) becomes the
-    // correct magnitude — direction is now handled automatically by the screen-relative cue.
-    fun lonGain(c: Context) = kotlin.math.abs(prefs(c).getFloat(K_LON_GAIN, DEF_LON_GAIN)).coerceIn(0f, 4.0f)
+    // SIGNED accel/brake trim (mirrors Windows LonGain): sign sets direction, |v| sets sensitivity,
+    // centre = off. Separate from the signed Hill/grade trim, so accel and hill flip independently.
+    fun lonGain(c: Context) = prefs(c).getFloat(K_LON_GAIN, DEF_LON_GAIN).coerceIn(-4.0f, 4.0f)
     fun gradeGain(c: Context) = prefs(c).getFloat(K_GRADE_GAIN, DEF_GRADE_GAIN).coerceIn(-4.0f, 4.0f)   // signed
     fun dotSize(c: Context) = prefs(c).getFloat(K_DOT_SIZE, DEF_DOT_SIZE).coerceIn(0.4f, 3.0f)
     fun dotColor(c: Context) = prefs(c).getInt(K_DOT_COLOR, DEF_DOT_COLOR).coerceIn(0, 3)
@@ -94,7 +94,7 @@ object SettingsStore {
     fun setFlipV(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_V, v).apply()
     fun setFlipH(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_H, v).apply()
     fun setSwap(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_SWAP, v).apply()
-    fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(0f, 4.0f)).apply()
+    fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(-4.0f, 4.0f)).apply()
     fun setGradeGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_GRADE_GAIN, v.coerceIn(-4.0f, 4.0f)).apply()
     fun setDotSize(c: Context, v: Float) = prefs(c).edit().putFloat(K_DOT_SIZE, v.coerceIn(0.4f, 3.0f)).apply()
     fun setDotColor(c: Context, v: Int) = prefs(c).edit().putInt(K_DOT_COLOR, v.coerceIn(0, 3)).apply()

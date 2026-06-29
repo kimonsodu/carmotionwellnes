@@ -312,12 +312,12 @@ class MainActivity : Activity() {
         cbAutoHide.isChecked = SettingsStore.autoHide(this)
         cbAutoHide.setOnCheckedChangeListener { _, on -> SettingsStore.setAutoHide(this, on); refreshPreview() }
 
-        // ---- Advanced: accel/brake (magnitude only; direction is automatic) ----
+        // ---- Advanced: accel/brake (SIGNED -4..4; centre = off, left = reversed — mirrors Windows) ----
         val lon = SettingsStore.lonGain(this)
-        seekLon.max = 40; seekLon.progress = (lon * 10f).toInt().coerceIn(0, 40)
-        tvLonVal.text = fmtLon(lon)
+        seekLon.max = 80; seekLon.progress = ((lon + 4f) * 10f).toInt().coerceIn(0, 80)
+        tvLonVal.text = fmtGrade(lon)
         seekLon.setOnSeekBarChangeListener(simpleSeek { prog ->
-            val v = prog / 10f; SettingsStore.setLonGain(this, v); tvLonVal.text = fmtLon(v); refreshPreview()
+            val v = prog / 10f - 4f; SettingsStore.setLonGain(this, v); tvLonVal.text = fmtGrade(v); refreshPreview()
         })
 
         // ---- Advanced: hill / grade (SIGNED -4..4; centre = off, left = reversed) ----
@@ -390,11 +390,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun fmtLon(v: Float): String =
-        if (v < 0.05f) "off"
-        else String.format(java.util.Locale.US, "%.1f×", v)
-
-    // signed: "off" near centre, else "+1.0×" / "-1.0×" (sign = uphill/downhill direction)
+    // signed trim format: "off" near centre, else "+1.0×" / "-1.0×" (sign = direction).
+    // Shared by Accel/brake and Hill/grade — both are signed, independent controls (Windows parity).
     private fun fmtGrade(v: Float): String =
         if (kotlin.math.abs(v) < 0.05f) "off"
         else String.format(java.util.Locale.US, "%+.1f×", v)

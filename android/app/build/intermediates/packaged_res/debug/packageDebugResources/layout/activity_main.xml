@@ -61,14 +61,16 @@
                     android:text="Stream to laptop"
                     android:textColor="@color/text"
                     android:checked="true"
-                    android:layout_marginEnd="20dp"
-                    android:layout_width="wrap_content"
+                    android:layout_marginEnd="12dp"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content" />
                 <CheckBox
                     android:id="@+id/cbPhone"
                     android:text="Cue on this phone"
                     android:textColor="@color/text"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
@@ -355,10 +357,10 @@
                     android:orientation="horizontal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
-                    <RadioButton android:id="@+id/rbPresetCalm" style="@style/ChipRadio" android:text="Calm" />
-                    <RadioButton android:id="@+id/rbPresetBalanced" style="@style/ChipRadio" android:text="Balanced" />
-                    <RadioButton android:id="@+id/rbPresetStrong" style="@style/ChipRadio" android:text="Strong" />
-                    <RadioButton android:id="@+id/rbPresetCustom" style="@style/ChipRadio" android:text="Custom" />
+                    <RadioButton android:id="@+id/rbPresetCalm" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Calm" />
+                    <RadioButton android:id="@+id/rbPresetBalanced" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Balanced" />
+                    <RadioButton android:id="@+id/rbPresetStrong" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Strong" />
+                    <RadioButton android:id="@+id/rbPresetCustom" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Custom" />
                 </RadioGroup>
                 <LinearLayout
                     android:id="@+id/customBox"
@@ -413,10 +415,10 @@
                     android:layout_marginTop="4dp"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
-                    <RadioButton android:id="@+id/rbLight" style="@style/ChipRadio" android:text="Light" />
-                    <RadioButton android:id="@+id/rbMixed" style="@style/ChipRadio" android:text="Mixed" android:checked="true" />
-                    <RadioButton android:id="@+id/rbDark" style="@style/ChipRadio" android:text="Dark" />
-                    <RadioButton android:id="@+id/rbColorCustom" style="@style/ChipRadio" android:text="Accent" />
+                    <RadioButton android:id="@+id/rbLight" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Light" />
+                    <RadioButton android:id="@+id/rbMixed" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Mixed" android:checked="true" />
+                    <RadioButton android:id="@+id/rbDark" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Dark" />
+                    <RadioButton android:id="@+id/rbColorCustom" style="@style/ChipRadio" android:layout_width="0dp" android:layout_weight="1" android:text="Accent" />
                 </RadioGroup>
                 <LinearLayout
                     android:id="@+id/accentRow"
@@ -483,13 +485,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
                     <LinearLayout style="@style/RowLine">
-                        <TextView style="@style/FieldLabel" android:text="Accel / brake response" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
-                        <TextView android:id="@+id/tvLonVal" style="@style/ValuePill" android:text="1.5×" />
+                        <TextView style="@style/FieldLabel" android:text="Accel / brake" android:layout_weight="1" android:layout_width="0dp" android:layout_height="wrap_content" />
+                        <TextView android:id="@+id/tvLonVal" style="@style/ValuePill" android:text="+1.5×" />
                     </LinearLayout>
                     <SeekBar android:id="@+id/seekLon" android:layout_width="match_parent" android:layout_height="wrap_content" />
                     <TextView
                         style="@style/FieldLabel"
-                        android:text="Higher = accel and braking move the cue more. Direction is automatic for any seat. 0 = no accel/brake cue."
+                        android:text="Fore/aft cue trim, separate from Hill/grade. Sign sets direction (accelerate = dots down); slide left of centre to reverse; centre = off."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

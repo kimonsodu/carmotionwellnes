@@ -33,7 +33,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
 
     // --- live params (defaults mirror the original behaviour) ---
     private var strength = SettingsStore.DEF_STRENGTH
-    private var lonGain = SettingsStore.DEF_LON_GAIN   // fore/aft (accel/brake) sensitivity; magnitude only
+    private var lonGain = SettingsStore.DEF_LON_GAIN   // fore/aft (accel/brake) trim; SIGNED (sign = direction)
     private var gradeGain = SettingsStore.DEF_GRADE_GAIN // hill/grade sensitivity; SIGNED (direction)
     private var invertX = 1f             // -1 = flip horizontal (turn) direction
     private var invertY = 1f             // -1 = flip vertical (accel/brake) direction
