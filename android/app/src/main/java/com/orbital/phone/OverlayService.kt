@@ -64,6 +64,7 @@ class OverlayService : Service(), SensorEventListener,
     private val sim = MotionSimulator()
     @Volatile private var simScenario = MotionSimulator.OFF   // 0 = Off -> original real-sensor behaviour
     @Volatile private var simRunning = false
+    @Volatile private var simSeatLabel = "facing forward"     // seat name shown in the on-cue note
     private var lm: LocationManager? = null
     private var locListener: LocationListener? = null
     @Volatile private var sensing = false       // true while screen-on and the IMU/GPS are live
@@ -199,7 +200,10 @@ class OverlayService : Service(), SensorEventListener,
             if (!simRunning) return
             vf.onGps(15f, 0f, false)                       // ~15 m/s so the in-vehicle gate enables
             val s = sim.step()
-            simPhase = s.phase                             // surface the active scenario phase to the app UI
+            if (s.phase != simPhase) {                     // phase changed -> update the on-cue note (no per-frame alloc)
+                simPhase = s.phase
+                view?.setSimLabel(if (s.phase == "Rest") "— Rest —" else "${s.phase} · $simSeatLabel")
+            }
             vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
             val o = vf.onAccel(s.accel, false, s.R, System.nanoTime())   // raw accel + R from sim (grade+seat), so the hill cue fires like a real rotation-vector phone
             view?.feed(o.screenX, o.screenY, o.grade, o.enable)
@@ -217,6 +221,7 @@ class OverlayService : Service(), SensorEventListener,
     private fun stopSimLoop() {
         simRunning = false
         simPhase = ""
+        ui.post { view?.setSimLabel(null) }   // clear the on-cue note
         sensorHandler?.removeCallbacks(simRunnable)
     }
 
@@ -302,7 +307,9 @@ class OverlayService : Service(), SensorEventListener,
 
     /** Seating heading for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) / 3 Rear (180°). */
     private fun applySimSeat() {
-        sim.seatPsiDeg = when (SettingsStore.simSeat(this)) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
+        val seat = SettingsStore.simSeat(this)
+        sim.seatPsiDeg = when (seat) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
+        simSeatLabel = when (seat) { 1 -> "facing left"; 2 -> "facing right"; 3 -> "facing rear"; else -> "facing forward" }
     }
 
     private fun startForegroundNotification() {

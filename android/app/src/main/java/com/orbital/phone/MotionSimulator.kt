@@ -33,11 +33,12 @@ class MotionSimulator {
         private const val G = 9.81f
         private const val RAMP = 0.6f      // smoothstep ease-in/out so the cue glides (spec)
         private const val DT = 1f / 62f    // synthetic step matches the ~62 Hz drive loop
-        // A SINGLE held scenario loops [maneuver -> rest] instead of holding: a constant accel is
-        // absorbed by the gravity self-split (cue decays in ~1.5 s), so re-firing keeps the cue alive
-        // and makes seat mirroring obvious without watching a one-shot transient.
-        private const val SINGLE_ON = 2.6f
-        private const val SINGLE_OFF = 1.8f
+        // A SINGLE held scenario LINEARLY ramps the maneuver up (a steady rate of change makes the
+        // band-pass/gravity-split emit a CONSTANT cue -> the dots drift steadily ONE way for the whole
+        // active window, instead of a brief spike that snaps back). Then a slower release ramps it down
+        // ("Rest") so the reverse is gentle. Repeats so seat mirroring stays visible.
+        private const val SINGLE_ON = 3.0f     // steady one-direction drift, labelled with the maneuver
+        private const val SINGLE_OFF = 4.0f    // slower release -> gentle settle, labelled "Rest"
     }
 
     /** One driving phase. dur is only used by the looping "All" script (single-hold ignores it). */
@@ -109,15 +110,11 @@ class MotionSimulator {
             aFwd = ph.aFwd * s; aRight = ph.aRight * s; yawDeg = ph.yawDeg * s; gradeDeg = ph.gradeDeg * s
         } else {
             clock += DT
-            val cyc = clock % (SINGLE_ON + SINGLE_OFF)         // single scenario: loop maneuver -> rest
-            if (cyc < SINGLE_ON) {
-                val s = min(smoothstep(cyc / RAMP), smoothstep((SINGLE_ON - cyc) / RAMP))  // ease in AND out
-                name = single.name
-                aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
-            } else {
-                name = "Rest"
-                aFwd = 0f; aRight = 0f; yawDeg = 0f; gradeDeg = 0f
-            }
+            val cyc = clock % (SINGLE_ON + SINGLE_OFF)         // single scenario: ramp up -> slow release, repeat
+            val s: Float
+            if (cyc < SINGLE_ON) { s = cyc / SINGLE_ON; name = single.name }   // LINEAR up -> constant, steady cue
+            else { s = 1f - (cyc - SINGLE_ON) / SINGLE_OFF; name = "Rest" }     // slow linear release
+            aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
         }
         psiDeg = seatPsiDeg                                   // seating applies to whatever scenario is running
 

@@ -30,6 +30,11 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     @Volatile private var inScreenY = 0f // screen-relative accel m/s^2: + = felt accel toward screen-forward (accelerate)
     @Volatile private var inGrade = 0f   // road-grade (hill) cue m/s^2, baselined; drives the vertical axis
     @Volatile private var inEnable = 1f  // 0..1 in-vehicle/GPS enable (also cue fade target)
+    @Volatile private var simLabel: String? = null   // simulation note ("Accelerate", "Turn left"…) or null
+
+    /** Show a note over the cue naming the simulated maneuver (null = nothing). Set by OverlayService
+     *  only while a sim scenario runs, so the real overlay is never labelled. */
+    fun setSimLabel(s: String?) { simLabel = s }
 
     // --- live params (defaults mirror the original behaviour) ---
     private var strength = SettingsStore.DEF_STRENGTH
@@ -75,6 +80,11 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private val light = Color.argb(217, 0xEC, 0xE7, 0xD7)   // warm off-white (matches PC light dot)
     private val dark = Color.argb(217, 0x12, 0x16, 0x1E)    // near-bg dark (matches PC dark dot)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; textAlign = Paint.Align.CENTER; textSize = 22f * d
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    private val labelBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(180, 0x12, 0x16, 0x1E) }
 
     // --- scattered field (shared by Dots / Streaks; the strips also anchor Chevrons/Rails) ---
     // side: 0 left strip, 1 right strip, 2 top band, 3 bottom band (bands only when placement=Full).
@@ -271,6 +281,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
+        drawSimLabel(c, w)                          // always show the sim note, even when the dots are faded
         val a = dotsAlpha.coerceIn(0f, 1f)
         if (a <= 0.01f) return
         if (field.isEmpty() || builtW != width || builtH != height) {
@@ -288,6 +299,21 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
             5 -> renderChevrons(c)
             else -> renderDots(c)
         }
+    }
+
+    // Sim note: a centred pill near the top naming the current maneuver, so you can tell what the
+    // cue is reacting to (and which way it should drift) at a glance.
+    private fun drawSimLabel(c: Canvas, w: Float) {
+        val txt = simLabel ?: return
+        val y = 64f * d
+        val tw = labelPaint.measureText(txt)
+        val padX = 18f * d; val padY = 11f * d
+        val fm = labelPaint.fontMetrics
+        val cx = w / 2f
+        val top = y + fm.ascent - padY; val bot = y + fm.descent + padY
+        val r = (bot - top) / 2f
+        c.drawRoundRect(cx - tw / 2f - padX, top, cx + tw / 2f + padX, bot, r, r, labelBgPaint)
+        c.drawText(txt, cx, y, labelPaint)
     }
 
     // ---- styles --------------------------------------------------------------------------------

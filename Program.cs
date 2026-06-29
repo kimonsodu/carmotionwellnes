@@ -178,6 +178,7 @@ namespace OrbitalOverlay
     {
         // --- flow state, written by OverlayWindow.Frame() each tick ---
         public double OffX, OffY, VelX, VelY, AccelEnv;
+        public string SimLabel;           // simulation note ("Accelerate", "Turn left"…) or null
 
         // --- live params (mirror Android's DotsView) ---
         public int DotStyle = 1;          // colour mode: 0 light, 1 mixed, 2 dark, 3 accent
@@ -311,6 +312,23 @@ namespace OrbitalOverlay
                 case 5: Chevrons(dc); break;
                 default: Dots(dc); break;
             }
+            DrawSimLabel(dc, w);
+        }
+
+        // Sim note: a centred pill near the top naming the current maneuver, so you can tell what the
+        // cue is reacting to at a glance during desk testing.
+        void DrawSimLabel(DrawingContext dc, double w)
+        {
+            var txt = SimLabel;
+            if (string.IsNullOrEmpty(txt)) return;
+            var ft = new FormattedText(txt, System.Globalization.CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
+                22, Brushes.White, 1.0);
+            double padX = 16, padY = 9, y = 54;
+            double bx = w / 2 - ft.Width / 2, by = y;
+            var rect = new Rect(bx - padX, by - padY, ft.Width + padX * 2, ft.Height + padY * 2);
+            dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(190, 0x12, 0x16, 0x1E)), null, rect, rect.Height / 2, rect.Height / 2);
+            dc.DrawText(ft, new Point(bx, by));
         }
 
         void Dots(DrawingContext dc)
@@ -466,8 +484,9 @@ namespace OrbitalOverlay
         const double Deg = Math.PI / 180.0;
         const double Ramp = 0.6;            // smoothstep ease-in/out per active phase (s) so the cue glides
         const double GradeRate = 4.5;       // deg/s max road-grade pitch rate -> stays under the lid-tilt reject knee (6)
-        const double SingleOn = 2.6, SingleOff = 1.8;   // a single held scenario loops [maneuver -> rest] so its
-                                                        // transient re-fires (a constant accel is absorbed by the gravity estimate)
+        const double SingleOn = 3.0, SingleOff = 4.0;   // a single scenario LINEARLY ramps the maneuver up (steady
+                                                        // rate -> constant cue -> dots drift one way), then a slower
+                                                        // release ("Rest"); repeats. No snap-back within the maneuver.
 
         public SimScenario Scenario = SimScenario.Off;
         // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
@@ -546,17 +565,11 @@ namespace OrbitalOverlay
             else
             {
                 var p = Single(Scenario);
-                double cyc = t % (SingleOn + SingleOff);     // loop maneuver -> rest so the cue re-fires
-                if (cyc < SingleOn)
-                {
-                    double s = Math.Min(SmoothStep(0, Ramp, cyc), SmoothStep(0, Ramp, SingleOn - cyc));  // ease in + out
-                    aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
-                    gradeTarget = p.Grade; PhaseName = p.Name;
-                }
-                else
-                {
-                    aFwd = 0; aRight = 0; yaw = 0; gradeTarget = 0; PhaseName = "Rest";
-                }
+                double cyc = t % (SingleOn + SingleOff);     // ramp up -> slow release, repeating
+                double s;
+                if (cyc < SingleOn) { s = cyc / SingleOn; PhaseName = p.Name; }       // LINEAR up -> constant, steady cue
+                else { s = 1.0 - (cyc - SingleOn) / SingleOff; PhaseName = "Rest"; }    // slow linear release
+                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s; gradeTarget = p.Grade * s;
             }
             psi = SeatPsi;                              // seating heading applies to whatever scenario is running
 
@@ -1063,6 +1076,10 @@ namespace OrbitalOverlay
             cue.DotScale = DotScale; cue.DotStyle = DotStyle; cue.AccentColor = AccentColor;
             cue.DotOpacity = DotOpacity; cue.Density = Density; cue.Placement = Placement;
             cue.CueStyle = CueStyle; cue.CueModel = CueModel;
+            cue.SimLabel = Simulating
+                ? (sim.PhaseName == "Rest" || string.IsNullOrEmpty(sim.PhaseName)
+                    ? "— Rest —" : sim.PhaseName + "  ·  " + SeatName(sim.SeatPsi))
+                : null;
             cue.InvalidateVisual();
 
             DebugText =
@@ -1158,6 +1175,8 @@ namespace OrbitalOverlay
 
         // Seating orientation for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) /
         // 3 Rear (180°). Applies to whatever scenario is running.
+        static string SeatName(double psi) => psi switch { 90 => "facing left", 270 => "facing right", 180 => "facing rear", _ => "facing forward" };
+
         public void SetSimSeat(int seat)
         {
             sim.SeatPsi = seat switch { 1 => 90, 2 => 270, 3 => 180, _ => 0 };

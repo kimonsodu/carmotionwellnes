@@ -64,8 +64,11 @@ auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the 
 - **Off** (default every launch) — the real sensor drives the dots, exactly as normal.
 - **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
   uphill/downhill (road grade). The active phase name shows live under the buttons.
-- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) — it repeats on a
-  short loop (maneuver → rest) for focused testing, so the cue keeps re-firing instead of fading.
+- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) — it drifts the dots
+  steadily *one way* for a few seconds (a slow rest follows), then repeats, so you can clearly read
+  the direction instead of a flicker that snaps back.
+- A **note** on the overlay names the current maneuver + seat (e.g. "Accelerate · facing left"), so
+  you always know what the cue is reacting to.
 - **Seat orientation** — which way the rider faces (*forward / left / right / rear*), applied to
   *whatever* scenario is running, so you can test accel/turns/hills from any seat. Facing left or
   right shows forward motion (and hills) on the left/right channel; facing rear reverses it.

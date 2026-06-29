@@ -65,9 +65,11 @@ scenario:
 
 - **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades — so you
   can watch every axis respond in turn.
-- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill) repeat on a short
-  loop (maneuver → rest) so you can study one motion — and clearly see it mirror between the left
-  and right seats — instead of the cue fading after a second.
+- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill) drift the dots
+  steadily *one way* for a few seconds (then a slow rest), repeating — so you can clearly read the
+  direction and see it mirror between the left and right seats, instead of a flicker that snaps back.
+- A **note** drawn on the overlay names the current maneuver and seat (e.g. "Turn left · facing
+  right"), so you always know what the cue is reacting to.
 - **Seat orientation** — which way the rider faces (*forward / left / right / rear*), applied to
   whatever scenario is selected, so you can run accel/turns/hills from any seat (facing left and
   facing right are the two sideways/train cases).
