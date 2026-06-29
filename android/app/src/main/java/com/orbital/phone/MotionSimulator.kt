@@ -20,10 +20,13 @@ import kotlin.math.sin
 class MotionSimulator {
 
     companion object {
-        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..8)
+        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..10)
         const val OFF = 0; const val ALL = 1
         const val ACCELERATE = 2; const val BRAKE = 3; const val TURN_LEFT = 4; const val TURN_RIGHT = 5
         const val UPHILL = 6; const val DOWNHILL = 7; const val SIDEWAYS = 8
+        const val REVERSE = 9      // driving backwards (reverse gear): travel rearward, seat faces forward
+        const val BACKWARD = 10    // sitting backwards (rear-facing train seat): psi=180, fwd accel -> screen-back
+        const val MAX = BACKWARD
 
         private const val G = 9.81f
         private const val RAMP = 0.6f      // smoothstep ease-in/out so the cue glides (spec)
@@ -61,6 +64,12 @@ class MotionSimulator {
         Phase("Sideways acc", 3.0f, 2.5f, 0f, 0f, 0f, 90f),    // TRAIN: fwd accel lands on screen-X
         Phase("Sideways brk", 3.0f, -3.0f, 0f, 0f, 0f, 90f),
         Phase("Sideways turn", 3.0f, 0f, 2.6f, 24f, 0f, 90f),
+        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
+        Phase("Reverse acc", 3.0f, -2.5f, 0f, 0f, 0f, 0f),     // driving backwards: travel rearward
+        Phase("Reverse brk", 3.0f, 2.5f, 0f, 0f, 0f, 0f),      // braking out of reverse pushes forward
+        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
+        Phase("Backward acc", 3.0f, 2.5f, 0f, 0f, 0f, 180f),   // REAR-FACING seat: fwd accel -> screen-back
+        Phase("Backward brk", 3.0f, -3.0f, 0f, 0f, 0f, 180f),
         Phase("Rest", 2.0f, 0f, 0f, 0f, 0f, 0f)                // loop back to #1
     )
 
@@ -73,7 +82,7 @@ class MotionSimulator {
 
     /** Pick a scenario (resets the clock). OFF disables sim; the service then uses real sensors. */
     fun setScenario(s: Int) {
-        scenario = s.coerceIn(OFF, SIDEWAYS)
+        scenario = s.coerceIn(OFF, MAX)
         single = singleFor(scenario)
         idx = 0; clock = 0f; prevGradeRad = 0f
         currentPhase = if (scenario == ALL) script[0].name else single.name
@@ -132,6 +141,8 @@ class MotionSimulator {
         UPHILL -> Phase("Uphill", 0f, 0.4f, 0f, 0f, 9f, 0f)
         DOWNHILL -> Phase("Downhill", 0f, -0.4f, 0f, 0f, -9f, 0f)
         SIDEWAYS -> Phase("Sideways", 0f, 2.5f, 0f, 0f, 0f, 90f)   // TRAIN: cue on the lateral/screenX channel
+        REVERSE -> Phase("Reverse", 0f, -2.5f, 0f, 0f, 0f, 0f)     // driving backwards (rearward travel)
+        BACKWARD -> Phase("Rear-facing", 0f, 2.5f, 0f, 0f, 0f, 180f) // rear-facing seat: fwd accel -> screen-back
         else -> Phase("Off", 0f, 0f, 0f, 0f, 0f, 0f)
     }
 }

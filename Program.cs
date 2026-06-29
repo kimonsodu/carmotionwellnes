@@ -457,7 +457,7 @@ namespace OrbitalOverlay
     // Device is assumed flat, screen up (R = identity): x = right (East),
     // y = forward (North), z = up; resting reading = (0, 0, +G).
     // ---------------------------------------------------------------
-    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill, Sideways }
+    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill, Sideways, Reverse, Backward }
 
     public class MotionSimulator
     {
@@ -501,6 +501,12 @@ namespace OrbitalOverlay
             P("Sideways accel", 3.0,  2.5,  0,    0,   0,  90),
             P("Sideways brake", 3.0, -3.0,  0,    0,   0,  90),
             P("Sideways turn",  3.0,  0,    2.6,  24,  0,  90),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Reverse accel",  3.0, -2.5,  0,    0,   0,  0),    // driving backwards: travel rearward
+            P("Reverse brake",  3.0,  2.5,  0,    0,   0,  0),    // braking out of reverse pushes forward
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Backward accel", 3.0,  2.5,  0,    0,   0, 180),   // REAR-FACING seat: fwd accel -> dots the other way
+            P("Backward brake", 3.0, -3.0,  0,    0,   0, 180),
             P("Rest",           2.0,  0,    0,    0,   0,  0),
         };
 
@@ -514,6 +520,8 @@ namespace OrbitalOverlay
             SimScenario.Uphill     => P("Uphill",         0,  0.4, 0,    0,   9,  0),
             SimScenario.Downhill   => P("Downhill",       0, -0.4, 0,    0,  -9,  0),
             SimScenario.Sideways   => P("Sideways accel", 0,  2.5, 0,    0,   0,  90),
+            SimScenario.Reverse    => P("Reverse",        0, -2.5, 0,    0,   0,  0),    // driving backwards
+            SimScenario.Backward   => P("Rear-facing",    0,  2.5, 0,    0,   0, 180),   // rear-facing seat
             _                      => P("Rest",           0,  0,   0,    0,   0,  0),
         };
 
@@ -1806,9 +1814,10 @@ namespace OrbitalOverlay
             var simScenarios = new[]
             {
                 SimScenario.Off, SimScenario.All, SimScenario.Accelerate, SimScenario.Brake,
-                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill, SimScenario.Sideways
+                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill,
+                SimScenario.Sideways, SimScenario.Reverse, SimScenario.Backward
             };
-            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill", "Sideways" };
+            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill", "Sideways", "Reverse", "Rear-facing" };
             var simWrap = new WrapPanel();
             var simBtns = new Button[simScenarios.Length];
             void HighlightSim(int idx)

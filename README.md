@@ -61,10 +61,12 @@ auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the 
 
 - **Off** (default every launch) — the real sensor drives the dots, exactly as normal.
 - **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
-  uphill/downhill (road grade), and a *sideways-seating* set (e.g. on a train, where forward
-  motion shows on the left/right channel). The active phase name shows live under the buttons.
-- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill, Sideways) to hold
-  it continuously for focused testing.
+  uphill/downhill (road grade), a *sideways-seating* set (e.g. on a train, where forward motion
+  shows on the left/right channel), **reverse** (driving backwards), and a **rear-facing** seat
+  (facing the back of a train, where accel drifts the dots the opposite way). The active phase
+  name shows live under the buttons.
+- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill, Sideways, Reverse,
+  Rear-facing) to hold it continuously for focused testing.
 
 While a scenario other than Off is selected the simulation **overrides the real sensor**; switch
 back to **Off** to return to it. Simulation is a test aid — it's never persisted, so the app

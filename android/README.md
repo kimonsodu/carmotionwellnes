@@ -58,10 +58,11 @@ Want to confirm the cue reacts before you hit the road? Tick **Where the dots go
 phone**, tap **Start cue overlay**, then open **Advanced → Simulation (test motion)** and pick a
 scenario:
 
-- **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades, and a
-  sideways "train" seating case — so you can watch every axis respond in turn.
-- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill, Sideways) ease in and
-  hold so you can study one motion.
+- **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades, a
+  sideways "train" seating case, **reverse** (driving backwards), and a **rear-facing** seat — so
+  you can watch every axis respond in turn.
+- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill, Sideways, Reverse,
+  Rear-facing seat) ease in and hold so you can study one motion.
 
 Simulation feeds synthetic IMU through the *same* motion pipeline as the real sensors (gravity
 removal, gates, smoothing and the cue render are all exercised), and **overrides** the real

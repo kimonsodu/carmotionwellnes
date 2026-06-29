@@ -35,7 +35,7 @@ object SettingsStore {
     const val K_HIDE_SENS = "ph_hideSensitivity" // Float 0.5..2.0 auto-hide knee scale
     const val K_PRESET = "ph_preset"             // Int 0..3 = Calm / Balanced / Strong / Custom (UI-only)
     const val K_ONBOARDED = "ph_onboarded"       // Bool first-run seen (UI-only)
-    const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..8 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill / Sideways (test-only synthetic motion)
+    const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..10 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill / Sideways / Reverse / RearFacing (test-only synthetic motion)
 
     // ---- defaults ----
     const val DEF_STRENGTH = 1.8f
@@ -78,7 +78,7 @@ object SettingsStore {
     fun hideSensitivity(c: Context) = prefs(c).getFloat(K_HIDE_SENS, DEF_HIDE_SENS).coerceIn(0.5f, 2.0f)
     fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
     fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
-    fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 8)
+    fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 10)
 
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
     fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(0f, 4.0f)).apply()
@@ -97,7 +97,7 @@ object SettingsStore {
     fun setHideSensitivity(c: Context, v: Float) = prefs(c).edit().putFloat(K_HIDE_SENS, v.coerceIn(0.5f, 2.0f)).apply()
     fun setPreset(c: Context, v: Int) = prefs(c).edit().putInt(K_PRESET, v.coerceIn(0, 3)).apply()
     fun setOnboarded(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_ONBOARDED, v).apply()
-    fun setSimScenario(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SCENARIO, v.coerceIn(0, 8)).apply()
+    fun setSimScenario(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SCENARIO, v.coerceIn(0, 10)).apply()
 
     /**
      * Intensity presets write the EXISTING fine keys (all in LIVE_KEYS), so a running overlay updates

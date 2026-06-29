@@ -350,7 +350,8 @@ class MainActivity : Activity() {
         // real sensors while a running overlay is up). Persisted via K_SIM_SCENARIO (in LIVE_KEYS). ----
         val simNames = listOf(
             "Off (real sensors)", "All scenarios", "Accelerate", "Brake", "Turn left",
-            "Turn right", "Uphill", "Downhill", "Sideways (train)")
+            "Turn right", "Uphill", "Downhill", "Sideways (train)", "Reverse (driving back)",
+            "Rear-facing seat")
         val simAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, simNames)
         simAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spSim.adapter = simAdapter
