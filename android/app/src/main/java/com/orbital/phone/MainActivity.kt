@@ -46,6 +46,9 @@ class MainActivity : Activity() {
     private lateinit var seekLon: SeekBar
     private lateinit var seekGrade: SeekBar
     private lateinit var tvGradeVal: TextView
+    private lateinit var cbFlipV: CheckBox
+    private lateinit var cbFlipH: CheckBox
+    private lateinit var cbSwap: CheckBox
     private lateinit var seekSize: SeekBar
     private lateinit var rgColor: RadioGroup
     private lateinit var cbAutoHide: CheckBox
@@ -103,6 +106,9 @@ class MainActivity : Activity() {
         seekLon = findViewById(R.id.seekLon)
         seekGrade = findViewById(R.id.seekGrade)
         tvGradeVal = findViewById(R.id.tvGradeVal)
+        cbFlipV = findViewById(R.id.cbFlipV)
+        cbFlipH = findViewById(R.id.cbFlipH)
+        cbSwap = findViewById(R.id.cbSwap)
         seekSize = findViewById(R.id.seekSize)
         rgColor = findViewById(R.id.rgDotColor)
         cbAutoHide = findViewById(R.id.cbAutoHide)
@@ -321,6 +327,17 @@ class MainActivity : Activity() {
         seekGrade.setOnSeekBarChangeListener(simpleSeek { prog ->
             val v = prog / 10f - 4f; SettingsStore.setGradeGain(this, v); tvGradeVal.text = fmtGrade(v); refreshPreview()
         })
+
+        // ---- Advanced: manual direction overrides (Flip ↕ / Flip ↔ / Swap) ----
+        cbFlipV.setOnCheckedChangeListener(null)
+        cbFlipV.isChecked = SettingsStore.flipV(this)
+        cbFlipV.setOnCheckedChangeListener { _, on -> SettingsStore.setFlipV(this, on); refreshPreview() }
+        cbFlipH.setOnCheckedChangeListener(null)
+        cbFlipH.isChecked = SettingsStore.flipH(this)
+        cbFlipH.setOnCheckedChangeListener { _, on -> SettingsStore.setFlipH(this, on); refreshPreview() }
+        cbSwap.setOnCheckedChangeListener(null)
+        cbSwap.isChecked = SettingsStore.swap(this)
+        cbSwap.setOnCheckedChangeListener { _, on -> SettingsStore.setSwap(this, on); refreshPreview() }
 
         // ---- Advanced: cue motion model / coverage ----
         rgCueModel.setOnCheckedChangeListener(null)

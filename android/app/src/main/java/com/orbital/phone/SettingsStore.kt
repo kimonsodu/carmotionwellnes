@@ -35,6 +35,10 @@ object SettingsStore {
     const val K_HIDE_SENS = "ph_hideSensitivity" // Float 0.5..2.0 auto-hide knee scale
     const val K_PRESET = "ph_preset"             // Int 0..3 = Calm / Balanced / Strong / Custom (UI-only)
     const val K_ONBOARDED = "ph_onboarded"       // Bool first-run seen (UI-only)
+    // ---- manual direction overrides (the cue is screen-relative/automatic by default; these flip it) ----
+    const val K_FLIP_V = "ph_flipV"              // Bool reverse the vertical (accel/brake) cue direction
+    const val K_FLIP_H = "ph_flipH"              // Bool reverse the horizontal (turn) cue direction
+    const val K_SWAP = "ph_swap"                 // Bool swap which axis drives vertical vs horizontal
     const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..10 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill / Sideways / Reverse / RearFacing (test-only synthetic motion)
 
     // ---- defaults ----
@@ -56,6 +60,9 @@ object SettingsStore {
     const val DEF_PRESET = 1                // Balanced == the current defaults (existing users land here)
     const val DEF_ONBOARDED = false
     const val DEF_SIM_SCENARIO = 0          // Off — sim disabled; the overlay uses the real sensors
+    const val DEF_FLIP_V = false            // direction is automatic by default; flips are opt-in overrides
+    const val DEF_FLIP_H = false
+    const val DEF_SWAP = false
 
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -79,8 +86,14 @@ object SettingsStore {
     fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
     fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
     fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 10)
+    fun flipV(c: Context) = prefs(c).getBoolean(K_FLIP_V, DEF_FLIP_V)
+    fun flipH(c: Context) = prefs(c).getBoolean(K_FLIP_H, DEF_FLIP_H)
+    fun swap(c: Context) = prefs(c).getBoolean(K_SWAP, DEF_SWAP)
 
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
+    fun setFlipV(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_V, v).apply()
+    fun setFlipH(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_H, v).apply()
+    fun setSwap(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_SWAP, v).apply()
     fun setLonGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_LON_GAIN, v.coerceIn(0f, 4.0f)).apply()
     fun setGradeGain(c: Context, v: Float) = prefs(c).edit().putFloat(K_GRADE_GAIN, v.coerceIn(-4.0f, 4.0f)).apply()
     fun setDotSize(c: Context, v: Float) = prefs(c).edit().putFloat(K_DOT_SIZE, v.coerceIn(0.4f, 3.0f)).apply()
@@ -128,6 +141,7 @@ object SettingsStore {
             .putInt(K_PLACEMENT, DEF_PLACEMENT).putFloat(K_DECAY, DEF_DECAY)
             .putFloat(K_HIDE_SENS, DEF_HIDE_SENS).putInt(K_PRESET, DEF_PRESET)
             .putFloat(K_GRADE_GAIN, DEF_GRADE_GAIN)
+            .putBoolean(K_FLIP_V, DEF_FLIP_V).putBoolean(K_FLIP_H, DEF_FLIP_H).putBoolean(K_SWAP, DEF_SWAP)
             .apply()
     }
 
@@ -136,7 +150,7 @@ object SettingsStore {
     val LIVE_KEYS = setOf(
         K_STRENGTH, K_LON_GAIN, K_DOT_SIZE, K_DOT_COLOR, K_AUTO_HIDE,
         K_CUE_STYLE, K_OPACITY, K_DENSITY, K_ACCENT_COLOR, K_CUE_MODEL, K_PLACEMENT, K_DECAY, K_HIDE_SENS,
-        K_GRADE_GAIN,
+        K_GRADE_GAIN, K_FLIP_V, K_FLIP_H, K_SWAP,
         K_SIM_SCENARIO   // a running overlay switches between real-sensor and sim feed when this flips
     )
 
@@ -155,11 +169,15 @@ object SettingsStore {
         val cueModel: Int,     // 0 Velocity-flow, 1 Acceleration-pulse
         val placement: Int,    // 0 Side strips, 1 Full frame
         val decay: Float,
-        val hideSensitivity: Float
+        val hideSensitivity: Float,
+        val flipV: Boolean,    // reverse vertical (accel/brake) direction
+        val flipH: Boolean,    // reverse horizontal (turn) direction
+        val swap: Boolean      // swap vertical <-> horizontal axes
     )
 
     fun snapshot(c: Context) = Params(
         strength(c), lonGain(c), gradeGain(c), dotSize(c), dotColor(c), autoHide(c),
-        cueStyle(c), opacity(c), density(c), accentColor(c), cueModel(c), placement(c), decay(c), hideSensitivity(c)
+        cueStyle(c), opacity(c), density(c), accentColor(c), cueModel(c), placement(c), decay(c), hideSensitivity(c),
+        flipV(c), flipH(c), swap(c)
     )
 }

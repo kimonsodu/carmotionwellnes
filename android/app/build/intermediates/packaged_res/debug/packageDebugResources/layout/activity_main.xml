@@ -508,6 +508,24 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content" />
 
+                    <TextView style="@style/FieldLabel" android:text="Direction (if the cue drifts the wrong way)" android:layout_marginTop="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    <LinearLayout
+                        android:orientation="horizontal"
+                        android:layout_marginTop="4dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <CheckBox android:id="@+id/cbFlipV" android:text="Flip ↕" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        <CheckBox android:id="@+id/cbFlipH" android:text="Flip ↔" android:textColor="@color/text" android:layout_marginEnd="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                        <CheckBox android:id="@+id/cbSwap" android:text="Swap ↕↔" android:textColor="@color/text" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                    </LinearLayout>
+                    <TextView
+                        style="@style/FieldLabel"
+                        android:text="The cue direction is automatic for any seat. Use these only if accel/brake or turns drift the wrong way: Flip ↕ reverses up/down, Flip ↔ reverses left/right, Swap exchanges the two."
+                        android:textSize="11sp"
+                        android:layout_marginTop="2dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
                     <TextView style="@style/FieldLabel" android:text="Cue motion model" android:layout_marginTop="14dp" android:layout_width="wrap_content" android:layout_height="wrap_content" />
                     <RadioGroup
                         android:id="@+id/rgCueModel"

@@ -35,6 +35,9 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     private var strength = SettingsStore.DEF_STRENGTH
     private var lonGain = SettingsStore.DEF_LON_GAIN   // fore/aft (accel/brake) sensitivity; magnitude only
     private var gradeGain = SettingsStore.DEF_GRADE_GAIN // hill/grade sensitivity; SIGNED (direction)
+    private var invertX = 1f             // -1 = flip horizontal (turn) direction
+    private var invertY = 1f             // -1 = flip vertical (accel/brake) direction
+    private var swapAxes = false         // swap which axis drives vertical vs horizontal
     private var sizeScale = SettingsStore.DEF_DOT_SIZE
     private var colorMode = SettingsStore.DEF_DOT_COLOR
     private var autoHide = SettingsStore.DEF_AUTO_HIDE
@@ -117,6 +120,9 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         strength = p.strength
         lonGain = p.lonGain
         gradeGain = p.gradeGain
+        invertX = if (p.flipH) -1f else 1f
+        invertY = if (p.flipV) -1f else 1f
+        swapAxes = p.swap
         sizeScale = p.dotSize
         colorMode = p.colorMode
         cueStyle = p.cueStyle
@@ -155,14 +161,18 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         // VehicleFilter — DotsView only integrates to drift. Direction is AUTOMATIC for any seat:
         // accelerate -> dots DOWN; brake -> UP; vehicle turn-right -> dots LEFT (felt force opposite).
         val gain = 0.12f * strength
-        val driveX = sx * enable
-        val driveY = sy * enable
+        // Manual direction overrides (default no-op): Swap exchanges the lateral/forward axes; Flip
+        // ↔/↕ reverse the horizontal/vertical sense. Grade keeps its own signed gain on the vertical.
+        var sxx = sx; var syy = sy
+        if (swapAxes) { val t = sxx; sxx = syy; syy = t }
+        val driveX = sxx * enable * invertX
+        val driveY = syy * enable
         val driveG = grade * enable
         velX = velX * decay - driveX * gain
         // lonGain scales ONLY the screen-vertical axis to preserve the original fore/aft-vs-lateral feel.
         // The hill/grade cue rides the SAME vertical axis with its own SIGNED gain (gradeGain), so a
         // slope drifts the dots even at steady speed; sign flips uphill/downhill direction.
-        velY = velY * decay + driveY * lonGain * gain + driveG * gradeGain * gain
+        velY = velY * decay + driveY * lonGain * gain * invertY + driveG * gradeGain * gain
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)

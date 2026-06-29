@@ -52,6 +52,10 @@ The **Hill / grade** slider (Advanced) is a separate, signed control: it drifts 
 climb/descent even at a steady speed, independently of Accel/brake. Centre = off; slide left to
 reverse the uphill/downhill direction.
 
+The cue direction is automatic for any seat, but **Advanced → Direction** has manual overrides if
+something drifts the wrong way for your mount: **Flip ↕** reverses up/down (accel/brake), **Flip
+↔** reverses left/right (turns), and **Swap ↕↔** exchanges the two axes.
+
 ## Test it without driving — Simulation
 
 Want to confirm the cue reacts before you hit the road? Tick **Where the dots go → Cue on this
