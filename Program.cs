@@ -448,6 +448,126 @@ namespace OrbitalOverlay
     }
 
     // ---------------------------------------------------------------
+    // Simulation Mode — a synthetic IMU *source* for desk testing.
+    // It does NOT bypass the pipeline: it produces raw accel (m/s² incl.
+    // gravity) + gyro (deg/s) exactly like a real sensor frame so gravity
+    // removal, axis auto-learn, the gate, jerk limit, deadband and the cue
+    // renderer are all exercised. When sim is ON it OVERRIDES the real sensor.
+    // Device is assumed flat, screen up (R = identity): x = right (East),
+    // y = forward (North), z = up; resting reading = (0, 0, +G).
+    // ---------------------------------------------------------------
+    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill, Sideways }
+
+    public class MotionSimulator
+    {
+        public const double G = 9.81;
+        const double Deg = Math.PI / 180.0;
+        const double Ramp = 0.6;            // smoothstep ease-in/out per active phase (s) so the cue glides
+        const double GradeRate = 4.5;       // deg/s max road-grade pitch rate -> stays under the lid-tilt reject knee (6)
+
+        public SimScenario Scenario = SimScenario.Off;
+        public string PhaseName { get; private set; } = "";
+
+        // outputs, written each Tick — mirror a real sensor frame
+        public double Ax, Ay, Az;           // accel incl. gravity, m/s²
+        public double Gx, Gy, Gz;           // gyro deg/s (Gx = pitch about x, Gz = yaw about z)
+        public double Speed = 15;           // GPS ground speed fed to the gate (m/s) — keep "moving" the whole run
+
+        double t;                           // elapsed time within the script (s)
+        double grade;                       // current road-grade angle (deg), rate-limited toward target
+
+        struct Phase { public string Name; public double Dur, AFwd, ARight, Yaw, Grade, Psi; }
+        static Phase P(string n, double d, double f, double r, double y, double g, double p)
+            => new Phase { Name = n, Dur = d, AFwd = f, ARight = r, Yaw = y, Grade = g, Psi = p };
+
+        // The "All" script (loops forever). Each ACTIVE phase eases in/out; REST lets the
+        // cue return to neutral and gravity re-settle. Magnitudes match the shared spec.
+        static readonly Phase[] Script =
+        {
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Accelerate",     3.0,  2.5,  0,    0,   0,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Brake",          3.0, -3.5,  0,    0,   0,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Turn left",      3.0,  0,    2.8,  28,  0,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Turn right",     3.0,  0,   -2.8, -28,  0,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Uphill",         3.5,  0.4,  0,    0,   9,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Downhill",       3.5, -0.4,  0,    0,  -9,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Sideways accel", 3.0,  2.5,  0,    0,   0,  90),
+            P("Sideways brake", 3.0, -3.0,  0,    0,   0,  90),
+            P("Sideways turn",  3.0,  0,    2.6,  24,  0,  90),
+            P("Rest",           2.0,  0,    0,    0,   0,  0),
+        };
+
+        // A single held scenario: ease in over Ramp, then hold its target indefinitely (no rest/loop).
+        static Phase Single(SimScenario s) => s switch
+        {
+            SimScenario.Accelerate => P("Accelerate",     0,  2.5, 0,    0,   0,  0),
+            SimScenario.Brake      => P("Brake",          0, -3.5, 0,    0,   0,  0),
+            SimScenario.TurnLeft   => P("Turn left",      0,  0,   2.8,  28,  0,  0),
+            SimScenario.TurnRight  => P("Turn right",     0,  0,  -2.8, -28,  0,  0),
+            SimScenario.Uphill     => P("Uphill",         0,  0.4, 0,    0,   9,  0),
+            SimScenario.Downhill   => P("Downhill",       0, -0.4, 0,    0,  -9,  0),
+            SimScenario.Sideways   => P("Sideways accel", 0,  2.5, 0,    0,   0,  90),
+            _                      => P("Rest",           0,  0,   0,    0,   0,  0),
+        };
+
+        static double SmoothStep(double e0, double e1, double x)
+        { double tt = Math.Clamp((x - e0) / (e1 - e0), 0, 1); return tt * tt * (3 - 2 * tt); }
+
+        // Called when (re)starting: clear time + grade and snap the output to a clean rest frame.
+        public void Reset() { t = 0; grade = 0; PhaseName = ""; Ax = Ay = 0; Az = G; Gx = Gy = Gz = 0; }
+
+        public void Tick(double dt)
+        {
+            if (Scenario == SimScenario.Off) return;
+            t += dt;
+
+            double aFwd, aRight, yaw, gradeTarget, psi;
+            if (Scenario == SimScenario.All)
+            {
+                double total = 0; foreach (var ph in Script) total += ph.Dur;
+                double tt = t % total;
+                int i = 0; while (i < Script.Length - 1 && tt >= Script[i].Dur) { tt -= Script[i].Dur; i++; }
+                var p = Script[i];
+                double s = Math.Min(SmoothStep(0, Ramp, tt), SmoothStep(0, Ramp, p.Dur - tt));  // ease in + out
+                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
+                gradeTarget = p.Grade;                  // grade is rate-limited below, not smoothstepped
+                psi = p.Psi; PhaseName = p.Name;
+            }
+            else
+            {
+                var p = Single(Scenario);
+                double s = SmoothStep(0, Ramp, t);      // ease in, then hold
+                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
+                gradeTarget = p.Grade; psi = p.Psi; PhaseName = p.Name;
+            }
+
+            // Road grade: move the pitch angle toward target at a gentle rate so the emitted
+            // pitch gyro stays under Windows' lid-tilt reject knee (tiltRate > 6) — otherwise
+            // the tilt would be absorbed into the gravity estimate and the fore cue suppressed.
+            double dgr = Math.Clamp(gradeTarget - grade, -GradeRate * dt, GradeRate * dt);
+            grade += dgr;
+            double pitchRate = dt > 1e-6 ? dgr / dt : 0;    // deg/s about device x
+
+            // device-frame accel = pitched gravity + vehicle linear accel rotated by seating heading ψ.
+            // ψ=0 -> x = aRight, y = aFwd (normal car seat); ψ=90 -> forward lands on device-x (train).
+            double pr = psi * Deg, th = grade * Deg;
+            double sinp = Math.Sin(pr), cosp = Math.Cos(pr);
+            double lx = aFwd * sinp + aRight * cosp;
+            double ly = aFwd * cosp - aRight * sinp;
+            Ax = lx;
+            Ay = -G * Math.Sin(th) + ly;                    // road-grade longitudinal component via the gravity path
+            Az = G * Math.Cos(th);
+            Gx = pitchRate; Gy = 0; Gz = yaw;               // gyro: pitch about x during grade ramp, yaw about z
+        }
+    }
+
+    // ---------------------------------------------------------------
     // The transparent, always-on-top, click-through cue overlay.
     // ---------------------------------------------------------------
     public class OverlayWindow : Window
@@ -517,6 +637,14 @@ namespace OrbitalOverlay
 
         Accelerometer acc;
         Gyrometer gyro;
+
+        // --- Simulation Mode: a synthetic IMU source that OVERRIDES the real sensor while ON ---
+        public bool Simulating;                          // sim source is driving -> laptop ReadingChanged early-returns
+        public SimScenario SimScenarioMode = SimScenario.Off;
+        readonly MotionSimulator sim = new MotionSimulator();
+        DispatcherTimer simTimer;                        // ~16ms tick writing synthetic frames (like FeedPhone)
+        long simLastTick;
+        public string SimPhase => Simulating ? sim.PhaseName : "";   // active phase name for the panel/debug readout
 
         // --- phone bridge: while a phone frame is fresh it overrides the laptop sensor ---
         long lastPhoneTick = long.MinValue / 2;
@@ -648,7 +776,7 @@ namespace OrbitalOverlay
                 acc.ReportInterval = Math.Max(acc.MinimumReportInterval, 16u);
                 acc.ReadingChanged += (s, e) =>
                 {
-                    if (PhoneActive || PhoneOnly) return;    // phone is driving (or forced) — ignore the laptop sensor
+                    if (Simulating || PhoneActive || PhoneOnly) return;    // sim/phone is driving (or forced) — ignore the laptop sensor
                     var r = e.Reading;                      // AccelerationX/Y/Z in g, includes gravity
                     rawX = r.AccelerationX * 9.81;
                     rawY = r.AccelerationY * 9.81;
@@ -671,7 +799,7 @@ namespace OrbitalOverlay
                 gyro.ReportInterval = Math.Max(gyro.MinimumReportInterval, 16u);
                 gyro.ReadingChanged += (s, e) =>
                 {
-                    if (PhoneActive || PhoneOnly) return;   // phone is driving (or forced) — ignore the laptop gyro
+                    if (Simulating || PhoneActive || PhoneOnly) return;   // sim/phone is driving (or forced) — ignore the laptop gyro
                     var g = e.Reading;                  // deg/s
                     rawGyroX = g.AngularVelocityX;
                     rawGyroY = g.AngularVelocityY;
@@ -898,13 +1026,14 @@ namespace OrbitalOverlay
             cue.InvalidateVisual();
 
             DebugText =
-                $"src:{(PhoneActive ? "PHONE" : (acc != null ? "laptop" : "none"))}  mode:{oriMode}  gReady:{(gReady ? 1 : 0)}\n" +
+                $"src:{(Simulating ? "SIM" : PhoneActive ? "PHONE" : acc != null ? "laptop" : "none")}  mode:{oriMode}  gReady:{(gReady ? 1 : 0)}\n" +
                 $"in  a:{rawX,7:0.0}{rawY,7:0.0}{rawZ,7:0.0}   |a|:{Math.Sqrt(rawX * rawX + rawY * rawY + rawZ * rawZ),5:0.0}\n" +
                 $"grav :{gx,7:0.0}{gy,7:0.0}{gz,7:0.0}\n" +
                 $"gyro :{rawGyroX,7:0.0}{rawGyroY,7:0.0}{rawYaw,7:0.0}\n" +
                 $"lat:{lat,7:0.00}  fore:{fore,7:0.00}\n" +
                 $"vel:{velX,7:0.0}  {velY,7:0.0}\n" +
-                $"act:{activityEma,6:0.000} jit:{jitterEma,5:0.00} spd:{(SpeedFresh ? (phoneSpeed * 3.6).ToString("0.0") + "km/h" : "--")}  {(AutoPause ? (autoStill ? "HIDDEN (stopped)" : "moving") : "autohide off")}";
+                $"act:{activityEma,6:0.000} jit:{jitterEma,5:0.00} spd:{(SpeedFresh ? (phoneSpeed * 3.6).ToString("0.0") + "km/h" : "--")}  {(AutoPause ? (autoStill ? "HIDDEN (stopped)" : "moving") : "autohide off")}" +
+                (Simulating ? $"\nSIM phase: {sim.PhaseName}" : "");
         }
 
         public void Recenter()
@@ -945,6 +1074,60 @@ namespace OrbitalOverlay
             velX = velY = 0;
             if (!startupSuppress) autoStill = false;                 // a source switch (e.g. phone connect) must NOT
             stillFrames = 0; activityEma = 0.3;                      // reveal dots during startup suppression; wake on real motion
+        }
+
+        // --- Simulation Mode: a synthetic IMU source for desk testing ----------------
+        // When ON it OVERRIDES the real sensor (the laptop ReadingChanged handlers
+        // early-return on Simulating, exactly like PhoneActive/PhoneOnly). The sim
+        // timer writes raw accel+gyro+speed every ~16ms just like FeedPhone, so the
+        // WHOLE pipeline runs unchanged. Off restores the real sensor and re-arms.
+        public void SetSimScenario(SimScenario sc)
+        {
+            SimScenarioMode = sc;
+            if (sc == SimScenario.Off)
+            {
+                if (!Simulating) return;                 // already off -> nothing to restore (byte-for-byte original)
+                simTimer?.Stop();
+                Simulating = false;
+                sim.Scenario = SimScenario.Off;
+                hasReading = false;                      // drop the last synthetic frame so it isn't re-ingested
+                if (gyro == null) { hasGyro = false; rawGyroX = rawGyroY = rawYaw = 0; }
+                phoneSpeed = -1;                         // stop forcing "moving"
+                ArmForNewSource();                       // re-learn gravity/axis map for the real sensor
+                SetStatus(PhoneOnly ? "Phone mode — connect your phone below to stream its motion."
+                          : acc != null ? "Reading this laptop’s motion sensor."
+                          : "No sensor on this PC — use your phone: open the link in the Phone section below.");
+            }
+            else
+            {
+                sim.Scenario = sc; sim.Reset();
+                Simulating = true;
+                ArmForNewSource();                       // re-learn gravity/axis cleanly for the sim source
+                if (simTimer == null)
+                {
+                    simTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+                    simTimer.Tick += (s, e) => SimTick();
+                }
+                simLastTick = Environment.TickCount64;
+                simTimer.Start();
+                SetStatus("Simulation running — " + sc + ". Set it to Off to use the real sensor.");
+            }
+        }
+
+        // Synthesize one frame and write it into the raw fields — mirrors FeedPhone
+        // (and the laptop ReadingChanged handlers) so the pipeline is identical.
+        void SimTick()
+        {
+            long now = Environment.TickCount64;
+            double dt = (now - simLastTick) / 1000.0;
+            simLastTick = now;
+            if (dt <= 0) dt = 0.016;
+            if (dt > 0.10) dt = 0.10;                    // clamp after a stall so the script doesn't jump
+            sim.Tick(dt);
+            rawX = sim.Ax; rawY = sim.Ay; rawZ = sim.Az;
+            rawGyroX = sim.Gx; rawGyroY = sim.Gy; rawYaw = sim.Gz;
+            hasGyro = true; hasReading = true;
+            phoneSpeed = sim.Speed; phoneSpeedTick = now;   // feed the gate so auto-hide sees "moving"
         }
     }
 
@@ -1572,6 +1755,49 @@ namespace OrbitalOverlay
             hkReset.Click += (s, e) => { hotkeys = DefaultHotkeys(); RefreshHotkeyButtons(); ReapplyHotKeys(); QueueSave(); };
             shortcuts.Children.Add(hkReset);
             root.Children.Add(CardOf(shortcuts));
+
+            // ---- SIMULATION card: synthetic motion for desk testing (dev/test aid) ----
+            var simCard = new StackPanel();
+            simCard.Children.Add(SectionHead("SIMULATION (test)"));
+            simCard.Children.Add(Styled(new TextBlock
+            {
+                Text = "Fake the motion so you can check the cue reacts — no driving needed. Pick a scenario; All loops through every one. Default Off.",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10)
+            }, "FaintText"));
+            var simScenarios = new[]
+            {
+                SimScenario.Off, SimScenario.All, SimScenario.Accelerate, SimScenario.Brake,
+                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill, SimScenario.Sideways
+            };
+            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill", "Sideways" };
+            var simWrap = new WrapPanel();
+            var simBtns = new Button[simScenarios.Length];
+            void HighlightSim(int idx)
+            {
+                for (int i = 0; i < simBtns.Length; i++)
+                {
+                    simBtns[i].Background = i == idx ? Brush("AccentBrush") : Brush("CardHiBrush");
+                    simBtns[i].Foreground = i == idx ? Brush("BgBrush") : Brush("TextBrush");
+                }
+            }
+            for (int i = 0; i < simScenarios.Length; i++)
+            {
+                int idx = i;
+                var b = Styled(new Button { Content = simLabels[i], Margin = new Thickness(0, 0, 6, 6), MinWidth = 76 }, "OrbitButton");
+                b.ToolTip = idx == 0 ? "Stop the simulation and use the real sensor."
+                          : "Feed synthetic " + simLabels[idx] + " motion into the cue pipeline.";
+                b.Click += (s, e) => { HighlightSim(idx); ov.SetSimScenario(simScenarios[idx]); };
+                simBtns[i] = b;
+                simWrap.Children.Add(b);
+            }
+            simCard.Children.Add(simWrap);
+            var simPhaseLbl = Styled(new TextBlock { Text = "Off", Margin = new Thickness(2, 6, 0, 0) }, "FaintText");
+            simCard.Children.Add(simPhaseLbl);
+            root.Children.Add(CardOf(simCard));
+            HighlightSim(0);                                 // default Off at launch — does NOT start the sim (off = original behavior)
+            var simPhaseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            simPhaseTimer.Tick += (s, e) => simPhaseLbl.Text = ov.Simulating ? "Active phase: " + ov.SimPhase : "Off";
+            simPhaseTimer.Start();
 
             // ---- DIAGNOSTICS card ----
             var debug = new StackPanel();

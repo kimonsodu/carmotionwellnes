@@ -48,6 +48,24 @@ Either way, two windows appear: the full-screen cue overlay, and a small **Orbit
 Strength, dot size, both flips and swap are **remembered between runs** (saved to
 `%AppData%\Orbital\settings.json`).
 
+### Test it without driving — Simulation
+
+The **SIMULATION (test)** card (near the bottom of the panel, by Diagnostics) fakes the motion
+so you can confirm the cue reacts to every scenario from your desk — no car needed. It feeds
+synthetic IMU readings into the *same* pipeline the real sensor uses (gravity removal, axis
+auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the road.
+
+- **Off** (default every launch) — the real sensor drives the dots, exactly as normal.
+- **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
+  uphill/downhill (road grade), and a *sideways-seating* set (e.g. on a train, where forward
+  motion shows on the left/right channel). The active phase name shows live under the buttons.
+- Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill, Sideways) to hold
+  it continuously for focused testing.
+
+While a scenario other than Off is selected the simulation **overrides the real sensor**; switch
+back to **Off** to return to it. Simulation is a test aid — it's never persisted, so the app
+always starts with it Off.
+
 ## Global hotkeys
 
 These work from any app, so you don't have to alt-tab to the panel mid-drive:

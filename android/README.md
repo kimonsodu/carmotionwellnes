@@ -43,6 +43,21 @@ and the **screen can then turn off** — the notification keeps it streaming.
 Tune feel on the laptop as usual (Strength / Flip / **Swap ↕↔** / Recenter) to match how the
 phone is mounted. Dots react to real *acceleration* (turns, gas, brake), not tilt.
 
+## Test it without driving — Simulation
+
+Want to confirm the cue reacts before you hit the road? Switch **Where the dots go → This phone**,
+tap **Start cue overlay**, then open **Advanced → Simulation (test motion)** and pick a scenario:
+
+- **All scenarios** loops the full script — accelerate, brake, turns, up/down-hill grades, and a
+  sideways "train" seating case — so you can watch every axis respond in turn.
+- The single scenarios (Accelerate, Brake, Turn left/right, Uphill, Downhill, Sideways) ease in and
+  hold so you can study one motion.
+
+Simulation feeds synthetic IMU through the *same* motion pipeline as the real sensors (gravity
+removal, gates, smoothing and the cue render are all exercised), and **overrides** the real
+accelerometer/gyro while it's on. Set it back to **Off (real sensors)** to return to normal — it
+reacts live, no restart needed.
+
 ## Notes
 
 - If nothing arrives: re-check the PC address, confirm both devices are on the same

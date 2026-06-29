@@ -1,0 +1,81 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.orbital.phone.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\themes.xml",
+                    "from": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "142",
+                        "endLines": "15",
+                        "endColumns": "12",
+                        "endOffsets": "949"
+                    },
+                    "to": {
+                        "startLines": "80",
+                        "startColumns": "4",
+                        "startOffsets": "3737",
+                        "endLines": "92",
+                        "endColumns": "12",
+                        "endOffsets": "4544"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\styles.xml",
+                    "from": {
+                        "startLines": "2,37,16,72,52,8,21,60",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,1501,584,3111,2212,261,737,2555",
+                        "endLines": "6,50,19,81,58,14,35,70",
+                        "endColumns": "12,12,12,12,12,12,12,12",
+                        "endOffsets": "255,2206,731,3604,2549,578,1495,3105"
+                    },
+                    "to": {
+                        "startLines": "18,23,37,41,51,58,65,93",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "745,950,1660,1812,2310,2652,2974,4549",
+                        "endLines": "22,36,40,50,57,64,79,103",
+                        "endColumns": "12,12,12,12,12,12,12,12",
+                        "endOffsets": "945,1655,1807,2305,2647,2969,3732,5099"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\colors.xml",
+                    "from": {
+                        "startLines": "7,15,16,8,2,3,4,5,12,11,10,6,14,13,9",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "256,595,642,297,55,92,134,173,461,421,381,215,549,502,342",
+                        "endColumns": "40,46,45,44,36,41,38,41,40,39,39,40,45,46,38",
+                        "endOffsets": "292,637,683,337,87,129,168,210,497,456,416,251,590,544,376"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,13,14,15,16,17",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,96,143,189,234,271,313,352,394,435,532,572,613,659,706",
+                        "endColumns": "40,46,45,44,36,41,38,41,40,39,39,40,45,46,38",
+                        "endOffsets": "91,138,184,229,266,308,347,389,430,470,567,608,654,701,740"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\simon\\Documents\\dev\\orbital\\android\\app\\src\\main\\res\\values\\ic_launcher_background.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "56",
+                        "endOffsets": "107"
+                    },
+                    "to": {
+                        "startLines": "12",
+                        "startColumns": "4",
+                        "startOffsets": "475",
+                        "endColumns": "56",
+                        "endOffsets": "527"
+                    }
+                }
+            ]
+        }
+    ]
+}

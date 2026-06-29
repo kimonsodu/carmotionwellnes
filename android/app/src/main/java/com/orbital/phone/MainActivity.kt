@@ -19,6 +19,7 @@ import android.widget.EditText
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 
@@ -68,6 +69,7 @@ class MainActivity : Activity() {
     private lateinit var seekHide: SeekBar
     private lateinit var tvHideVal: TextView
     private lateinit var btnReset: Button
+    private lateinit var spSim: Spinner
     private lateinit var accentRow: View
     private lateinit var styleChips: List<TextView>
     private lateinit var accentChips: List<TextView>
@@ -122,6 +124,7 @@ class MainActivity : Activity() {
         seekHide = findViewById(R.id.seekHide)
         tvHideVal = findViewById(R.id.tvHideVal)
         btnReset = findViewById(R.id.btnReset)
+        spSim = findViewById(R.id.spSim)
         accentRow = findViewById(R.id.accentRow)
         styleChips = listOf(
             findViewById(R.id.styleDots), findViewById(R.id.styleStreaks), findViewById(R.id.styleRails),
@@ -328,6 +331,23 @@ class MainActivity : Activity() {
             tvHideVal.text = String.format(L, "%.1f×", v)   // auto-hide gate is bypassed in the demo, so no preview change
         })
 
+        // ---- Advanced: Simulation (test the cue WITHOUT driving — synthetic motion overrides the
+        // real sensors while a running overlay is up). Persisted via K_SIM_SCENARIO (in LIVE_KEYS). ----
+        val simNames = listOf(
+            "Off (real sensors)", "All scenarios", "Accelerate", "Brake", "Turn left",
+            "Turn right", "Uphill", "Downhill", "Sideways (train)")
+        val simAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, simNames)
+        simAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spSim.adapter = simAdapter
+        spSim.onItemSelectedListener = null
+        spSim.setSelection(SettingsStore.simScenario(this), false)   // before the listener -> no spurious write
+        spSim.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                SettingsStore.setSimScenario(this@MainActivity, pos)   // OverlayService reacts live (LIVE_KEYS)
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+
         // ---- Advanced: reset ----
         btnReset.setOnClickListener {
             SettingsStore.resetToDefaults(this)
@@ -449,7 +469,9 @@ class MainActivity : Activity() {
         toggle.setBackgroundResource(if (running) R.drawable.btn_secondary else R.drawable.btn_primary)
         toggle.setTextColor(getColor(if (running) R.color.accent else R.color.bg))
         status.text = if (running) SensorService.statusLine else "stopped"
-        readout.text = SensorService.readout
+        // While the cue overlay is simulating, show the live scenario phase; else the stream readout.
+        val sp = OverlayService.simPhase
+        readout.text = if (OverlayService.running && sp.isNotEmpty()) "Simulating: $sp" else SensorService.readout
         val en = !running
         // setEnabled on the RadioGroup doesn't reach its children — disable the buttons directly
         rbWifi.isEnabled = en; rbBt.isEnabled = en

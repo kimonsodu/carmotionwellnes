@@ -41,6 +41,7 @@ class OverlayService : Service(), SensorEventListener,
 
     companion object {
         @Volatile var running = false
+        @Volatile var simPhase = ""          // active simulation phase name ("" = not simulating); shown in the app
         private const val CHANNEL = "orbit_overlay"
         private const val NOTIF_ID = 8                       // SensorService uses 7
         const val ACTION_STOP = "com.orbital.phone.OVERLAY_STOP"
@@ -59,6 +60,11 @@ class OverlayService : Service(), SensorEventListener,
     private val vf = VehicleFilter()
     private val Rmat = FloatArray(9)
     @Volatile private var haveR = false
+    // ---- Simulation Mode (test aid): synthetic IMU OVERRIDES the real sensors while ON ----
+    private val sim = MotionSimulator()
+    private val Ridentity = floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)   // device flat / screen up = ENU
+    @Volatile private var simScenario = MotionSimulator.OFF   // 0 = Off -> original real-sensor behaviour
+    @Volatile private var simRunning = false
     private var lm: LocationManager? = null
     private var locListener: LocationListener? = null
     @Volatile private var sensing = false       // true while screen-on and the IMU/GPS are live
@@ -85,6 +91,8 @@ class OverlayService : Service(), SensorEventListener,
         // The overlay permission can be revoked any time, incl. between a kill and a START_STICKY
         // restart; addView would throw BadTokenException without it (and on some OEMs even with it).
         if (!Settings.canDrawOverlays(this) || !addOverlay()) { stopSelf(); return START_NOT_STICKY }
+        // Read the sim scenario BEFORE the first resumeSensing so it picks the sim-vs-real feed path.
+        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario)
         startSensors()
         SettingsStore.prefs(this).registerOnSharedPreferenceChangeListener(this)
         running = true
@@ -164,23 +172,53 @@ class OverlayService : Service(), SensorEventListener,
         m.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let { m.registerListener(this, it, us, sensorHandler) }
     }
 
-    /** Screen ON: bring the IMU + GPS + dot loop up. Idempotent. */
+    /** Screen ON: bring the IMU + GPS + dot loop up — or the sim loop when a scenario is picked.
+     *  Idempotent. */
     private fun resumeSensing() {
         if (sensing) return
         sensing = true
-        registerSensors()
-        startGps()
+        if (simScenario != MotionSimulator.OFF) startSimLoop()   // sim OVERRIDES the real sensors
+        else { registerSensors(); startGps() }
         ui.post { view?.start() }
     }
 
-    /** Screen OFF: tear the IMU + GPS + dot loop down (dots are invisible anyway). Idempotent. */
+    /** Screen OFF: tear the IMU/GPS (or sim) + dot loop down (dots are invisible anyway). Idempotent. */
     private fun pauseSensing() {
         if (!sensing) return
         sensing = false
+        stopSimLoop()
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
         stopGps()
         ui.post { view?.stop() }
         haveR = false   // force a fresh orientation matrix before feeding again on resume
+    }
+
+    // ---- Simulation drive loop: posts synthetic samples on the sensor thread at ~62 Hz and feeds
+    // them through the SAME VehicleFilter entry points as the real accel/gyro path. ----
+    private val simRunnable = object : Runnable {
+        override fun run() {
+            if (!simRunning) return
+            vf.onGps(15f, 0f, false)                       // ~15 m/s so the in-vehicle gate enables
+            val s = sim.step()
+            simPhase = s.phase                             // surface the active scenario phase to the app UI
+            vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
+            val o = vf.onAccel(s.accel, false, Ridentity, System.nanoTime())   // raw accel incl. gravity, R = identity
+            view?.feed(o.screenX, o.screenY, o.enable)
+            sensorHandler?.postDelayed(this, 16L)          // ~62 Hz self-repost
+        }
+    }
+
+    private fun startSimLoop() {
+        if (simRunning) return
+        simRunning = true
+        vf.screenRot = currentRotation()                  // keep the screen-relative cue aligned (as the real path)
+        sensorHandler?.post(simRunnable)
+    }
+
+    private fun stopSimLoop() {
+        simRunning = false
+        simPhase = ""
+        sensorHandler?.removeCallbacks(simRunnable)
     }
 
     /** Optional GPS in-vehicle gate (framework LocationManager only — NO Play Services). No-op if
@@ -235,6 +273,21 @@ class OverlayService : Service(), SensorEventListener,
 
     // Live settings: any overlay key changes -> push a fresh snapshot on the UI thread.
     override fun onSharedPreferenceChanged(sp: SharedPreferences?, key: String?) {
+        if (key == SettingsStore.K_SIM_SCENARIO) {
+            // Switch the feed live on the sensor thread so it serialises with the running sim/IMU loop.
+            val newScn = SettingsStore.simScenario(this)
+            sensorHandler?.post {
+                simScenario = newScn
+                sim.setScenario(newScn)
+                if (sensing) {                              // tear down the current source, bring up the right one
+                    stopSimLoop()
+                    try { sm?.unregisterListener(this) } catch (_: Exception) {}
+                    stopGps()
+                    haveR = false
+                    if (newScn != MotionSimulator.OFF) startSimLoop() else { registerSensors(); startGps() }
+                }
+            }
+        }
         if (key in SettingsStore.LIVE_KEYS) {
             val snap = SettingsStore.snapshot(this)
             ui.post { view?.applyParams(snap) }
@@ -293,6 +346,7 @@ class OverlayService : Service(), SensorEventListener,
     override fun onDestroy() {
         running = false
         sensing = false
+        stopSimLoop()                                     // no orphaned self-reposting sim runnable
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         try { SettingsStore.prefs(this).unregisterOnSharedPreferenceChangeListener(this) } catch (_: Exception) {}
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
