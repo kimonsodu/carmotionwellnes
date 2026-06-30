@@ -308,14 +308,14 @@ class OverlayService : Service(), SensorEventListener,
         }
     }
 
-    /** Seating heading for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) / 3 Rear (180°).
-     *  Side seats are exact mirrors (180° apart), so each side seat's cue is the OPPOSITE of the other's.
-     *  Left=90 / Right=270 makes left/right read as the mirror of forward/rear; labels stay keyed to the
-     *  SEAT index, so "facing left/right" keep their names. */
+    /** Seating heading for the simulator: 0 Auto / 1 Forward / 2 Left (90°) / 3 Right (270°) / 4 Rear (180°).
+     *  Auto and Forward are both 0° here (the phone's real cue is screen-relative, so Auto needs no angle).
+     *  Side seats are exact mirrors (180° apart); labels stay keyed to the SEAT index. This shapes THIS
+     *  phone's simulated cue only — a laptop stream applies the laptop's own seat (see SensorService). */
     private fun applySimSeat() {
         val seat = SettingsStore.simSeat(this)
-        sim.seatPsiDeg = when (seat) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
-        simSeatLabel = when (seat) { 1 -> "facing left"; 2 -> "facing right"; 3 -> "facing rear"; else -> "facing forward" }
+        sim.seatPsiDeg = when (seat) { 2 -> 90f; 3 -> 270f; 4 -> 180f; else -> 0f }
+        simSeatLabel = when (seat) { 1 -> "facing forward"; 2 -> "facing left"; 3 -> "facing right"; 4 -> "facing rear"; else -> "auto" }
     }
 
     /** Keep the sim's vehicle-frame flips in step with the live settings. The simulator applies them

@@ -386,8 +386,8 @@ class MainActivity : Activity() {
             }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
-        // Seating orientation: applied to ANY sim scenario above (Forward / Left / Right / Rear).
-        val seatNames = listOf("Facing forward", "Facing left", "Facing right", "Facing rear")
+        // Seating orientation: applied to ANY sim scenario above (Auto / Forward / Left / Right / Rear).
+        val seatNames = listOf("Auto", "Facing forward", "Facing left", "Facing right", "Facing rear")
         val seatAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, seatNames)
         seatAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spSeat.adapter = seatAdapter

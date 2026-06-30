@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OrbitalOverlay")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+49df8ca9b7a6ecc54ad5dadf30c6fe65ea098a11")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+17dd5ed1675c3e30128068020385f22be68914be")]
 [assembly: System.Reflection.AssemblyProductAttribute("Orbital")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Orbital")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

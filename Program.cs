@@ -80,6 +80,7 @@ namespace OrbitalOverlay
         public int InvertGrade { get; set; } = 1;          // dedicated hill flip (±1) — reverses only the grade cue
         public int InvertX { get; set; } = 1;
         public int InvertY { get; set; } = 1;
+        public int SimSeat { get; set; } = 0;              // rider orientation: 0 Auto,1 Forward,2 Left,3 Right,4 Rear (applies to sim + stream + real)
         public double DotScale { get; set; } = 1.0;
         public bool SwapAxes { get; set; } = false;
         public int DotStyle { get; set; } = 1;             // 0 = light, 1 = mixed (default, matches Android), 2 = dark, 3 = accent
@@ -123,7 +124,7 @@ namespace OrbitalOverlay
             try
             {
                 Directory.CreateDirectory(ConfigDir);
-                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, GradeGain = ov.GradeGain, InvertGrade = ov.InvertGrade, InvertX = ov.InvertX, InvertY = ov.InvertY, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
+                var s = new Settings { Sens = ov.Sens, LonGain = ov.LonGain, GradeGain = ov.GradeGain, InvertGrade = ov.InvertGrade, InvertX = ov.InvertX, InvertY = ov.InvertY, SimSeat = ov.SimSeat, DotScale = ov.DotScale, SwapAxes = ov.SwapAxes, DotStyle = ov.DotStyle, AccentColor = ov.AccentColor, DotOpacity = ov.DotOpacity, Density = ov.Density, Decay = ov.Decay, HideSensitivity = ov.HideSensitivity, Placement = ov.Placement, CueStyle = ov.CueStyle, CueModel = ov.CueModel, StartMinimized = panel.StartMinimized, AutoPause = ov.AutoPause, FirstRunDone = panel.FirstRunDone, PhoneOnly = ov.PhoneOnly, AutoHideTipSeen = panel.AutoHideTipSeen, Hotkeys = panel.HotkeyConfig };
                 var b = panel.RestoreBounds;                            // normal-state bounds even if minimized/hidden
                 if (!b.IsEmpty && b.Width > 0 && b.Height > 0)
                 {
@@ -494,12 +495,14 @@ namespace OrbitalOverlay
         const double Rest = 4.0;            // single-scenario rest window (s)
 
         public SimScenario Scenario = SimScenario.Off;
-        // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
-        // 0 = forward, 90 = side-facing (train), 180 = rear-facing, 270 = both (other side).
-        public double SeatPsi = 0;
-        // Accel/turn flips (mirror the panel's Flip ↕/↔ toggles). Applied in the VEHICLE frame, BEFORE
-        // the seat rotation, so each reverses its MANEUVER in every seat. Set each Tick from the panel
-        // state; Frame() neutralises the screen-axis InvertX/Y while Simulating so they aren't doubled.
+        // Seat orientation is NO LONGER baked here. The sim emits a FORWARD-neutral maneuver and the seat
+        // is applied at CUE level (OverlayWindow.Frame rotates the 2-D cue vector by the seat heading) so
+        // it survives the forward-learning estimator — which would otherwise re-learn forward and cancel a
+        // baked seat. That cue-level rotation also covers the phone-streamed sim and real sensors uniformly.
+        // Accel/turn flips (mirror the panel's Flip ↕/↔ toggles). Applied in the VEHICLE frame (still
+        // forward-neutral here), so each reverses its MANEUVER, and the seat rotation then carries it to the
+        // right axis. Set each Tick from the panel state; Frame() neutralises the screen-axis InvertX/Y
+        // while Simulating so they aren't doubled.
         // (The HILL flip is NOT here: the grade pitch is rate-limited to dodge the lid-tilt reject, so
         // reversing it at the source is too sluggish to see — it stays a cue-level InvertGrade in Frame,
         // which is instant and works in every seat since the Windows grade cue is always vertical.)
@@ -590,7 +593,7 @@ namespace OrbitalOverlay
             }
             ResetPending = isRest && !wasRest;          // one-shot only on the frame that ENTERS a rest
             wasRest = isRest;
-            psi = SeatPsi;                              // seating heading applies to whatever scenario is running
+            psi = 0;                                    // FORWARD-neutral: seat is applied at cue level (see OverlayWindow.Frame)
 
             // Direction flips act HERE, in the vehicle frame, BEFORE the seat rotation below — so each
             // reverses its MANEUVER in every seat. (Frame() neutralises the screen-axis InvertX/Y/Grade
@@ -611,7 +614,10 @@ namespace OrbitalOverlay
             double sinp = Math.Sin(pr), cosp = Math.Cos(pr);
             // Grade leans gravity along VEHICLE-FORWARD (sinp,cosp), which the seating heading rotates
             // too — so a side-facing seat puts the hill cue on the lateral axis (90°), like accel/brake.
-            double leanFwd = -G * Math.Sin(th);
+            // SIGN: the laptop grade channel reads gravity·forward, and a real uphill drove the cue the
+            // RIGHT way — the sim's lean was the opposite sign, so uphill/downhill came out inverted vs a
+            // real drive. Match the real sense: +G·sinθ (was −), so sim hills agree with real hills.
+            double leanFwd = G * Math.Sin(th);
             double lx = aFwd * sinp + aRight * cosp + leanFwd * sinp;
             double ly = aFwd * cosp - aRight * sinp + leanFwd * cosp;
             Ax = lx;
@@ -642,6 +648,9 @@ namespace OrbitalOverlay
         public int InvertGrade = 1;              // dedicated HILL flip (±1): reverses ONLY the grade cue, independent of Flip vertical (accel/brake).
         public int InvertX = 1;
         public int InvertY = 1;
+        public int SimSeat = 0;                  // rider orientation: 0 Auto, 1 Forward, 2 Left, 3 Right, 4 Rear.
+                                                 // Applied as a cue-level rotation in Frame() (Auto/Forward = none),
+                                                 // so it covers the local sim, the phone-streamed sim, and real sensors.
         public bool Paused = false;
         public double DotScale = 1.0;            // visual dot-size multiplier
         public bool SwapAxes = false;            // swap which axis drives vertical vs horizontal
@@ -765,6 +774,7 @@ namespace OrbitalOverlay
             InvertGrade = s.InvertGrade < 0 ? -1 : 1;
             InvertX = s.InvertX < 0 ? -1 : 1;
             InvertY = s.InvertY < 0 ? -1 : 1;
+            SimSeat = Math.Clamp(s.SimSeat, 0, 4);
             DotScale = double.IsFinite(s.DotScale) ? Math.Clamp(s.DotScale, 0.4, 3.0) : 1.0;
             SwapAxes = s.SwapAxes;
             DotStyle = Math.Clamp(s.DotStyle, 0, 3);
@@ -941,7 +951,12 @@ namespace OrbitalOverlay
             // reproduces the old mapping until it converges, so this is a safe superset. Turns are
             // excluded via yawRate (deg/s) so cornering can't pull the axis sideways.
             double hmag = Math.Sqrt(h1 * h1 + h2 * h2);
-            if (hmag > 0.20 && Math.Abs(yawRate) < 8.0)
+            // The sim emits a KNOWN vehicle frame (forward = device-Y, lateral = device-X), so DON'T learn
+            // forward from it. A turn's lateral g arrives while the yaw is still ramping under the 8°/s gate
+            // below, so the estimator would mislearn that lateral as "forward", rotate the axis, and the
+            // turn cue would then leak onto BOTH axes -> dots drift DIAGONALLY. Pin the axis instead.
+            if (Simulating) { fwd1 = 0; fwd2 = 1; }
+            else if (hmag > 0.20 && Math.Abs(yawRate) < 8.0)
             {
                 double d1 = h1 / hmag, d2 = h2 / hmag;
                 if (d1 * fwd1 + d2 * fwd2 < 0) { d1 = -d1; d2 = -d2; }    // gas & brake share the line
@@ -1016,15 +1031,25 @@ namespace OrbitalOverlay
             // so neutralise the screen-axis inverts here to avoid double-applying; real sources keep them.
             int invX = Simulating ? 1 : InvertX;
             int invY = Simulating ? 1 : InvertY;
-            int invG = InvertGrade;                      // HILL flip stays cue-level (instant; grade is always vertical) even while Simulating
-            double aX = SoftDead(rawAX, dz) * invX;      // turns  -> horizontal
+            int invG = InvertGrade;                      // HILL flip stays cue-level (instant) even while Simulating
+            // PRE-SEAT cue vector, in the rider-FORWARD frame: turns -> horizontal, accel + hill -> vertical.
+            double hPre = SoftDead(rawAX, dz) * invX;    // turns -> horizontal (pre-seat)
             // Longitudinal (gas/brake) axis: LonGain is the signed accel/brake trim — its SIGN sets
             // direction and its magnitude sets sensitivity (mirrors Android's lonGain). It COMPOSES
             // with InvertY so the "Flip vertical" toggle still reverses the whole Y axis as before.
             // gas/brake -> vertical (signed trim), PLUS the hill/grade cue on the same vertical axis
             // with its own independent signed gain (GradeGain), so a slope drifts the dots even at a
             // steady speed where there's no linear accel.
-            double aY = SoftDead(fore, dz) * invY * LonGain + SoftDead(gradeSig, dz) * invG * GradeGain;
+            double vPre = SoftDead(fore, dz) * invY * LonGain + SoftDead(gradeSig, dz) * invG * GradeGain;
+            // SEAT orientation: rotate the 2-D cue vector by the seating heading ψ. Done at CUE level so it
+            // survives the forward-learning estimator (which would otherwise re-learn forward and cancel a
+            // baked seat) and applies uniformly to the local sim, the phone-streamed sim, and real sensors.
+            // Auto/Forward => ψ=0 => identity (real Auto driving is byte-for-byte unchanged). The rotation
+            // also carries the hill cue onto the LATERAL axis in side seats (2-D grade), matching Android.
+            double pr = SeatPsiDeg(SimSeat) * (Math.PI / 180.0);
+            double sp = Math.Sin(pr), cp = Math.Cos(pr);
+            double aX = hPre * cp + vPre * sp;           // turns -> horizontal (rotated by seat)
+            double aY = -hPre * sp + vPre * cp;          // accel + hill -> vertical (rotated by seat)
 
             // smoothed accel envelope for the Acceleration-pulse cue model (band-passed mag, never raw -> no strobe)
             double cueMag = Math.Sqrt(lat * lat + fore * fore);
@@ -1108,7 +1133,7 @@ namespace OrbitalOverlay
             cue.CueStyle = CueStyle; cue.CueModel = CueModel;
             cue.SimLabel = Simulating
                 ? (sim.PhaseName == "Rest" || string.IsNullOrEmpty(sim.PhaseName)
-                    ? "— Rest —" : sim.PhaseName + "  ·  " + SeatName(sim.SeatPsi))
+                    ? "— Rest —" : sim.PhaseName + "  ·  " + SeatName(SimSeat))
                 : null;
             cue.InvalidateVisual();
 
@@ -1203,17 +1228,18 @@ namespace OrbitalOverlay
             }
         }
 
-        // Seating orientation for the simulator: 0 Forward / 1 Left side (270°) / 2 Right side (90°) /
-        // 3 Rear (180°). Side seats are exact mirrors, so swapping their heading makes every cue opposite.
-        static string SeatName(double psi) => psi switch { 90 => "facing right", 270 => "facing left", 180 => "facing rear", _ => "facing forward" };
+        // Rider orientation index -> seating heading ψ (deg). 0 Auto + 1 Forward = 0° (no rotation);
+        // 2 Left = 270°, 3 Right = 90°, 4 Rear = 180°. Side seats are exact mirrors (180° apart).
+        public static double SeatPsiDeg(int seat) => seat switch { 2 => 270, 3 => 90, 4 => 180, _ => 0 };
+        static string SeatName(int seat) => seat switch { 2 => "facing left", 3 => "facing right", 4 => "facing rear", 1 => "facing forward", _ => "auto" };
 
         public void SetSimSeat(int seat)
         {
-            sim.SeatPsi = seat switch { 1 => 270, 2 => 90, 3 => 180, _ => 0 };
+            SimSeat = Math.Clamp(seat, 0, 4);
             // The accel/turn cue is a transient that decays as the gravity estimate is absorbed, so
-            // flipping the seat mid-hold would just flip an already-zero residual (looks like "no
+            // changing the seat mid-hold would just rotate an already-zero residual (looks like "no
             // change"). Replay the maneuver from the start with a re-armed pipeline so it re-fires in
-            // the new seat's mirrored direction.
+            // the new seat's orientation.
             if (Simulating) { sim.Reset(); ArmForNewSource(); }
         }
 
@@ -1686,6 +1712,42 @@ namespace OrbitalOverlay
                 Text = "Turn on Swap if gas/brake moves the dots sideways.",
                 Margin = new Thickness(0, 2, 0, 0)
             }, "FaintText"));
+            // ---- Seat (rider orientation): general control, applies to live driving AND simulation ----
+            direction.Children.Add(Divider());
+            direction.Children.Add(Styled(new TextBlock
+            {
+                Text = "Seat (which way the rider faces):",
+                Margin = new Thickness(0, 2, 0, 4)
+            }, "FaintText"));
+            var seatLabels = new[] { "Auto", "Forward", "Left", "Right", "Rear" };
+            var seatWrap = new WrapPanel();
+            var seatBtns = new Button[seatLabels.Length];
+            void HighlightSeat(int idx)
+            {
+                for (int i = 0; i < seatBtns.Length; i++)
+                {
+                    seatBtns[i].Background = i == idx ? Brush("AccentBrush") : Brush("CardHiBrush");
+                    seatBtns[i].Foreground = i == idx ? Brush("BgBrush") : Brush("TextBrush");
+                }
+            }
+            for (int i = 0; i < seatLabels.Length; i++)
+            {
+                int idx = i;
+                var b = Styled(new Button { Content = seatLabels[i], Margin = new Thickness(0, 0, 6, 6), MinWidth = 66 }, "OrbitButton");
+                b.ToolTip = idx == 0
+                    ? "Auto: learn travel-forward from the motion itself (normal driving)."
+                    : "Force the rider facing " + seatLabels[idx].ToLower() + " — rotates the whole cue. Applies live AND in the simulator.";
+                b.Click += (s, e) => { HighlightSeat(idx); ov.SetSimSeat(idx); QueueSave(); };
+                seatBtns[i] = b;
+                seatWrap.Children.Add(b);
+            }
+            direction.Children.Add(seatWrap);
+            HighlightSeat(Math.Clamp(ov.SimSeat, 0, 4));
+            direction.Children.Add(Styled(new TextBlock
+            {
+                Text = "Auto = normal. A forced seat also drives the cue when a phone streams its simulation here.",
+                Margin = new Thickness(0, 2, 0, 0)
+            }, "FaintText"));
             root.Children.Add(CardOf(direction));
 
             // ---- action buttons ----
@@ -1924,35 +1986,13 @@ namespace OrbitalOverlay
             }
             simCard.Children.Add(simWrap);
 
-            // Seating: orthogonal selector applied to ANY scenario above, so you can test accel/turn/
-            // hills from a forward, left-side, right-side or rear-facing seat (train).
+            // Seat (rider orientation) now lives in the general Direction card above — it applies to live
+            // driving AND every simulation scenario, so it's no longer a sim-only control here.
             simCard.Children.Add(Styled(new TextBlock
             {
-                Text = "Seat orientation (applies to every scenario):",
-                Margin = new Thickness(0, 6, 0, 4)
+                Text = "Tip: set the rider's Seat in the Direction card above — it applies to every scenario.",
+                Margin = new Thickness(0, 6, 0, 0)
             }, "FaintText"));
-            var seatLabels = new[] { "Facing fwd", "Facing left", "Facing right", "Facing rear" };
-            var seatWrap = new WrapPanel();
-            var seatBtns = new Button[seatLabels.Length];
-            void HighlightSeat(int idx)
-            {
-                for (int i = 0; i < seatBtns.Length; i++)
-                {
-                    seatBtns[i].Background = i == idx ? Brush("AccentBrush") : Brush("CardHiBrush");
-                    seatBtns[i].Foreground = i == idx ? Brush("BgBrush") : Brush("TextBrush");
-                }
-            }
-            for (int i = 0; i < seatLabels.Length; i++)
-            {
-                int idx = i;
-                var b = Styled(new Button { Content = seatLabels[i], Margin = new Thickness(0, 0, 6, 6), MinWidth = 84 }, "OrbitButton");
-                b.ToolTip = "Run the chosen scenario seated " + seatLabels[idx].ToLower() + " (which way the rider looks).";
-                b.Click += (s, e) => { HighlightSeat(idx); ov.SetSimSeat(idx); };
-                seatBtns[i] = b;
-                seatWrap.Children.Add(b);
-            }
-            simCard.Children.Add(seatWrap);
-            HighlightSeat(0);
 
             var simPhaseLbl = Styled(new TextBlock { Text = "Off", Margin = new Thickness(2, 6, 0, 0) }, "FaintText");
             simCard.Children.Add(simPhaseLbl);

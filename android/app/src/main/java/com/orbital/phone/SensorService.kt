@@ -79,7 +79,7 @@ class SensorService : Service(), SensorEventListener,
 
     // ---- Simulation Mode for the STREAM: synthetic IMU OVERRIDES the real sensors and is streamed to
     // the laptop, so the PC overlay can be tested with no driving (mirrors OverlayService's on-phone
-    // sim). Shares the same sim settings (scenario / seat / flips) as the on-phone cue. ----
+    // sim). Shares scenario / seat with the on-phone cue; flips are applied by the laptop's own cue. ----
     private val sim = MotionSimulator()
     @Volatile private var simScenario = MotionSimulator.OFF
     @Volatile private var simRunning = false
@@ -126,7 +126,7 @@ class SensorService : Service(), SensorEventListener,
         sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         // Sim OVERRIDES the real sensors: when a scenario is picked we stream SYNTHETIC IMU instead of
         // registering the accelerometer/gyro, so the laptop overlay can be tested with no driving. The
-        // sim shares its scenario/seat/flip settings with the on-phone cue and updates live below.
+        // sim shares its scenario/seat with the on-phone cue (flips owned by the laptop) and updates live.
         simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario); applySimSeat(); applySimFlips()
         SettingsStore.prefs(this).registerOnSharedPreferenceChangeListener(this)
         if (simScenario != MotionSimulator.OFF) startSimLoop()
@@ -187,15 +187,23 @@ class SensorService : Service(), SensorEventListener,
         if (accel == null) statusLine = "no accelerometer on this phone"
     }
 
-    /** Seating heading + flips for the stream sim — IDENTICAL mapping to OverlayService so the laptop
-     *  cue and the on-phone cue simulate the same motion. */
+    /** Seat for the laptop stream is owned by the WINDOWS cue (it rotates the cue vector by the chosen
+     *  seat), NOT the phone — same rationale as flips (see applySimFlips). Stream a FORWARD-neutral
+     *  maneuver so the laptop applies its own seat from its own selector. The on-phone OverlayService cue
+     *  keeps its own seat (that's the phone's local cue). */
     private fun applySimSeat() {
-        sim.seatPsiDeg = when (SettingsStore.simSeat(this)) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
+        sim.seatPsiDeg = 0f
     }
+    /** Flips for the laptop stream are owned by the WINDOWS cue (Invert accel/turn/hill), NOT the phone.
+     *  The laptop renders raw IMU through its own pipeline and applies flips at cue level, so baking them
+     *  at the source here would double-apply — and the laptop's forward-direction estimator can wash a
+     *  source flip out anyway. Keep the streamed maneuver unflipped, matching the real-drive stream
+     *  (never source-flipped). The on-phone OverlayService cue is screen-relative and still source-flips;
+     *  that path is unchanged. */
     private fun applySimFlips() {
-        sim.flipV = SettingsStore.flipV(this)
-        sim.flipH = SettingsStore.flipH(this)
-        sim.flipGrade = SettingsStore.flipGrade(this)
+        sim.flipV = false
+        sim.flipH = false
+        sim.flipGrade = false
     }
 
     // Sim drive loop: synthesize one IMU frame at ~62 Hz, run it through the SAME VehicleFilter as the
@@ -229,11 +237,11 @@ class SensorService : Service(), SensorEventListener,
         handler?.removeCallbacks(simRunnable)
     }
 
-    /** Live sim changes while streaming: switch between real-sensor and sim feed, replay the maneuver
-     *  on a seat/scenario change, and keep the flips current — mirrors OverlayService. */
+    /** Live sim changes while streaming: switch between real-sensor and sim feed, and replay the
+     *  maneuver on a seat/scenario change — mirrors OverlayService. (Flips are owned by the laptop cue.) */
     override fun onSharedPreferenceChanged(sp: SharedPreferences?, key: String?) {
         when (key) {
-            SettingsStore.K_SIM_SCENARIO, SettingsStore.K_SIM_SEAT -> handler?.post {
+            SettingsStore.K_SIM_SCENARIO -> handler?.post {
                 simScenario = SettingsStore.simScenario(this)
                 applySimSeat(); applySimFlips()
                 sim.setScenario(simScenario)                 // clock back to 0 -> the maneuver replays
@@ -243,7 +251,9 @@ class SensorService : Service(), SensorEventListener,
                 if (simScenario != MotionSimulator.OFF) { stopGps(); startSimLoop() }
                 else { registerRealSensors(); startGps() }
             }
-            SettingsStore.K_FLIP_V, SettingsStore.K_FLIP_H, SettingsStore.K_FLIP_GRADE -> applySimFlips()
+            // K_FLIP_* and K_SIM_SEAT intentionally ignored here: flips AND seat for the laptop stream are
+            // owned by the Windows cue (see applySimFlips / applySimSeat), so phone-side flip/seat toggles
+            // must not change the streamed maneuver — the laptop applies its own from its own selectors.
         }
     }
 

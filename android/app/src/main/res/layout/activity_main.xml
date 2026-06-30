@@ -72,7 +72,7 @@
             </LinearLayout>
 
             <TextView
-                android:text="Tick either or both. Stream to laptop: this phone is the sensor, dots show on the PC. Cue on this phone: dots show here, driven by this phone's own motion. Both can run at once."
+                android:text="Tick either or both. Stream to laptop: this phone is the sensor, dots show on the PC. Cue on this phone: dots show here, driven by this phone's own motion. Both can run at once. When streaming, the LAPTOP's own controls (cue look, flips, seat) shape the laptop dots; the look/flip/seat settings in this app shape only this phone's own cue."
                 android:textColor="@color/faint"
                 android:textSize="12sp"
                 android:lineSpacingExtra="2dp"
@@ -585,7 +585,7 @@
                         android:layout_height="wrap_content" />
                     <TextView
                         style="@style/FieldLabel"
-                        android:text="Which way the rider faces (applied to the scenario above) — test accel, turns and hills facing forward, left, right, or the rear."
+                        android:text="Which way the rider faces, applied to THIS phone's simulated cue (Auto = normal forward). When streaming to the laptop, the laptop's own Seat control drives the laptop dots — not this."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

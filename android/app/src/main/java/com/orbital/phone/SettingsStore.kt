@@ -41,7 +41,7 @@ object SettingsStore {
     const val K_FLIP_H = "ph_flipH"              // Bool reverse the horizontal (turn) cue direction
     const val K_SWAP = "ph_swap"                 // Bool swap which axis drives vertical vs horizontal
     const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..7 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill (test-only synthetic motion)
-    const val K_SIM_SEAT = "ph_simSeat"          // Int 0..3 sim seating orientation: 0 Forward / 1 Left side / 2 Right side / 3 Rear — applies to any scenario
+    const val K_SIM_SEAT = "ph_simSeat"          // Int 0..4 sim seating orientation: 0 Auto / 1 Forward / 2 Left / 3 Right / 4 Rear — shapes THIS phone's simulated cue (a laptop stream applies the laptop's own seat)
 
     // ---- defaults ----
     const val DEF_STRENGTH = 1.8f
@@ -66,7 +66,7 @@ object SettingsStore {
     const val DEF_FLIP_GRADE = false
     const val DEF_FLIP_H = false
     const val DEF_SWAP = false
-    const val DEF_SIM_SEAT = 0              // sim seating defaults to forward-facing
+    const val DEF_SIM_SEAT = 0              // sim seating defaults to Auto (= forward-facing)
 
     fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -90,14 +90,14 @@ object SettingsStore {
     fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
     fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
     fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 7)
-    fun simSeat(c: Context) = prefs(c).getInt(K_SIM_SEAT, DEF_SIM_SEAT).coerceIn(0, 3)
+    fun simSeat(c: Context) = prefs(c).getInt(K_SIM_SEAT, DEF_SIM_SEAT).coerceIn(0, 4)
     fun flipV(c: Context) = prefs(c).getBoolean(K_FLIP_V, DEF_FLIP_V)
     fun flipGrade(c: Context) = prefs(c).getBoolean(K_FLIP_GRADE, DEF_FLIP_GRADE)
     fun flipH(c: Context) = prefs(c).getBoolean(K_FLIP_H, DEF_FLIP_H)
     fun swap(c: Context) = prefs(c).getBoolean(K_SWAP, DEF_SWAP)
 
     fun setStrength(c: Context, v: Float) = prefs(c).edit().putFloat(K_STRENGTH, v.coerceIn(0.3f, 6.0f)).apply()
-    fun setSimSeat(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SEAT, v.coerceIn(0, 3)).apply()
+    fun setSimSeat(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SEAT, v.coerceIn(0, 4)).apply()
     fun setFlipV(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_V, v).apply()
     fun setFlipGrade(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_GRADE, v).apply()
     fun setFlipH(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_FLIP_H, v).apply()
