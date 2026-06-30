@@ -573,7 +573,7 @@
                         android:layout_height="wrap_content" />
                     <TextView
                         style="@style/FieldLabel"
-                        android:text="Plays synthetic driving motion so you can verify the cue without driving — start the overlay, then pick a scenario. Off = your real sensors."
+                        android:text="Plays synthetic driving motion so you can verify the cue without driving — start the overlay or laptop streaming, then pick a scenario. Off = your real sensors."
                         android:textSize="11sp"
                         android:layout_marginTop="2dp"
                         android:layout_width="match_parent"

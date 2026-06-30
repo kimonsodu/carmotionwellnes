@@ -497,6 +497,13 @@ namespace OrbitalOverlay
         // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
         // 0 = forward, 90 = side-facing (train), 180 = rear-facing, 270 = both (other side).
         public double SeatPsi = 0;
+        // Accel/turn flips (mirror the panel's Flip ↕/↔ toggles). Applied in the VEHICLE frame, BEFORE
+        // the seat rotation, so each reverses its MANEUVER in every seat. Set each Tick from the panel
+        // state; Frame() neutralises the screen-axis InvertX/Y while Simulating so they aren't doubled.
+        // (The HILL flip is NOT here: the grade pitch is rate-limited to dodge the lid-tilt reject, so
+        // reversing it at the source is too sluggish to see — it stays a cue-level InvertGrade in Frame,
+        // which is instant and works in every seat since the Windows grade cue is always vertical.)
+        public bool FlipV, FlipH;
         public string PhaseName { get; private set; } = "";
         // One-shot, raised on the frame that ENTERS a rest: tells the overlay to re-arm the pipeline
         // (clears the gravity the band-pass had absorbed) so 0-drive produces NO cue -> dots just stop.
@@ -584,6 +591,12 @@ namespace OrbitalOverlay
             ResetPending = isRest && !wasRest;          // one-shot only on the frame that ENTERS a rest
             wasRest = isRest;
             psi = SeatPsi;                              // seating heading applies to whatever scenario is running
+
+            // Direction flips act HERE, in the vehicle frame, BEFORE the seat rotation below — so each
+            // reverses its MANEUVER in every seat. (Frame() neutralises the screen-axis InvertX/Y/Grade
+            // while Simulating so these aren't applied a second time.)
+            if (FlipV) aFwd = -aFwd;
+            if (FlipH) { aRight = -aRight; yaw = -yaw; }
 
             // Road grade: move the pitch angle toward target at a gentle rate so the emitted
             // pitch gyro stays under Windows' lid-tilt reject knee (tiltRate > 6) — otherwise
@@ -999,14 +1012,19 @@ namespace OrbitalOverlay
             // Turns are driven mainly by yaw rate about gravity (works in ANY mount orientation —
             // flat, upright, on-side) plus the felt lateral g. yaw is deg/s; lat is m/s².
             double rawAX = lat + yaw * 0.15;
-            double aX = SoftDead(rawAX, dz) * InvertX;   // turns  -> horizontal
+            // While the sim drives, the flips are applied in the maneuver frame (see MotionSimulator),
+            // so neutralise the screen-axis inverts here to avoid double-applying; real sources keep them.
+            int invX = Simulating ? 1 : InvertX;
+            int invY = Simulating ? 1 : InvertY;
+            int invG = InvertGrade;                      // HILL flip stays cue-level (instant; grade is always vertical) even while Simulating
+            double aX = SoftDead(rawAX, dz) * invX;      // turns  -> horizontal
             // Longitudinal (gas/brake) axis: LonGain is the signed accel/brake trim — its SIGN sets
             // direction and its magnitude sets sensitivity (mirrors Android's lonGain). It COMPOSES
             // with InvertY so the "Flip vertical" toggle still reverses the whole Y axis as before.
             // gas/brake -> vertical (signed trim), PLUS the hill/grade cue on the same vertical axis
             // with its own independent signed gain (GradeGain), so a slope drifts the dots even at a
             // steady speed where there's no linear accel.
-            double aY = SoftDead(fore, dz) * InvertY * LonGain + SoftDead(gradeSig, dz) * InvertGrade * GradeGain;
+            double aY = SoftDead(fore, dz) * invY * LonGain + SoftDead(gradeSig, dz) * invG * GradeGain;
 
             // smoothed accel envelope for the Acceleration-pulse cue model (band-passed mag, never raw -> no strobe)
             double cueMag = Math.Sqrt(lat * lat + fore * fore);
@@ -1208,6 +1226,9 @@ namespace OrbitalOverlay
             simLastTick = now;
             if (dt <= 0) dt = 0.016;
             if (dt > 0.10) dt = 0.10;                    // clamp after a stall so the script doesn't jump
+            // Drive the sim's vehicle-frame flips from the panel toggles, so each Flip reverses its
+            // maneuver in EVERY seat (Frame() neutralises the screen-axis inverts while Simulating).
+            sim.FlipV = InvertY == -1; sim.FlipH = InvertX == -1;   // hill flip stays cue-level (InvertGrade in Frame)
             sim.Tick(dt);
             if (sim.ResetPending) ArmForNewSource();         // rest entry: clear the absorbed gravity so 0-drive -> no cue (no reverse)
             rawX = sim.Ax; rawY = sim.Ay; rawZ = sim.Az;
@@ -1235,8 +1256,8 @@ namespace OrbitalOverlay
             ("Recenter",     HK_RECENTER, "Recenter",        false),
             ("StrengthDown", HK_DOWN,     "Strength −",      true),
             ("StrengthUp",   HK_UP,       "Strength +",      true),
-            ("FlipV",        HK_FLIPV,    "Flip vertical",   false),
-            ("FlipH",        HK_FLIPH,    "Flip horizontal", false),
+            ("FlipV",        HK_FLIPV,    "Flip accel",      false),
+            ("FlipH",        HK_FLIPH,    "Flip turn",       false),
         };
         static Dictionary<string, Hotkey> DefaultHotkeys() => new Dictionary<string, Hotkey>
         {
@@ -1609,6 +1630,9 @@ namespace OrbitalOverlay
             resetVis.ToolTip = "Restore strength, accel/brake, size, opacity, density, colour, style, smoothness and hide sensitivity to defaults.";
             resetVis.Click += (s, e) =>
             {
+                if (MessageBox.Show("Restore strength, accel/brake, size, opacity, density, colour, style, smoothness and hide sensitivity to their defaults?\nThis can't be undone.",
+                        "Reset visuals to defaults?", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                    return;
                 slider.Value = 1.8; lonSlider.Value = 1.5; sizeSlider.Value = 1.0;
                 opacitySlider.Value = 1.0; densitySlider.Value = 1.0;
                 decaySlider.Value = 0.94; hideSlider.Value = 1.0;
@@ -1630,22 +1654,22 @@ namespace OrbitalOverlay
             pause.Unchecked += (s, e) => ov.Paused = false;
             direction.Children.Add(pause);
             direction.Children.Add(Divider());
-            flipV = Toggle("Flip vertical  ↕");
-            flipV.ToolTip = "Reverse up/down dot drift (Ctrl+Alt+V).";
+            flipV = Toggle("Flip ↕ accel");
+            flipV.ToolTip = "Reverse the accel/brake cue if it drifts the wrong way (Ctrl+Alt+V).";
             flipV.Checked += (s, e) => { ov.InvertY = -1; QueueSave(); };
             flipV.Unchecked += (s, e) => { ov.InvertY = 1; QueueSave(); };
             flipV.IsChecked = ov.InvertY == -1;     // reflect persisted settings
             direction.Children.Add(flipV);
             direction.Children.Add(Divider());
-            flipGrade = Toggle("Flip hill  ⛰");
+            flipGrade = Toggle("Flip ⛰ hill");
             flipGrade.ToolTip = "Reverse ONLY the hill/grade cue (uphill vs downhill), without touching accel/brake.";
             flipGrade.Checked += (s, e) => { ov.InvertGrade = -1; QueueSave(); };
             flipGrade.Unchecked += (s, e) => { ov.InvertGrade = 1; QueueSave(); };
             flipGrade.IsChecked = ov.InvertGrade == -1;
             direction.Children.Add(flipGrade);
             direction.Children.Add(Divider());
-            flipH = Toggle("Flip horizontal  ↔");
-            flipH.ToolTip = "Reverse left/right dot drift (Ctrl+Alt+H).";
+            flipH = Toggle("Flip ↔ turn");
+            flipH.ToolTip = "Reverse the turn cue if it drifts the wrong way (Ctrl+Alt+H).";
             flipH.Checked += (s, e) => { ov.InvertX = -1; QueueSave(); };
             flipH.Unchecked += (s, e) => { ov.InvertX = 1; QueueSave(); };
             flipH.IsChecked = ov.InvertX == -1;

@@ -82,6 +82,14 @@ class MotionSimulator {
     // Seating heading (deg), set from the app's seat toggles: 0 forward, 90 side-facing (train),
     // 180 rear-facing, 270 both. Applied to whatever scenario runs.
     @Volatile @JvmField var seatPsiDeg = 0f
+    // Direction flips (mirror the DotsView Flip ↕/↔/⛰ controls). Applied here in the VEHICLE frame,
+    // BEFORE the seat rotation, so each flip reverses its MANEUVER in every seat — unlike the
+    // screen-axis flips in DotsView, which become no-ops in side seats (where accel/turn land on the
+    // other screen axis). OverlayService keeps these in sync with the live settings and tells
+    // DotsView to neutralise its screen-axis flips while a sim runs, so they aren't double-applied.
+    @Volatile @JvmField var flipV = false       // reverse accel/brake
+    @Volatile @JvmField var flipH = false       // reverse turn
+    @Volatile @JvmField var flipGrade = false   // reverse ONLY the hill/grade cue
     private var idx = 0                 // current "All" phase
     private var clock = 0f              // seconds into the current phase (or into the held ramp)
     private var wasRest = false         // previous frame's rest state -> one-shot reset on rest entry
@@ -127,11 +135,18 @@ class MotionSimulator {
         wasRest = isRest
         psiDeg = seatPsiDeg                                   // seating applies to whatever scenario is running
 
+        // Direction flips act HERE, in the vehicle frame, BEFORE the seat rotation below — so each one
+        // reverses its MANEUVER (accel/brake, turn, hill) in EVERY seat, matching the UI's promise.
+        val aFwdM = aFwd * (if (flipV) -1f else 1f)
+        val aRightM = aRight * (if (flipH) -1f else 1f)
+        val yawDegM = yawDeg * (if (flipH) -1f else 1f)
+        val gradeDegM = gradeDeg * (if (flipGrade) -1f else 1f)
+
         // Seating heading psi rotates the vehicle linear accel into the device frame (psi=0 -> x=right,
         // y=forward; psi=90 -> fwd accel lands on device-x, proving sideways/train seating is handled).
         val psi = Math.toRadians(psiDeg.toDouble())
         val sinP = sin(psi).toFloat(); val cosP = cos(psi).toFloat()
-        val gradeRad = Math.toRadians(gradeDeg.toDouble()).toFloat()
+        val gradeRad = Math.toRadians(gradeDegM.toDouble()).toFloat()
         // Road grade pitches gravity about device-x: g' = (0, -G·sinθ, G·cosθ) — a longitudinal grav
         // component drives the fore cue via the gravity path (distinct from accel/brake linear accel).
         // The road grade leans gravity along the VEHICLE-FORWARD axis, which the seating heading
@@ -140,8 +155,8 @@ class MotionSimulator {
         // in the device frame.
         val sinG = sin(gradeRad); val cosG = cos(gradeRad)
         val leanFwd = -G * sinG
-        val ax = aFwd * sinP + aRight * cosP + leanFwd * sinP
-        val ay = aFwd * cosP - aRight * sinP + leanFwd * cosP
+        val ax = aFwdM * sinP + aRightM * cosP + leanFwd * sinP
+        val ay = aFwdM * cosP - aRightM * sinP + leanFwd * cosP
         val az = G * cosG
         // device->world (ENU) row-major: rows = world East / North / Up expressed in device coords.
         // Row 2 (Up) = the gravity-reaction direction baked into (ax,ay,az)/G, so the filter's
@@ -155,7 +170,7 @@ class MotionSimulator {
         // gyro rad/s: pitchRate is the grade ramp's derivative about the vehicle-RIGHT axis
         // (cosP,-sinP) so it rotates with the seat too; yawRate is the cornering rate about z.
         val pitchRate = (gradeRad - prevGradeRad) / DT; prevGradeRad = gradeRad
-        val yawRate = Math.toRadians(yawDeg.toDouble()).toFloat()
+        val yawRate = Math.toRadians(yawDegM.toDouble()).toFloat()
 
         currentPhase = name
         return Sample(floatArrayOf(ax, ay, az), floatArrayOf(pitchRate * cosP, -pitchRate * sinP, yawRate), name, R, reset)

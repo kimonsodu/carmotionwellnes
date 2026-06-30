@@ -8,6 +8,7 @@ import android.app.Service
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -35,7 +36,8 @@ import java.util.UUID
  * Frame (m/s^2 accel incl. gravity; deg/s gyro), matching every PC ingest path:
  *   {"ax":..,"ay":..,"az":..,"gx":..,"gy":..,"gz":..,"g":0|1}\n
  */
-class SensorService : Service(), SensorEventListener {
+class SensorService : Service(), SensorEventListener,
+    SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
         @Volatile var running = false
@@ -74,6 +76,13 @@ class SensorService : Service(), SensorEventListener {
     @Volatile private var spdMps = -1f
     private var lm: android.location.LocationManager? = null
     private var locListener: android.location.LocationListener? = null
+
+    // ---- Simulation Mode for the STREAM: synthetic IMU OVERRIDES the real sensors and is streamed to
+    // the laptop, so the PC overlay can be tested with no driving (mirrors OverlayService's on-phone
+    // sim). Shares the same sim settings (scenario / seat / flips) as the on-phone cue. ----
+    private val sim = MotionSimulator()
+    @Volatile private var simScenario = MotionSimulator.OFF
+    @Volatile private var simRunning = false
 
     private var lastSendNs = 0L
     private var rateMark = 0L
@@ -115,18 +124,13 @@ class SensorService : Service(), SensorEventListener {
         }
 
         sm = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val accel = sm!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        val gyro = sm!!.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-        val us = 16000 // ~62 Hz request
-        accel?.let { sm!!.registerListener(this, it, us, handler) }
-        gyro?.let { sm!!.registerListener(this, it, us, handler) }
-        // Orientation for the world-frame vehicle filter (mirrors OverlayService); optional.
-        (sm!!.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-            ?: sm!!.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
-            ?: sm!!.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR))
-            ?.let { sm!!.registerListener(this, it, us, handler) }
-        if (accel == null) statusLine = "no accelerometer on this phone"
-        startGps()
+        // Sim OVERRIDES the real sensors: when a scenario is picked we stream SYNTHETIC IMU instead of
+        // registering the accelerometer/gyro, so the laptop overlay can be tested with no driving. The
+        // sim shares its scenario/seat/flip settings with the on-phone cue and updates live below.
+        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario); applySimSeat(); applySimFlips()
+        SettingsStore.prefs(this).registerOnSharedPreferenceChangeListener(this)
+        if (simScenario != MotionSimulator.OFF) startSimLoop()
+        else { registerRealSensors(); startGps() }
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "orbit:stream").apply {
@@ -150,6 +154,7 @@ class SensorService : Service(), SensorEventListener {
         if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
             != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         lm = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        stopGps()                                  // never stack duplicate registrations across sim<->real switches
         val cb = object : android.location.LocationListener {
             override fun onLocationChanged(loc: android.location.Location) {
                 spdMps = if (loc.hasSpeed()) loc.speed else -1f
@@ -165,6 +170,86 @@ class SensorService : Service(), SensorEventListener {
             lm!!.requestLocationUpdates(
                 android.location.LocationManager.GPS_PROVIDER, 1000L, 0f, cb, handler!!.looper)
         } catch (_: Exception) {}
+    }
+
+    /** Register the real accelerometer/gyro/orientation listeners (skipped while the sim drives). */
+    private fun registerRealSensors() {
+        val s = sm ?: return
+        val us = 16000 // ~62 Hz request
+        val accel = s.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        accel?.let { s.registerListener(this, it, us, handler) }
+        s.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let { s.registerListener(this, it, us, handler) }
+        // Orientation for the world-frame vehicle filter (mirrors OverlayService); optional.
+        (s.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            ?: s.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: s.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR))
+            ?.let { s.registerListener(this, it, us, handler) }
+        if (accel == null) statusLine = "no accelerometer on this phone"
+    }
+
+    /** Seating heading + flips for the stream sim — IDENTICAL mapping to OverlayService so the laptop
+     *  cue and the on-phone cue simulate the same motion. */
+    private fun applySimSeat() {
+        sim.seatPsiDeg = when (SettingsStore.simSeat(this)) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
+    }
+    private fun applySimFlips() {
+        sim.flipV = SettingsStore.flipV(this)
+        sim.flipH = SettingsStore.flipH(this)
+        sim.flipGrade = SettingsStore.flipGrade(this)
+    }
+
+    // Sim drive loop: synthesize one IMU frame at ~62 Hz, run it through the SAME VehicleFilter as the
+    // real path, then stream it — so the PC receives synthetic raw accel/gyro indistinguishable from a
+    // real phone (it runs its own pipeline on ax/ay/az/gx/gy/gz).
+    private val simRunnable = object : Runnable {
+        override fun run() {
+            if (!simRunning) return
+            vf.onGps(15f, 0f, false)                          // ~15 m/s so the in-vehicle gate enables
+            val s = sim.step()
+            vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
+            if (s.reset) vf.reset()                           // rest entry: drop absorbed gravity (no reverse cue)
+            val o = vf.onAccel(s.accel, false, s.R, System.nanoTime())
+            ax = s.accel[0]; ay = s.accel[1]; az = s.accel[2] // stream the SYNTHETIC raw frame (what the PC ingests)
+            gx = s.gyro[0] * RAD2DEG; gy = s.gyro[1] * RAD2DEG; gz = s.gyro[2] * RAD2DEG; haveGyro = 1
+            vlong = o.lon; vlat = o.lat; yawDeg = o.yawDegPerSec; gateVal = o.gate; vehFlag = if (o.inVehicle) 1 else 0
+            spdMps = 15f                                      // tell the PC's gate we're moving
+            maybeSend()
+            handler?.postDelayed(this, 16L)                  // ~62 Hz self-repost
+        }
+    }
+
+    private fun startSimLoop() {
+        if (simRunning) return
+        simRunning = true
+        handler?.post(simRunnable)
+    }
+
+    private fun stopSimLoop() {
+        simRunning = false
+        handler?.removeCallbacks(simRunnable)
+    }
+
+    /** Live sim changes while streaming: switch between real-sensor and sim feed, replay the maneuver
+     *  on a seat/scenario change, and keep the flips current — mirrors OverlayService. */
+    override fun onSharedPreferenceChanged(sp: SharedPreferences?, key: String?) {
+        when (key) {
+            SettingsStore.K_SIM_SCENARIO, SettingsStore.K_SIM_SEAT -> handler?.post {
+                simScenario = SettingsStore.simScenario(this)
+                applySimSeat(); applySimFlips()
+                sim.setScenario(simScenario)                 // clock back to 0 -> the maneuver replays
+                stopSimLoop()
+                try { sm?.unregisterListener(this) } catch (_: Exception) {}
+                vf.reset(); haveR = false                    // fresh gravity/baseline so the replay isn't masked
+                if (simScenario != MotionSimulator.OFF) { stopGps(); startSimLoop() }
+                else { registerRealSensors(); startGps() }
+            }
+            SettingsStore.K_FLIP_V, SettingsStore.K_FLIP_H, SettingsStore.K_FLIP_GRADE -> applySimFlips()
+        }
+    }
+
+    /** Stop GPS updates (sim provides its own speed). Safe if GPS was never started. */
+    private fun stopGps() {
+        try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
     }
 
     private fun openUdp(host: String, port: Int): Transport {
@@ -277,6 +362,8 @@ class SensorService : Service(), SensorEventListener {
 
     override fun onDestroy() {
         running = false
+        stopSimLoop()
+        try { SettingsStore.prefs(this).unregisterOnSharedPreferenceChangeListener(this) } catch (_: Exception) {}
         try { sm?.unregisterListener(this) } catch (_: Exception) {}
         try { locListener?.let { lm?.removeUpdates(it) } } catch (_: Exception) {}
         try { wake?.release() } catch (_: Exception) {}

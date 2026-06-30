@@ -32,10 +32,16 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     @Volatile private var inGradeY = 0f  // road-grade (hill) cue m/s^2, baselined; vertical pitch (screen-up)
     @Volatile private var inEnable = 1f  // 0..1 in-vehicle/GPS enable (also cue fade target)
     @Volatile private var simLabel: String? = null   // simulation note ("Accelerate", "Turn left"…) or null
+    @Volatile private var simActive = false          // a sim scenario is driving (vs the real sensor)
 
     /** Show a note over the cue naming the simulated maneuver (null = nothing). Set by OverlayService
      *  only while a sim scenario runs, so the real overlay is never labelled. */
     fun setSimLabel(s: String?) { simLabel = s }
+
+    /** True while a sim scenario drives the cue. The simulator applies the direction FLIPS in the
+     *  vehicle frame (so each reverses its maneuver in every seat); neutralise the screen-axis flips
+     *  here so they aren't double-applied. Real-sensor mode keeps them (there is no maneuver frame). */
+    fun setSimActive(on: Boolean) { simActive = on }
 
     // --- live params (defaults mirror the original behaviour) ---
     private var strength = SettingsStore.DEF_STRENGTH
@@ -182,17 +188,22 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         // ↔/↕ reverse the horizontal/vertical sense. Grade keeps its own signed gain on the vertical.
         var sxx = sx; var syy = sy
         if (swapAxes) { val t = sxx; sxx = syy; syy = t }
-        val driveX = sxx * enable * invertX
+        // Screen-axis flips. A running sim already flipped each maneuver in the vehicle frame (see
+        // MotionSimulator), so neutralise them here to avoid double-applying; real-sensor mode keeps them.
+        val invX = if (simActive) 1f else invertX
+        val invY = if (simActive) 1f else invertY
+        val invG = if (simActive) 1f else invertGrade
+        val driveX = sxx * enable * invX
         val driveY = syy * enable
         val driveGX = gradeX * enable
         val driveGY = gradeY * enable
         // The lateral hill component (side seats) rides the SAME horizontal axis as turns, following the
         // SAME minus-sign convention as driveX, but with its OWN flip (invertGrade, NOT invertX).
-        velX = velX * decay - driveX * gain - driveGX * gradeGain * gain * invertGrade
+        velX = velX * decay - driveX * gain - driveGX * gradeGain * gain * invG
         // lonGain scales ONLY the screen-vertical axis to preserve the original fore/aft-vs-lateral feel.
         // The vertical hill component (forward/rear seats) rides the SAME vertical axis with its own
         // SIGNED gain (gradeGain), so a slope drifts the dots even at steady speed; sign flips up/downhill.
-        velY = velY * decay + driveY * lonGain * gain * invertY + driveGY * gradeGain * gain * invertGrade
+        velY = velY * decay + driveY * lonGain * gain * invY + driveGY * gradeGain * gain * invG
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)

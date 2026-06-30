@@ -400,12 +400,20 @@ class MainActivity : Activity() {
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
 
-        // ---- Advanced: reset ----
+        // ---- Advanced: reset (confirm first — it wipes every tuned setting) ----
         btnReset.setOnClickListener {
-            SettingsStore.resetToDefaults(this)
-            bindPhoneSettings()                 // re-read every control from defaults
-            refreshPreview(); haptic(it)
-            toast("Reset to defaults")
+            haptic(it)
+            AlertDialog.Builder(this)
+                .setTitle("Reset to defaults?")
+                .setMessage("Restores every Orbital setting on this screen to its default. This can't be undone.")
+                .setPositiveButton("Reset") { _, _ ->
+                    SettingsStore.resetToDefaults(this)
+                    bindPhoneSettings()                 // re-read every control from defaults
+                    refreshPreview()
+                    toast("Reset to defaults")
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         }
     }
 

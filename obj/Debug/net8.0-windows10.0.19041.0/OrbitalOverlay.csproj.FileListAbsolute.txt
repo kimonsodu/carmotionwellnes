@@ -45,3 +45,8 @@ C:\Users\simon\AppData\Local\Temp\orbital_final\OrbitalOverlay.deps.json
 C:\Users\simon\AppData\Local\Temp\orbital_final\OrbitalOverlay.runtimeconfig.json
 C:\Users\simon\AppData\Local\Temp\orbital_final\OrbitalOverlay.dll
 C:\Users\simon\AppData\Local\Temp\orbital_final\OrbitalOverlay.pdb
+C:\Users\simon\AppData\Local\Temp\orbbuild\OrbitalOverlay.exe
+C:\Users\simon\AppData\Local\Temp\orbbuild\OrbitalOverlay.deps.json
+C:\Users\simon\AppData\Local\Temp\orbbuild\OrbitalOverlay.runtimeconfig.json
+C:\Users\simon\AppData\Local\Temp\orbbuild\OrbitalOverlay.dll
+C:\Users\simon\AppData\Local\Temp\orbbuild\OrbitalOverlay.pdb

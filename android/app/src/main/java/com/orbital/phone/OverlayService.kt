@@ -92,7 +92,7 @@ class OverlayService : Service(), SensorEventListener,
         // restart; addView would throw BadTokenException without it (and on some OEMs even with it).
         if (!Settings.canDrawOverlays(this) || !addOverlay()) { stopSelf(); return START_NOT_STICKY }
         // Read the sim scenario BEFORE the first resumeSensing so it picks the sim-vs-real feed path.
-        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario); applySimSeat()
+        simScenario = SettingsStore.simScenario(this); sim.setScenario(simScenario); applySimSeat(); applySimFlips()
         startSensors()
         SettingsStore.prefs(this).registerOnSharedPreferenceChangeListener(this)
         running = true
@@ -124,7 +124,7 @@ class OverlayService : Service(), SensorEventListener,
             wm!!.addView(v, p)
             v.start()
             view = v; lp = p
-            vf.screenRot = currentRotation()   // screen-relative cue needs the live display rotation
+            syncScreenRot()                    // screen-relative cue needs the live display rotation (or 0 under sim)
             true
         } catch (e: Exception) {
             try { v.stop() } catch (_: Exception) {}
@@ -178,7 +178,7 @@ class OverlayService : Service(), SensorEventListener,
         if (sensing) return
         sensing = true
         if (simScenario != MotionSimulator.OFF) startSimLoop()   // sim OVERRIDES the real sensors
-        else { registerSensors(); startGps() }
+        else { syncScreenRot(); registerSensors(); startGps() }
         ui.post { view?.start() }
     }
 
@@ -215,14 +215,15 @@ class OverlayService : Service(), SensorEventListener,
     private fun startSimLoop() {
         if (simRunning) return
         simRunning = true
-        vf.screenRot = currentRotation()                  // keep the screen-relative cue aligned (as the real path)
+        syncScreenRot()                                   // sim is flat-phone framed -> pin screenRot 0 (cue rides the window)
+        view?.setSimActive(true)                          // flips act in the vehicle frame now -> neutralise DotsView's
         sensorHandler?.post(simRunnable)
     }
 
     private fun stopSimLoop() {
         simRunning = false
         simPhase = ""
-        ui.post { view?.setSimLabel(null) }   // clear the on-cue note
+        ui.post { view?.setSimLabel(null); view?.setSimActive(false) }   // clear the note; restore screen-axis flips
         sensorHandler?.removeCallbacks(simRunnable)
     }
 
@@ -296,23 +297,34 @@ class OverlayService : Service(), SensorEventListener,
                     try { sm?.unregisterListener(this) } catch (_: Exception) {}
                     stopGps()
                     vf.reset(); haveR = false               // fresh gravity/baseline so the replay isn't masked by stale state
-                    if (simScenario != MotionSimulator.OFF) startSimLoop() else { registerSensors(); startGps() }
+                    if (simScenario != MotionSimulator.OFF) startSimLoop() else { syncScreenRot(); registerSensors(); startGps() }
                 }
             }
         }
         if (key in SettingsStore.LIVE_KEYS) {
+            applySimFlips()                       // a Flip ↕/↔/⛰ toggle takes effect live in the sim source too
             val snap = SettingsStore.snapshot(this)
             ui.post { view?.applyParams(snap) }
         }
     }
 
-    /** Seating heading for the simulator: 0 Forward / 1 Left side (270°) / 2 Right side (90°) / 3 Rear (180°).
-     *  Side seats are exact mirrors, so swapping their heading (Left↔Right ψ) makes every cue read OPPOSITE
-     *  in the two side seats. Labels stay keyed to the SEAT index, so they read correctly after the swap. */
+    /** Seating heading for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) / 3 Rear (180°).
+     *  Side seats are exact mirrors (180° apart), so each side seat's cue is the OPPOSITE of the other's.
+     *  Left=90 / Right=270 makes left/right read as the mirror of forward/rear; labels stay keyed to the
+     *  SEAT index, so "facing left/right" keep their names. */
     private fun applySimSeat() {
         val seat = SettingsStore.simSeat(this)
-        sim.seatPsiDeg = when (seat) { 1 -> 270f; 2 -> 90f; 3 -> 180f; else -> 0f }
+        sim.seatPsiDeg = when (seat) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
         simSeatLabel = when (seat) { 1 -> "facing left"; 2 -> "facing right"; 3 -> "facing rear"; else -> "facing forward" }
+    }
+
+    /** Keep the sim's vehicle-frame flips in step with the live settings. The simulator applies them
+     *  before the seat rotation, so each reverses its maneuver in every seat (DotsView neutralises its
+     *  own screen-axis flips while the sim runs — see setSimActive — so they aren't double-applied). */
+    private fun applySimFlips() {
+        sim.flipV = SettingsStore.flipV(this)
+        sim.flipH = SettingsStore.flipH(this)
+        sim.flipGrade = SettingsStore.flipGrade(this)
     }
 
     private fun startForegroundNotification() {
@@ -354,7 +366,15 @@ class OverlayService : Service(), SensorEventListener,
         super.onConfigurationChanged(newConfig)
         // MATCH_PARENT + FLAG_LAYOUT_NO_LIMITS already track rotation; force a re-measure.
         view?.let { v -> lp?.let { p -> try { wm?.updateViewLayout(v, p) } catch (_: Exception) {} } }
-        vf.screenRot = currentRotation()   // keep the screen-relative cue aligned after a rotate
+        syncScreenRot()                    // keep the cue aligned after a rotate (real path only — see below)
+    }
+
+    /** The SIM feeds a FLAT-phone synthetic IMU (device-y = forward), so the real display rotation must
+     *  NOT re-project it — that lands accel on the wrong screen axis in landscape. Pin screenRot to 0 and
+     *  let the overlay window (which rotates with the screen) carry the cue, so accel stays screen-vertical
+     *  in BOTH orientations. Real sensors use the live rotation (they need the true device orientation). */
+    private fun syncScreenRot() {
+        vf.screenRot = if (simScenario != MotionSimulator.OFF) 0 else currentRotation()
     }
 
     /** Display rotation of the overlay's screen (Surface.ROTATION_0/90/180/270) for the
