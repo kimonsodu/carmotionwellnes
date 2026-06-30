@@ -283,15 +283,37 @@ namespace OrbitalOverlay
             }
         }
 
-        (double x, double y) Head(Dot dot, double sX, double sY, double w, double h)
+        // Fade a dot to 0 within `m` px of either end of a wrapped axis, so it is invisible exactly at
+        // the wrap seam — the dot fades OUT approaching one edge and fades IN leaving the other, instead
+        // of teleporting at 35% alpha (the old hard "pop"). m is sized >= the dot radius so the dot is
+        // fully gone before its centre reaches the edge ("fully off before removed").
+        static double EdgeFade(double v, double len, double m)
         {
+            if (len <= 4) return 1.0;
+            m = Math.Min(m, len * 0.45);
+            double d = Math.Min(v, len - v);     // distance to the nearer seam
+            return SmoothStep(0, m, d);
+        }
+
+        // Returns the dot's screen position AND an edge fade [0..1] that drops to 0 at the wrap seams of
+        // its cell (the band on both axes), so motion across a seam is a smooth fade, not a pop.
+        (double x, double y, double fade) Head(Dot dot, double sX, double sY, double w, double h)
+        {
+            double cw, ch, ox, oy;               // cell size + screen origin for this dot's strip/band
             switch (dot.side)
             {
-                case 0:  return (Wrap(dot.lx + sX * dot.depth, bandW), Wrap(dot.y + sY * dot.depth, h));
-                case 1:  return (w - bandW + Wrap(dot.lx + sX * dot.depth, bandW), Wrap(dot.y + sY * dot.depth, h));
-                case 2:  return (Wrap(dot.lx + sX * dot.depth, w), Wrap(dot.y + sY * dot.depth, bandH));
-                default: return (Wrap(dot.lx + sX * dot.depth, w), h - bandH + Wrap(dot.y + sY * dot.depth, bandH));
+                case 0:  cw = bandW; ch = h;     ox = 0;          oy = 0;          break;  // left strip
+                case 1:  cw = bandW; ch = h;     ox = w - bandW;  oy = 0;          break;  // right strip
+                case 2:  cw = w;     ch = bandH; ox = 0;          oy = 0;          break;  // top band
+                default: cw = w;     ch = bandH; ox = 0;          oy = h - bandH;  break;  // bottom band
             }
+            double wx = Wrap(dot.lx + sX * dot.depth, cw);
+            double wy = Wrap(dot.y + sY * dot.depth, ch);
+            double rr = dot.r * DotScale;
+            double mx = Math.Min(60.0, Math.Max(rr * 1.5 + 6.0, cw * 0.10));   // fade-zone width per axis
+            double my = Math.Min(60.0, Math.Max(rr * 1.5 + 6.0, ch * 0.10));
+            double fade = EdgeFade(wx, cw, mx) * EdgeFade(wy, ch, my);
+            return (ox + wx, oy + wy, fade);
         }
 
         double frW, frH, frOp, frSX, frSY, frKFlow, frIntens;
@@ -336,8 +358,8 @@ namespace OrbitalOverlay
         {
             foreach (var dot in field)
             {
-                var (x, y) = Head(dot, frSX, frSY, frW, frH);
-                double mul = frOp * dot.alpha * CornerFade(y, frH) * frIntens;
+                var (x, y, fade) = Head(dot, frSX, frSY, frW, frH);
+                double mul = frOp * dot.alpha * fade * frIntens;
                 double rr = dot.r * DotScale;
                 dc.DrawEllipse(BrushFor(BaseColor(dot.pick), mul), null, new Point(x, y), rr, rr);
             }
@@ -350,9 +372,9 @@ namespace OrbitalOverlay
             double ux = VelX / spd, uy = VelY / spd;
             foreach (var dot in field)
             {
-                var (x, y) = Head(dot, frSX, frSY, frW, frH);
+                var (x, y, fade) = Head(dot, frSX, frSY, frW, frH);
                 double len = Math.Clamp(spd * frKFlow * dot.depth * 2.2 * (CueModel == 1 ? (0.4 + Math.Clamp(AccelEnv, 0, 1)) : 1.0), 2, 26);
-                double mul = frOp * dot.alpha * CornerFade(y, frH) * frIntens;
+                double mul = frOp * dot.alpha * fade * frIntens;
                 double th = Math.Max(1.0, dot.r * DotScale * 0.9);
                 dc.DrawLine(PenFor(BaseColor(dot.pick), mul, th), new Point(x, y), new Point(x - ux * len, y - uy * len));
             }
