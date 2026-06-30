@@ -604,7 +604,12 @@ namespace OrbitalOverlay
             // Road grade: move the pitch angle toward target at a gentle rate so the emitted
             // pitch gyro stays under Windows' lid-tilt reject knee (tiltRate > 6) — otherwise
             // the tilt would be absorbed into the gravity estimate and the fore cue suppressed.
-            double dgr = Math.Clamp(gradeTarget - grade, -GradeRate * dt, GradeRate * dt);
+            // On REST, snap straight back to flat instead of rate-limiting the way DOWN: a grade built up
+            // over an active phase would otherwise keep unwinding for SECONDS into the rest, and the pipeline
+            // reads that unwind as a phantom hill cue — the dots drift up/down while "stopped" (and one
+            // cycle's leftover tilt could invert the next cycle's hill direction). The rest also re-arms the
+            // pipeline, which absorbs the one-frame snap, so rests stay dead-quiet and every cycle is consistent.
+            double dgr = isRest ? -grade : Math.Clamp(gradeTarget - grade, -GradeRate * dt, GradeRate * dt);
             grade += dgr;
             double pitchRate = dt > 1e-6 ? dgr / dt : 0;    // deg/s about device x
 
