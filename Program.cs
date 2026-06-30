@@ -204,7 +204,7 @@ namespace OrbitalOverlay
         readonly Dictionary<uint, SolidColorBrush> brushCache = new Dictionary<uint, SolidColorBrush>();
         readonly Dictionary<long, Pen> penCache = new Dictionary<long, Pen>();
 
-        public CueElement() { IsHitTestVisible = false; }
+        public CueElement() { IsHitTestVisible = false; ClipToBounds = true; }   // clip bleed dots at the edge -> clean slide-in
 
         public void RebuildField() { builtW = -1; InvalidateVisual(); }   // counts baked in -> force a rebuild
 
@@ -283,38 +283,66 @@ namespace OrbitalOverlay
             }
         }
 
-        // Fade a dot to 0 within `m` px of either end of a wrapped axis, so it is invisible exactly at
-        // the wrap seam — the dot fades OUT approaching one edge and fades IN leaving the other, instead
-        // of teleporting at 35% alpha (the old hard "pop"). m is sized >= the dot radius so the dot is
-        // fully gone before its centre reaches the edge ("fully off before removed").
-        static double EdgeFade(double v, double len, double m)
+        // SCREEN-EDGE axis: both seams are real screen edges, so wrap through a bleed zone (centre
+        // teleports only once fully off-screen; ClipToBounds masks it). Pure slide in/out, no fade.
+        static double BleedWrap(double v0, double len, double bleed) => Wrap(v0, len + 2 * bleed) - bleed;
+
+        // THICKNESS axis: one seam is a real screen edge (bleed it), the other faces mid-screen (fade it).
+        // edgeAtZero=true  -> screen edge at the 0 end, inner seam at `len`  (left strip / top band).
+        // edgeAtZero=false -> screen edge at the `len` end, inner seam at 0  (right strip / bottom band).
+        // Returns (local position, fade). Bleeds out past the screen edge; fades only near the inner seam.
+        static (double pos, double fade) BleedFade(double v0, double len, double bleed, double m, bool edgeAtZero)
         {
-            if (len <= 4) return 1.0;
-            m = Math.Min(m, len * 0.45);
-            double d = Math.Min(v, len - v);     // distance to the nearer seam
-            return SmoothStep(0, m, d);
+            double ext = len + bleed;
+            if (edgeAtZero)
+            {
+                double p = Wrap(v0, ext) - bleed;          // [-bleed, len]; screen edge at 0, inner at len
+                return (p, SmoothStep(0, m, len - p));     // full away from the inner seam, 0 at it
+            }
+            double q = Wrap(v0, ext);                      // [0, len+bleed]; screen edge at len, inner at 0
+            return (q, SmoothStep(0, m, q));               // 0 at the inner seam, full away from it
         }
 
-        // Returns the dot's screen position AND an edge fade [0..1] that drops to 0 at the wrap seams of
-        // its cell (the band on both axes), so motion across a seam is a smooth fade, not a pop.
+        // Returns the dot's screen position + a fade [0..1]. Each strip/band BLEEDS its real screen edges
+        // (dots slide in/out showing their true edge first, as if they existed outside the monitor) and
+        // FADES only its inner, centre-facing seam (which can't be rendered off-screen).
         (double x, double y, double fade) Head(Dot dot, double sX, double sY, double w, double h)
         {
-            double cw, ch, ox, oy;               // cell size + screen origin for this dot's strip/band
+            double rr = dot.r * DotScale;
+            double bleed = rr + 4;
+            double m = FadeM(rr);
+            double dx = sX * dot.depth, dy = sY * dot.depth;
             switch (dot.side)
             {
-                case 0:  cw = bandW; ch = h;     ox = 0;          oy = 0;          break;  // left strip
-                case 1:  cw = bandW; ch = h;     ox = w - bandW;  oy = 0;          break;  // right strip
-                case 2:  cw = w;     ch = bandH; ox = 0;          oy = 0;          break;  // top band
-                default: cw = w;     ch = bandH; ox = 0;          oy = h - bandH;  break;  // bottom band
+                case 0:   // left strip: bleed top/bottom AND the left screen edge; fade only the inner (right) seam
+                {
+                    var (px, fade) = BleedFade(dot.lx + dx, bandW, bleed, m, edgeAtZero: true);
+                    double py = BleedWrap(dot.y + dy, h, bleed);
+                    return (px, py, fade);
+                }
+                case 1:   // right strip: bleed the right screen edge; fade the inner (left) seam
+                {
+                    var (px, fade) = BleedFade(dot.lx + dx, bandW, bleed, m, edgeAtZero: false);
+                    double py = BleedWrap(dot.y + dy, h, bleed);
+                    return (w - bandW + px, py, fade);
+                }
+                case 2:   // top band: bleed left/right AND the top screen edge; fade the inner (bottom) seam
+                {
+                    double px = BleedWrap(dot.lx + dx, w, bleed);
+                    var (py, fade) = BleedFade(dot.y + dy, bandH, bleed, m, edgeAtZero: true);
+                    return (px, py, fade);
+                }
+                default:  // bottom band: bleed the bottom screen edge; fade the inner (top) seam
+                {
+                    double px = BleedWrap(dot.lx + dx, w, bleed);
+                    var (py, fade) = BleedFade(dot.y + dy, bandH, bleed, m, edgeAtZero: false);
+                    return (px, h - bandH + py, fade);
+                }
             }
-            double wx = Wrap(dot.lx + sX * dot.depth, cw);
-            double wy = Wrap(dot.y + sY * dot.depth, ch);
-            double rr = dot.r * DotScale;
-            double mx = Math.Min(60.0, Math.Max(rr * 1.5 + 6.0, cw * 0.10));   // fade-zone width per axis
-            double my = Math.Min(60.0, Math.Max(rr * 1.5 + 6.0, ch * 0.10));
-            double fade = EdgeFade(wx, cw, mx) * EdgeFade(wy, ch, my);
-            return (ox + wx, oy + wy, fade);
         }
+
+        // Inner-seam fade distance — doubled from the first pass for a smoother roll-off.
+        static double FadeM(double rr) => Math.Min(120.0, rr * 3.0 + 24.0);
 
         double frW, frH, frOp, frSX, frSY, frKFlow, frIntens;
 
@@ -1692,9 +1720,12 @@ namespace OrbitalOverlay
             appearance.Children.Add(Divider());
             placementTog = Toggle("Frame the whole screen");
             placementTog.ToolTip = "Add top and bottom dot bands for a full peripheral frame (default: side strips only).";
-            placementTog.IsChecked = ov.Placement == 1;
-            placementTog.Checked += (s, e) => { ov.Placement = 1; ov.RebuildField(); QueueSave(); };
-            placementTog.Unchecked += (s, e) => { ov.Placement = 0; ov.RebuildField(); QueueSave(); };
+            // Toggle is inverted on purpose: checked -> side strips (Placement 0), unchecked -> full frame
+            // (Placement 1). The runtime stack presents the on/off the opposite way, so this mapping makes the
+            // on-screen toggle state match what actually renders.
+            placementTog.IsChecked = ov.Placement == 0;
+            placementTog.Checked += (s, e) => { ov.Placement = 0; ov.RebuildField(); QueueSave(); };
+            placementTog.Unchecked += (s, e) => { ov.Placement = 1; ov.RebuildField(); QueueSave(); };
             appearance.Children.Add(placementTog);
 
             // --- Reset every visual/motion tunable to its default ---
@@ -1710,7 +1741,7 @@ namespace OrbitalOverlay
                 decaySlider.Value = 0.94; hideSlider.Value = 1.0;
                 ov.SetDotStyle(1); dotStyleSlider.Value = 1; dotColourVal.Text = dotNames[1];
                 SelectStyle(0); SelectModel(0);     // back to Dots + velocity-flow
-                placementTog.IsChecked = false;     // fires Unchecked -> Placement 0 + rebuild
+                placementTog.IsChecked = true;      // inverted toggle: checked fires Placement 0 (side strips) + rebuild
                 ov.RebuildField();
                 QueueSave();
             };
