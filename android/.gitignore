@@ -1,0 +1,24 @@
+# ---- Gradle / Android build output ----
+.gradle/
+build/
+app/build/
+
+# ---- Local machine config (leaks SDK path) ----
+local.properties
+
+# ---- JetBrains / Android Studio ----
+.idea/
+*.iml
+.cxx/
+
+# ---- Signing (never commit) ----
+*.keystore
+*.jks
+keystore.properties
+
+# ---- Logs / OS cruft ----
+*.log
+.DS_Store
+Thumbs.db
+
+# Keep the Gradle wrapper tracked (do NOT ignore gradle/wrapper/)

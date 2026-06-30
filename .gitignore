@@ -1,2 +1,30 @@
+# ---- .NET / WPF build output ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ---- Publish / installer output ----
 /bin/publish/
+/bin/installer/
+
+# ---- JetBrains (Rider / IntelliJ) ----
+.idea/
+*.iml
+
+# ---- Claude Code ----
 .claude/
+
+# ---- Secrets / signing (never commit) ----
+*.keystore
+*.jks
+keystore.properties
+*.pfx
+.env
+.env.*
+
+# ---- OS cruft ----
+.DS_Store
+Thumbs.db
+desktop.ini

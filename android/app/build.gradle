@@ -3,21 +3,48 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Release signing is read from android/keystore.properties (gitignored — never committed).
+// Create it from keystore.properties.example after generating a keystore (see android/README.md).
+// Absent the file (debug machines / CI without secrets), the release build stays unsigned and
+// falls back gracefully instead of failing.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+def hasReleaseSigning = keystorePropsFile.exists()
+if (hasReleaseSigning) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
 android {
     namespace 'com.orbital.phone'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.orbital.phone"
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     compileOptions {

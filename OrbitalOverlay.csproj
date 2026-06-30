@@ -10,10 +10,26 @@
     <Product>Orbital</Product>
     <AssemblyTitle>Orbital</AssemblyTitle>
     <Version>1.0.0</Version>
+    <Company>Simon Kodu</Company>
+    <Authors>Simon Kodu</Authors>
+    <Description>Orbital — a transparent, click-through overlay that drifts peripheral dots with your vehicle's motion to reduce car sickness while you work.</Description>
+    <Copyright>Copyright © 2026 Simon Kodu. All rights reserved.</Copyright>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <ApplicationIcon>orbital.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Release publish: self-contained single-file win-x64 exe (the installer at
+       installer\Orbital.iss consumes bin\publish\win-x64\OrbitalOverlay.exe).
+       Build via publish.ps1, which passes the win-x64 RID and self-contained flag.
+       These knobs only take effect during `dotnet publish`; a plain build/run ignores them. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

@@ -20,6 +20,24 @@ Orbital control panel.
    in Android Studio to install + launch the app. (Or **Build → Build APK** and copy the APK to
    the phone to sideload.)
 
+## Release build (Google Play)
+
+The remote-to-Windows streaming is a paid **subscription**. To produce a Play release:
+
+1. **Create the upload keystore** (one time) and the gitignored `keystore.properties` —
+   see the "Android" section of the root [`BUILD.md`](../BUILD.md). Never commit either.
+2. Build the bundle / APK from the `android/` folder:
+   ```powershell
+   .\gradlew bundleRelease     # AAB for Play   -> app/build/outputs/bundle/release/
+   .\gradlew assembleRelease   # APK to sideload -> app/build/outputs/apk/release/
+   ```
+   Release builds run R8 (`minifyEnabled` + `shrinkResources`); rules live in
+   `app/proguard-rules.pro`. compile/target SDK is 35 (Play's minimum for new apps).
+3. **Still required before going live:** Google Play **Billing** integration +
+   subscription products in Play Console, and the Play listing must link the privacy
+   policy ([`PRIVACY.md`](../PRIVACY.md), which discloses the sensor/Bluetooth/location
+   permissions). Bump `versionCode` each upload.
+
 ## Use it
 
 Pick a **Connection** in the app: **Bluetooth** (default) or **WiFi**.

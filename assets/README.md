@@ -1,4 +1,4 @@
-# Orbitalal — app launcher & favicon kit
+# Orbital — app launcher & favicon kit
 
 Source SVGs + a build script that generates every launcher/favicon asset for
 **Android**, **Windows**, and the **web** from one set of masters.
@@ -12,7 +12,7 @@ Brand: dark "instrument" theme — teal motion-field dots at the edges, one ambe
 | phosphor | `#6FD8C6` | the dots (teal field) |
 | signal | `#E0A24A` | the center level point (amber) |
 
-> **Family option:** to tie Orbitalal's warm accent to the Wroughtery Ember, set
+> **Family option:** to tie Orbital's warm accent to the Wroughtery Ember, set
 > `signal` to `#C24E2A` in every `svg/*.svg` (replace `#E0A24A`) and rerun the
 > build. Kept warmer (`#E0A24A`) here because it reads better on the teal field.
 

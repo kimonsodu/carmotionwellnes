@@ -19,8 +19,12 @@
 ; ============================================================================
 
 #define MyAppName     "Orbital"
-#define MyAppVersion  "1.0.0"
-#define MyAppPublisher "Simon"
+; Version can be overridden from the command line (publish.ps1 passes /DMyAppVersion=<csproj version>)
+; so it stays in lockstep with OrbitalOverlay.csproj. Falls back to this default for a bare `iscc`.
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
+#define MyAppPublisher "Simon Kodu"
 #define MyAppExeName  "OrbitalOverlay.exe"
 ; Path to the self-contained single-file publish output (relative to this .iss).
 ; Adjust if you publish elsewhere.

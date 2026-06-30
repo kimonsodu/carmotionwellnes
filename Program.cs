@@ -396,7 +396,7 @@ namespace OrbitalOverlay
         void Streaks(DrawingContext dc)
         {
             double spd = Math.Sqrt(VelX * VelX + VelY * VelY);
-            if (spd < 1e-3) { Dots(dc); return; }                 // steady cruise -> collapse to dots
+            if (spd < 1e-3) { StreakRest(dc); return; }           // at rest -> shrink to streak-thickness caps (no size pop)
             double ux = VelX / spd, uy = VelY / spd;
             foreach (var dot in field)
             {
@@ -405,6 +405,21 @@ namespace OrbitalOverlay
                 double mul = frOp * dot.alpha * fade * frIntens;
                 double th = Math.Max(1.0, dot.r * DotScale * 0.9);
                 dc.DrawLine(PenFor(BaseColor(dot.pick), mul, th), new Point(x, y), new Point(x - ux * len, y - uy * len));
+            }
+        }
+
+        // Streaks at rest: with no velocity there's no direction to draw, so a zero-length streak is just
+        // its own round cap. Render each as a small dot sized to the streak THICKNESS (th/2), not the full
+        // dot radius — otherwise the streaks would pop into noticeably bigger static dots when motion stops
+        // (only visible when auto-hide is off, since the dots stay on screen at rest).
+        void StreakRest(DrawingContext dc)
+        {
+            foreach (var dot in field)
+            {
+                var (x, y, fade) = Head(dot, frSX, frSY, frW, frH);
+                double mul = frOp * dot.alpha * fade * frIntens;
+                double rcap = Math.Max(1.0, dot.r * DotScale * 0.9) * 0.5;
+                dc.DrawEllipse(BrushFor(BaseColor(dot.pick), mul), null, new Point(x, y), rcap, rcap);
             }
         }
 

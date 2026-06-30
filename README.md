@@ -190,3 +190,29 @@ slide the laptop **forward/back** on the table — the dots should move **up/dow
   you dialed in there transfers directly.
 - The dot strips are 22% of the screen width on each side; change `bandW` to make them
   wider/narrower or `nNear`/`nFar` for density.
+
+## System requirements
+
+- **Windows 10 (build 19041 / 20H1) or Windows 11**, **64-bit (x64)**.
+- No .NET install needed — the installer bundles the runtime (self-contained).
+- A built-in motion sensor is optional; without one, use the phone as the sensor.
+- Phone sensor (optional): an **Android** phone, plus Bluetooth, a shared WiFi
+  link, or a USB tether between phone and laptop.
+
+## Pricing
+
+- **Orbital for Windows** — free to download and use.
+- **Orbital Phone (Android), remote-to-Windows streaming** — a paid **subscription**
+  via the Google Play Store.
+
+## Privacy
+
+Orbital has no account, no analytics, and no cloud server. Motion (and optional
+location) is processed on-device and only streamed to **your own** paired computer
+over a local link — never the internet. Full details in [PRIVACY.md](PRIVACY.md).
+
+## License
+
+Orbital is **proprietary** software — © 2026 Simon Kodu, all rights reserved. It is
+not open source. See [LICENSE](LICENSE). Building from source is covered in
+[BUILD.md](BUILD.md).
