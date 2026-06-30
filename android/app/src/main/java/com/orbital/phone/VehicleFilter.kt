@@ -32,8 +32,11 @@ class VehicleFilter {
         @JvmField val lon: Float, @JvmField val lat: Float, @JvmField val enable: Float,
         @JvmField val yawDegPerSec: Float, @JvmField val gate: Float, @JvmField val inVehicle: Boolean,
         @JvmField val screenX: Float, @JvmField val screenY: Float,
-        /** road-grade (hill) cue, m/s²-ish (~9.81·sinθ), baselined; SCREEN-frame, caller applies gain. */
-        @JvmField val grade: Float
+        /** road-grade (hill) cue, m/s²-ish (~9.81·sinθ), baselined; SCREEN-frame, caller applies gain.
+         *  2-D so a hill cues in EVERY seat: gradeX = lateral pitch (screen-right), gradeY = vertical
+         *  pitch (screen-up). Forward/rear seats lean along screen-up (gradeY); side seats along
+         *  screen-right (gradeX). */
+        @JvmField val gradeX: Float, @JvmField val gradeY: Float
     )
 
     // ---- tunables (tune in-car) ----
@@ -62,7 +65,11 @@ class VehicleFilter {
     private var baseX = 0f; private var baseY = 0f
     private var prevSX = 0f; private var prevSY = 0f
     private var fPrevX = 0f; private var fPrevY = 1f; private var fPrevZ = 0f   // last good screen-forward (roll-degenerate hold)
-    private var gradeBase = 0f; private var gradeInit = false; private var gradeSig = 0f   // hill/grade channel (screen-frame pitch), baselined
+    // hill/grade channel (screen-frame pitch), baselined; 2-D so side seats cue too:
+    // Y = vertical pitch (screen-up), X = lateral pitch (screen-right). Separate baseline+smooth each.
+    private var gradeBaseY = 0f; private var gradeSigY = 0f
+    private var gradeBaseX = 0f; private var gradeSigX = 0f
+    private var gradeInit = false
     /** Display rotation (Surface.ROTATION_0/90/180/270) of the overlay's screen. Set by
      *  OverlayService; SensorService leaves it 0 (it doesn't render). */
     @Volatile @JvmField var screenRot = 0
@@ -86,7 +93,7 @@ class VehicleFilter {
         lpF = 0f; lpR = 0f; baseF = 0f; baseR = 0f
         lpX = 0f; lpY = 0f; baseX = 0f; baseY = 0f; prevSX = 0f; prevSY = 0f
         fPrevX = 0f; fPrevY = 1f; fPrevZ = 0f
-        gradeBase = 0f; gradeInit = false; gradeSig = 0f
+        gradeBaseY = 0f; gradeSigY = 0f; gradeBaseX = 0f; gradeSigX = 0f; gradeInit = false
         hdgE = 0f; hdgN = 1f; yawLp = 0f; gmag = 0f
         prevLon = 0f; prevLat = 0f; moveOn = false; moveFrames = 0; gainEnv = 0f; lastNs = 0L
     }
@@ -135,7 +142,7 @@ class VehicleFilter {
             // No orientation matrix. We need a gravity estimate to project tilt out; if we don't
             // have one (e.g. fused linear-accel present but no rotation sensor), the sample is
             // unusable for tilt removal — emit no drive rather than leaking device-frame tilt.
-            if (!gravInit) return Out(0f, 0f, gainEnv, yawLp * 57.29578f, 0f, moveOn, 0f, 0f, 0f)
+            if (!gravInit) return Out(0f, 0f, gainEnv, yawLp * 57.29578f, 0f, moveOn, 0f, 0f, 0f, 0f)
             val gx = grav[0]; val gy = grav[1]; val gz = grav[2]
             val gn = sqrt(gx * gx + gy * gy + gz * gz).coerceAtLeast(1e-3f)
             val ux = gx / gn; val uy = gy / gn; val uz = gz / gn
@@ -226,15 +233,22 @@ class VehicleFilter {
             3 -> { suX = 1f; suY = 0f }     // ROTATION_270 (landscape; verify sign in-car)
             else -> { suX = 0f; suY = 1f }  // ROTATION_0 (portrait)
         }
-        // ROAD GRADE (hill): the device PITCH = how far the screen-up axis leans toward gravity-up.
-        // grade_raw = (screenUp · gravity-up) ≈ ±sinθ on a slope; ×G to put it in m/s² (matches the
+        // ROAD GRADE (hill): the device PITCH = how far a screen axis leans toward gravity-up.
+        // grade_raw = (screenAxis · gravity-up) ≈ ±sinθ on a slope; ×G to put it in m/s² (matches the
         // felt-accel units of bY). A slow baseline removes the constant resting mount pitch, so only
-        // real grade *changes* drive the cue. Sustained while on the slope, distinct from the
-        // band-passed accel/brake (sY) which decays. Caller applies its own signed gradeGain.
-        val gradeRaw = (suX * ghx + suY * ghy) * 9.81f
-        if (!gradeInit) { gradeBase = gradeRaw; gradeInit = true }
-        gradeBase += (gradeRaw - gradeBase) * (dt / 25f)     // ~25 s baseline -> zeroes constant mount tilt
-        gradeSig += (gradeRaw - gradeBase - gradeSig) * 0.05f
+        // real grade *changes* drive the cue. 2-D so it works in EVERY seat: forward/rear seats lean
+        // the hill along screen-UP (gradeSigY), side seats lean it along screen-RIGHT (gradeSigX) —
+        // the scalar screen-up-only cue read ~0 on side seats so Flip ⛰ had nothing to flip. The
+        // screen-right axis is screenUp rotated -90°: (srX,srY) = (suY,-suX). Each gets its OWN slow
+        // baseline + smooth (same 25 s / 0.05). Caller applies its own signed gradeGain.
+        val srX = suY; val srY = -suX
+        val gradeUpRaw = (suX * ghx + suY * ghy) * 9.81f
+        val gradeRightRaw = (srX * ghx + srY * ghy) * 9.81f
+        if (!gradeInit) { gradeBaseY = gradeUpRaw; gradeBaseX = gradeRightRaw; gradeInit = true }
+        gradeBaseY += (gradeUpRaw - gradeBaseY) * (dt / 25f)        // ~25 s baseline -> zeroes constant mount tilt
+        gradeSigY += (gradeUpRaw - gradeBaseY - gradeSigY) * 0.05f
+        gradeBaseX += (gradeRightRaw - gradeBaseX) * (dt / 25f)
+        gradeSigX += (gradeRightRaw - gradeBaseX - gradeSigX) * 0.05f
         // f_hat = horizontal projection of the screen's up-meridian = g_hat x (screenUp x Zdev).
         // Built from the live up-vector so it tracks tilt every sample. Holds last when the phone
         // is rolled ~90 deg (gravity along screen-right) and f_raw degenerates.
@@ -264,8 +278,8 @@ class VehicleFilter {
         val sMag = sqrt(bX * bX + bY * bY)
         if (sMag < DEADBAND) { bX = 0f; bY = 0f } else { val k = (sMag - DEADBAND) / sMag; bX *= k; bY *= k }
 
-        // UNSCALED lon/lat AND screenX/screenY/grade; caller multiplies by enable exactly once.
-        return Out(lon, lat, gainEnv, yawLp * 57.29578f, gate, moveOn, bX, bY, gradeSig)
+        // UNSCALED lon/lat AND screenX/screenY/gradeX/gradeY; caller multiplies by enable exactly once.
+        return Out(lon, lat, gainEnv, yawLp * 57.29578f, gate, moveOn, bX, bY, gradeSigX, gradeSigY)
     }
 
     companion object {

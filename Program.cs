@@ -482,17 +482,25 @@ namespace OrbitalOverlay
     {
         public const double G = 9.81;
         const double Deg = Math.PI / 180.0;
-        const double Ramp = 0.6;            // smoothstep ease-in/out per active phase (s) so the cue glides
         const double GradeRate = 4.5;       // deg/s max road-grade pitch rate -> stays under the lid-tilt reject knee (6)
-        const double SingleOn = 3.0, SingleOff = 4.0;   // a single scenario LINEARLY ramps the maneuver up (steady
-                                                        // rate -> constant cue -> dots drift one way), then a slower
-                                                        // release ("Rest"); repeats. No snap-back within the maneuver.
+        // A maneuver is driven as a LINEAR ramp at a FIXED SLOPE: constant rate of change -> the
+        // band-pass/gravity-split emits a CONSTANT cue -> dots drift steadily ONE way, at a speed set
+        // by SlopeRef and independent of how long the active window is. On entering a REST we drive 0
+        // and raise ResetPending so the pipeline clears the absorbed gravity -> 0-drive -> dots STOP
+        // (no reverse). The accel VALUE grows past nominal over a long active window (only the RATE
+        // drives the cue, and it's discarded at the rest reset).
+        const double SlopeRef = 3.0;        // ramp slope (s) -> drift speed; keeps the current feel
+        const double Active = 9.0;          // single-scenario active window (s)
+        const double Rest = 4.0;            // single-scenario rest window (s)
 
         public SimScenario Scenario = SimScenario.Off;
         // Seating heading (deg) applied to EVERY scenario, set from the panel's seat toggles:
         // 0 = forward, 90 = side-facing (train), 180 = rear-facing, 270 = both (other side).
         public double SeatPsi = 0;
         public string PhaseName { get; private set; } = "";
+        // One-shot, raised on the frame that ENTERS a rest: tells the overlay to re-arm the pipeline
+        // (clears the gravity the band-pass had absorbed) so 0-drive produces NO cue -> dots just stop.
+        public bool ResetPending;
 
         // outputs, written each Tick — mirror a real sensor frame
         public double Ax, Ay, Az;           // accel incl. gravity, m/s²
@@ -501,13 +509,15 @@ namespace OrbitalOverlay
 
         double t;                           // elapsed time within the script (s)
         double grade;                       // current road-grade angle (deg), rate-limited toward target
+        bool wasRest;                       // previous-frame rest state, so ResetPending fires only on entry
 
         struct Phase { public string Name; public double Dur, AFwd, ARight, Yaw, Grade, Psi; }
         static Phase P(string n, double d, double f, double r, double y, double g, double p)
             => new Phase { Name = n, Dur = d, AFwd = f, ARight = r, Yaw = y, Grade = g, Psi = p };
 
-        // The "All" script (loops forever). Each ACTIVE phase eases in/out; REST lets the
-        // cue return to neutral and gravity re-settle. Magnitudes match the shared spec.
+        // The "All" script (loops forever). Each ACTIVE phase ramps LINEARLY (s = timeInPhase/SlopeRef)
+        // so it emits a constant cue; each "Rest" phase drives 0 and re-arms the pipeline. Magnitudes
+        // match the shared spec.
         static readonly Phase[] Script =
         {
             P("Rest",           1.5,  0,    0,    0,   0,  0),
@@ -527,7 +537,7 @@ namespace OrbitalOverlay
         // Seating (side/rear-facing) is now an orthogonal toggle (SeatPsi) applied to EVERY phase,
         // so each motion above can be tested in any seat — no separate sideways/rear phases needed.
 
-        // A single held scenario: ease in over Ramp, then hold its target indefinitely (no rest/loop).
+        // A single scenario: linearly ramp the maneuver over Active, then a Rest window that drives 0; repeats.
         static Phase Single(SimScenario s) => s switch
         {
             SimScenario.Accelerate => P("Accelerate",     0,  2.5, 0,    0,   0,  0),
@@ -539,11 +549,8 @@ namespace OrbitalOverlay
             _                      => P("Rest",           0,  0,   0,    0,   0,  0),
         };
 
-        static double SmoothStep(double e0, double e1, double x)
-        { double tt = Math.Clamp((x - e0) / (e1 - e0), 0, 1); return tt * tt * (3 - 2 * tt); }
-
         // Called when (re)starting: clear time + grade and snap the output to a clean rest frame.
-        public void Reset() { t = 0; grade = 0; PhaseName = ""; Ax = Ay = 0; Az = G; Gx = Gy = Gz = 0; }
+        public void Reset() { t = 0; grade = 0; wasRest = false; ResetPending = false; PhaseName = ""; Ax = Ay = 0; Az = G; Gx = Gy = Gz = 0; }
 
         public void Tick(double dt)
         {
@@ -551,26 +558,31 @@ namespace OrbitalOverlay
             t += dt;
 
             double aFwd, aRight, yaw, gradeTarget, psi;
+            bool isRest;
+            double s;
             if (Scenario == SimScenario.All)
             {
                 double total = 0; foreach (var ph in Script) total += ph.Dur;
-                double tt = t % total;
+                double tt = t % total;                  // timeInPhase is the clock within the phase
                 int i = 0; while (i < Script.Length - 1 && tt >= Script[i].Dur) { tt -= Script[i].Dur; i++; }
                 var p = Script[i];
-                double s = Math.Min(SmoothStep(0, Ramp, tt), SmoothStep(0, Ramp, p.Dur - tt));  // ease in + out
-                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s;
-                gradeTarget = p.Grade;                  // grade is rate-limited below, not smoothstepped
+                isRest = p.Name == "Rest";
+                s = isRest ? 0 : tt / SlopeRef;         // LINEAR ramp (no smoothstep); Rest drives 0
+                aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s; gradeTarget = p.Grade * s;
                 PhaseName = p.Name;
             }
             else
             {
                 var p = Single(Scenario);
-                double cyc = t % (SingleOn + SingleOff);     // ramp up -> slow release, repeating
-                double s;
-                if (cyc < SingleOn) { s = cyc / SingleOn; PhaseName = p.Name; }       // LINEAR up -> constant, steady cue
-                else { s = 1.0 - (cyc - SingleOn) / SingleOff; PhaseName = "Rest"; }    // slow linear release
+                double cyc = t % (Active + Rest);        // active ramp -> rest, repeating
+                isRest = cyc >= Active;
+                double timeInPhase = cyc;                // clock within the active window
+                s = isRest ? 0 : timeInPhase / SlopeRef; // LINEAR up -> constant, steady cue; Rest drives 0
                 aFwd = p.AFwd * s; aRight = p.ARight * s; yaw = p.Yaw * s; gradeTarget = p.Grade * s;
+                PhaseName = isRest ? "Rest" : p.Name;
             }
+            ResetPending = isRest && !wasRest;          // one-shot only on the frame that ENTERS a rest
+            wasRest = isRest;
             psi = SeatPsi;                              // seating heading applies to whatever scenario is running
 
             // Road grade: move the pitch angle toward target at a gentle rate so the emitted
@@ -1173,13 +1185,13 @@ namespace OrbitalOverlay
             }
         }
 
-        // Seating orientation for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) /
-        // 3 Rear (180°). Applies to whatever scenario is running.
-        static string SeatName(double psi) => psi switch { 90 => "facing left", 270 => "facing right", 180 => "facing rear", _ => "facing forward" };
+        // Seating orientation for the simulator: 0 Forward / 1 Left side (270°) / 2 Right side (90°) /
+        // 3 Rear (180°). Side seats are exact mirrors, so swapping their heading makes every cue opposite.
+        static string SeatName(double psi) => psi switch { 90 => "facing right", 270 => "facing left", 180 => "facing rear", _ => "facing forward" };
 
         public void SetSimSeat(int seat)
         {
-            sim.SeatPsi = seat switch { 1 => 90, 2 => 270, 3 => 180, _ => 0 };
+            sim.SeatPsi = seat switch { 1 => 270, 2 => 90, 3 => 180, _ => 0 };
             // The accel/turn cue is a transient that decays as the gravity estimate is absorbed, so
             // flipping the seat mid-hold would just flip an already-zero residual (looks like "no
             // change"). Replay the maneuver from the start with a re-armed pipeline so it re-fires in
@@ -1197,6 +1209,7 @@ namespace OrbitalOverlay
             if (dt <= 0) dt = 0.016;
             if (dt > 0.10) dt = 0.10;                    // clamp after a stall so the script doesn't jump
             sim.Tick(dt);
+            if (sim.ResetPending) ArmForNewSource();         // rest entry: clear the absorbed gravity so 0-drive -> no cue (no reverse)
             rawX = sim.Ax; rawY = sim.Ay; rawZ = sim.Az;
             rawGyroX = sim.Gx; rawGyroY = sim.Gy; rawYaw = sim.Gz;
             hasGyro = true; hasReading = true;

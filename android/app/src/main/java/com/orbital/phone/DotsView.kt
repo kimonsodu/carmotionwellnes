@@ -28,7 +28,8 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
     // --- cleaned vehicle-motion drive (computed by the shared VehicleFilter in OverlayService) ---
     @Volatile private var inScreenX = 0f // screen-relative accel m/s^2: + = felt accel toward screen-right
     @Volatile private var inScreenY = 0f // screen-relative accel m/s^2: + = felt accel toward screen-forward (accelerate)
-    @Volatile private var inGrade = 0f   // road-grade (hill) cue m/s^2, baselined; drives the vertical axis
+    @Volatile private var inGradeX = 0f  // road-grade (hill) cue m/s^2, baselined; lateral pitch (screen-right)
+    @Volatile private var inGradeY = 0f  // road-grade (hill) cue m/s^2, baselined; vertical pitch (screen-up)
     @Volatile private var inEnable = 1f  // 0..1 in-vehicle/GPS enable (also cue fade target)
     @Volatile private var simLabel: String? = null   // simulation note ("Accelerate", "Turn left"…) or null
 
@@ -120,7 +121,7 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
      * screenX = + toward screen-right, screenY = + toward screen-forward (accelerate), enable = 0..1.
      * Screen-relative means seating orientation (forward/back/sideways) is already handled — no sign.
      */
-    fun feed(screenX: Float, screenY: Float, grade: Float, enable: Float) { inScreenX = screenX; inScreenY = screenY; inGrade = grade; inEnable = enable }
+    fun feed(screenX: Float, screenY: Float, gradeX: Float, gradeY: Float, enable: Float) { inScreenX = screenX; inScreenY = screenY; inGradeX = gradeX; inGradeY = gradeY; inEnable = enable }
 
     /** Preview only: synthesize a gentle motion so the settings screen animates at a desk. Never set
      *  by OverlayService, so the real overlay can't run on synthetic values. */
@@ -167,9 +168,11 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         } else {
             sx = inScreenX; sy = inScreenY; enable = inEnable.coerceIn(0f, 1f)
         }
-        // hill cue. In the desk preview synthesize a slow grade (out of phase with accel/brake) so the
-        // Hill/grade strength and Flip ⛰ controls are actually visible there; live overlay uses inGrade.
-        val grade = if (demoMode) 1.1f * sin(demoT / 60f * 0.4f + 2.2f) else inGrade
+        // hill cue (2-D). In the desk preview synthesize a slow grade on the VERTICAL axis only (out of
+        // phase with accel/brake) so the Hill/grade strength and Flip ⛰ controls are visible there; the
+        // live overlay uses inGradeX (lateral pitch) + inGradeY (vertical pitch).
+        val gradeX = if (demoMode) 0f else inGradeX
+        val gradeY = if (demoMode) 1.1f * sin(demoT / 60f * 0.4f + 2.2f) else inGradeY
 
         // Inputs are ALREADY screen-relative, band-passed, gyro-gated, jerk-limited, deadbanded by
         // VehicleFilter — DotsView only integrates to drift. Direction is AUTOMATIC for any seat:
@@ -181,19 +184,22 @@ class DotsView(context: Context, attrs: AttributeSet? = null) : View(context, at
         if (swapAxes) { val t = sxx; sxx = syy; syy = t }
         val driveX = sxx * enable * invertX
         val driveY = syy * enable
-        val driveG = grade * enable
-        velX = velX * decay - driveX * gain
+        val driveGX = gradeX * enable
+        val driveGY = gradeY * enable
+        // The lateral hill component (side seats) rides the SAME horizontal axis as turns, following the
+        // SAME minus-sign convention as driveX, but with its OWN flip (invertGrade, NOT invertX).
+        velX = velX * decay - driveX * gain - driveGX * gradeGain * gain * invertGrade
         // lonGain scales ONLY the screen-vertical axis to preserve the original fore/aft-vs-lateral feel.
-        // The hill/grade cue rides the SAME vertical axis with its own SIGNED gain (gradeGain), so a
-        // slope drifts the dots even at steady speed; sign flips uphill/downhill direction.
-        velY = velY * decay + driveY * lonGain * gain * invertY + driveG * gradeGain * gain * invertGrade
+        // The vertical hill component (forward/rear seats) rides the SAME vertical axis with its own
+        // SIGNED gain (gradeGain), so a slope drifts the dots even at steady speed; sign flips up/downhill.
+        velY = velY * decay + driveY * lonGain * gain * invertY + driveGY * gradeGain * gain * invertGrade
         val vmax = 22f
         velX = velX.coerceIn(-vmax, vmax)
         velY = velY.coerceIn(-vmax, vmax)
 
         // --- auto-hide energy gate (driven by the cleaned magnitude; ~0 unless real vehicle motion) ---
         // include the grade drive so a sustained slope at steady speed keeps the cue awake.
-        val mag = sqrt(driveX * driveX + driveY * driveY + driveG * driveG)
+        val mag = sqrt(driveX * driveX + driveY * driveY + driveGX * driveGX + driveGY * driveGY)
         // accel envelope for the Acceleration-pulse model — fed from the already band-passed/deadbanded
         // mag (never raw), and smoothed, so brightness can't strobe (photosensitivity guard).
         accelEnv += ((mag / 3.0f).coerceIn(0f, 1f) - accelEnv) * 0.20f

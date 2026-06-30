@@ -205,8 +205,9 @@ class OverlayService : Service(), SensorEventListener,
                 view?.setSimLabel(if (s.phase == "Rest") "— Rest —" else "${s.phase} · $simSeatLabel")
             }
             vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
+            if (s.reset) vf.reset()                        // rest entry: drop the absorbed gravity so 0-drive produces no reverse cue
             val o = vf.onAccel(s.accel, false, s.R, System.nanoTime())   // raw accel + R from sim (grade+seat), so the hill cue fires like a real rotation-vector phone
-            view?.feed(o.screenX, o.screenY, o.grade, o.enable)
+            view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
             sensorHandler?.postDelayed(this, 16L)          // ~62 Hz self-repost
         }
     }
@@ -264,11 +265,11 @@ class OverlayService : Service(), SensorEventListener,
                 vf.onGyro(e.values[0], e.values[1], e.values[2])
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 val o = vf.onAccel(e.values, true, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.grade, o.enable)
+                view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.grade, o.enable)
+                view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
             }
         }
     }
@@ -305,10 +306,12 @@ class OverlayService : Service(), SensorEventListener,
         }
     }
 
-    /** Seating heading for the simulator: 0 Forward / 1 Left side (90°) / 2 Right side (270°) / 3 Rear (180°). */
+    /** Seating heading for the simulator: 0 Forward / 1 Left side (270°) / 2 Right side (90°) / 3 Rear (180°).
+     *  Side seats are exact mirrors, so swapping their heading (Left↔Right ψ) makes every cue read OPPOSITE
+     *  in the two side seats. Labels stay keyed to the SEAT index, so they read correctly after the swap. */
     private fun applySimSeat() {
         val seat = SettingsStore.simSeat(this)
-        sim.seatPsiDeg = when (seat) { 1 -> 90f; 2 -> 270f; 3 -> 180f; else -> 0f }
+        sim.seatPsiDeg = when (seat) { 1 -> 270f; 2 -> 90f; 3 -> 180f; else -> 0f }
         simSeatLabel = when (seat) { 1 -> "facing left"; 2 -> "facing right"; 3 -> "facing rear"; else -> "facing forward" }
     }
 

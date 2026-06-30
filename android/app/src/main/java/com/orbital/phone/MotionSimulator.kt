@@ -1,7 +1,6 @@
 package com.orbital.phone
 
 import kotlin.math.cos
-import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -31,14 +30,15 @@ class MotionSimulator {
         const val MAX = DOWNHILL
 
         private const val G = 9.81f
-        private const val RAMP = 0.6f      // smoothstep ease-in/out so the cue glides (spec)
         private const val DT = 1f / 62f    // synthetic step matches the ~62 Hz drive loop
-        // A SINGLE held scenario LINEARLY ramps the maneuver up (a steady rate of change makes the
+        // Every maneuver is driven as a LINEAR ramp at a FIXED SLOPE: a steady rate of change makes the
         // band-pass/gravity-split emit a CONSTANT cue -> the dots drift steadily ONE way for the whole
-        // active window, instead of a brief spike that snaps back). Then a slower release ramps it down
-        // ("Rest") so the reverse is gentle. Repeats so seat mirroring stays visible.
-        private const val SINGLE_ON = 3.0f     // steady one-direction drift, labelled with the maneuver
-        private const val SINGLE_OFF = 4.0f    // slower release -> gentle settle, labelled "Rest"
+        // active window (speed is independent of how long that window is). On entering a REST we drive 0
+        // AND fire a one-shot filter reset, so the absorbed gravity is cleared and the dots simply STOP
+        // (no reverse drift). SLOPE_REF sets the drift speed; ACTIVE/REST set the on/off durations.
+        private const val SLOPE_REF = 3.0f     // fixed ramp slope -> sets the one-direction drift speed
+        private const val ACTIVE = 9.0f        // active window seconds (single scenarios)
+        private const val REST = 4.0f          // rest window seconds (single scenarios)
     }
 
     /** One driving phase. dur is only used by the looping "All" script (single-hold ignores it). */
@@ -49,10 +49,12 @@ class MotionSimulator {
     )
 
     /** Synthetic sample: device-frame accel incl. gravity (m/s^2) + gyro (rad/s) + phase label +
-     *  device->world (ENU) rotation matrix R (row-major) consistent with the baked-in grade+seat. */
+     *  device->world (ENU) rotation matrix R (row-major) consistent with the baked-in grade+seat.
+     *  [reset] is true ONLY on the frame that enters a Rest -> the caller clears the filter so the
+     *  absorbed gravity is dropped and the 0-drive rest produces no reverse cue. */
     class Sample(
         @JvmField val accel: FloatArray, @JvmField val gyro: FloatArray, @JvmField val phase: String,
-        @JvmField val R: FloatArray
+        @JvmField val R: FloatArray, @JvmField val reset: Boolean
     )
 
     // The "All" script (table in SIM_SPEC.md). Loops forever; after the last Rest it returns to #1
@@ -82,6 +84,7 @@ class MotionSimulator {
     @Volatile @JvmField var seatPsiDeg = 0f
     private var idx = 0                 // current "All" phase
     private var clock = 0f              // seconds into the current phase (or into the held ramp)
+    private var wasRest = false         // previous frame's rest state -> one-shot reset on rest entry
     private var prevGradeRad = 0f       // for the analytic pitch-rate gyro about device-x
     @Volatile @JvmField var currentPhase = "Off"   // surfaced to the UI/status (read off-thread)
 
@@ -89,7 +92,7 @@ class MotionSimulator {
     fun setScenario(s: Int) {
         scenario = s.coerceIn(OFF, MAX)
         single = singleFor(scenario)
-        idx = 0; clock = 0f; prevGradeRad = 0f
+        idx = 0; clock = 0f; wasRest = false; prevGradeRad = 0f
         currentPhase = if (scenario == ALL) script[0].name else single.name
     }
 
@@ -97,6 +100,7 @@ class MotionSimulator {
     fun step(): Sample {
         val aFwd: Float; val aRight: Float; val yawDeg: Float; val gradeDeg: Float; val psiDeg: Float
         val name: String
+        val isRest: Boolean
         if (scenario == ALL) {
             clock += DT
             var ph = script[idx]
@@ -105,17 +109,22 @@ class MotionSimulator {
                 idx = if (idx >= script.lastIndex) 1 else idx + 1
                 ph = script[idx]
             }
-            val s = min(smoothstep(clock / RAMP), smoothstep((ph.dur - clock) / RAMP))  // ease in AND out
+            isRest = ph.name == "Rest"
+            // LINEAR ramp at a fixed slope on active phases; 0 on Rest (no reverse drift).
+            val s = if (isRest) 0f else clock / SLOPE_REF
             name = ph.name
             aFwd = ph.aFwd * s; aRight = ph.aRight * s; yawDeg = ph.yawDeg * s; gradeDeg = ph.gradeDeg * s
         } else {
             clock += DT
-            val cyc = clock % (SINGLE_ON + SINGLE_OFF)         // single scenario: ramp up -> slow release, repeat
-            val s: Float
-            if (cyc < SINGLE_ON) { s = cyc / SINGLE_ON; name = single.name }   // LINEAR up -> constant, steady cue
-            else { s = 1f - (cyc - SINGLE_ON) / SINGLE_OFF; name = "Rest" }     // slow linear release
+            val cyc = clock % (ACTIVE + REST)                  // single scenario: active window -> rest, repeat
+            isRest = cyc >= ACTIVE
+            // LINEAR up at a fixed slope -> constant, steady one-direction cue; 0 during rest -> dots STOP.
+            val s = if (isRest) 0f else cyc / SLOPE_REF
+            name = if (isRest) "Rest" else single.name
             aFwd = single.aFwd * s; aRight = single.aRight * s; yawDeg = single.yawDeg * s; gradeDeg = single.gradeDeg * s
         }
+        val reset = isRest && !wasRest                        // one-shot on the frame that ENTERS a rest
+        wasRest = isRest
         psiDeg = seatPsiDeg                                   // seating applies to whatever scenario is running
 
         // Seating heading psi rotates the vehicle linear accel into the device frame (psi=0 -> x=right,
@@ -149,11 +158,8 @@ class MotionSimulator {
         val yawRate = Math.toRadians(yawDeg.toDouble()).toFloat()
 
         currentPhase = name
-        return Sample(floatArrayOf(ax, ay, az), floatArrayOf(pitchRate * cosP, -pitchRate * sinP, yawRate), name, R)
+        return Sample(floatArrayOf(ax, ay, az), floatArrayOf(pitchRate * cosP, -pitchRate * sinP, yawRate), name, R, reset)
     }
-
-    // Hermite smoothstep, clamped — gentle ease so the grade ramp stays under Windows' tilt-reject.
-    private fun smoothstep(x: Float): Float { val t = x.coerceIn(0f, 1f); return t * t * (3f - 2f * t) }
 
     // Target hold for a single picked scenario (dur unused; ramps in then holds indefinitely).
     private fun singleFor(s: Int): Phase = when (s) {

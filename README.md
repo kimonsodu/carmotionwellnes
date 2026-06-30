@@ -65,8 +65,8 @@ auto-learn, auto-hide gate, dot flow), so what you see is what you'd get on the 
 - **All** — loops through the full script: accelerate (dots down), brake (up), turn left/right,
   uphill/downhill (road grade). The active phase name shows live under the buttons.
 - Or pick a **single** scenario (Accel, Brake, Left, Right, Uphill, Downhill) — it drifts the dots
-  steadily *one way* for a few seconds (a slow rest follows), then repeats, so you can clearly read
-  the direction instead of a flicker that snaps back.
+  steadily *one way* for ~9 s, then **stops** (a brief rest, no backward drift), and repeats, so you
+  can clearly read the direction. Side seats (facing left/right) mirror each other; hills cue too.
 - A **note** on the overlay names the current maneuver + seat (e.g. "Accelerate · facing left"), so
   you always know what the cue is reacting to.
 - **Seat orientation** — which way the rider faces (*forward / left / right / rear*), applied to
