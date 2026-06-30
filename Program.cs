@@ -986,8 +986,27 @@ namespace OrbitalOverlay
             else { gh1 = gy; gh2 = gz; }
             double gradeRaw = gh1 * fwd1 + gh2 * fwd2;             // gravity lean along forward (~9.81·sinθ, m/s²)
             if (!gradeBaseSet) { gradeBase = gradeRaw; gradeBaseSet = true; }
-            gradeBase += (gradeRaw - gradeBase) * 0.0007;          // ~25 s baseline -> zeroes a constant resting mount tilt
-            gradeSig += (gradeRaw - gradeBase - gradeSig) * 0.05;  // smooth (grade changes slowly)
+            if (tiltRate > 6.0)
+            {
+                // FAST device reorientation (gyro saw a >6°/s tilt perpendicular to gravity): the screen
+                // was tilted, or a sharp bump — NOT a road grade. A held tilt is just a new resting lean,
+                // so snap the baseline to it -> it produces no hill cue and the dots don't get "stuck"
+                // drifting up/down. A genuine hill pitches the car slowly (well under 6°/s) so it falls
+                // through to the normal baseline below and still cues. (Gyro-less devices keep tiltRate=0,
+                // so this never fires for them — which is fine, they can't tell a tilt from a grade anyway.)
+                gradeBase = gradeRaw; gradeSig = 0;
+            }
+            else
+            {
+                // ~7 s baseline (was 0.0007 / ~25 s). A gas/brake event is partly absorbed into the slow
+                // gravity estimate as a forward lean -> a PHANTOM grade on the vertical axis. With the old
+                // 25 s baseline that phantom took ~25 s to wash out, so the dots kept drifting up/down long
+                // after the car stopped or the accel changed. A faster baseline drains it in a few seconds.
+                // Cost: a genuine sustained hill also fades sooner (still cues clearly while the grade is
+                // actively changing — which is the part that matters for the cue). Harness-tuned (0.003).
+                gradeBase += (gradeRaw - gradeBase) * 0.003;
+                gradeSig += (gradeRaw - gradeBase - gradeSig) * 0.05;  // smooth (grade changes slowly)
+            }
 
             lat += (nlat - lat) * 0.25;              // a touch more smoothing -> road wiggle doesn't reach the dots
             fore += (nfore - fore) * 0.25;
