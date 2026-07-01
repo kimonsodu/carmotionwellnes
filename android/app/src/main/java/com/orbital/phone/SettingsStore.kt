@@ -40,7 +40,7 @@ object SettingsStore {
     const val K_FLIP_GRADE = "ph_flipGrade"      // Bool reverse ONLY the hill/grade cue (independent of accel/brake)
     const val K_FLIP_H = "ph_flipH"              // Bool reverse the horizontal (turn) cue direction
     const val K_SWAP = "ph_swap"                 // Bool swap which axis drives vertical vs horizontal
-    const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..7 = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill (test-only synthetic motion)
+    const val K_SIM_SCENARIO = "ph_simScenario"  // Int 0..MotionSimulator.MAX = Off / All / Accelerate / Brake / TurnLeft / TurnRight / Uphill / Downhill / (combined: Accel±hill, Brake±hill, Combo) — test-only synthetic motion
     const val K_SIM_SEAT = "ph_simSeat"          // Int 0..4 sim seating orientation: 0 Auto / 1 Forward / 2 Left / 3 Right / 4 Rear — shapes THIS phone's simulated cue (a laptop stream applies the laptop's own seat)
 
     // ---- defaults ----
@@ -89,7 +89,7 @@ object SettingsStore {
     fun hideSensitivity(c: Context) = prefs(c).getFloat(K_HIDE_SENS, DEF_HIDE_SENS).coerceIn(0.5f, 2.0f)
     fun preset(c: Context) = prefs(c).getInt(K_PRESET, DEF_PRESET).coerceIn(0, 3)
     fun onboarded(c: Context) = prefs(c).getBoolean(K_ONBOARDED, DEF_ONBOARDED)
-    fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, 7)
+    fun simScenario(c: Context) = prefs(c).getInt(K_SIM_SCENARIO, DEF_SIM_SCENARIO).coerceIn(0, MotionSimulator.MAX)
     fun simSeat(c: Context) = prefs(c).getInt(K_SIM_SEAT, DEF_SIM_SEAT).coerceIn(0, 4)
     fun flipV(c: Context) = prefs(c).getBoolean(K_FLIP_V, DEF_FLIP_V)
     fun flipGrade(c: Context) = prefs(c).getBoolean(K_FLIP_GRADE, DEF_FLIP_GRADE)
@@ -118,7 +118,7 @@ object SettingsStore {
     fun setHideSensitivity(c: Context, v: Float) = prefs(c).edit().putFloat(K_HIDE_SENS, v.coerceIn(0.5f, 2.0f)).apply()
     fun setPreset(c: Context, v: Int) = prefs(c).edit().putInt(K_PRESET, v.coerceIn(0, 3)).apply()
     fun setOnboarded(c: Context, v: Boolean) = prefs(c).edit().putBoolean(K_ONBOARDED, v).apply()
-    fun setSimScenario(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SCENARIO, v.coerceIn(0, 7)).apply()
+    fun setSimScenario(c: Context, v: Int) = prefs(c).edit().putInt(K_SIM_SCENARIO, v.coerceIn(0, MotionSimulator.MAX)).apply()
 
     /**
      * Intensity presets write the EXISTING fine keys (all in LIVE_KEYS), so a running overlay updates

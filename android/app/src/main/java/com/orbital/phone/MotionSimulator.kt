@@ -22,12 +22,18 @@ import kotlin.math.sin
 class MotionSimulator {
 
     companion object {
-        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..7). Seating (side/rear-facing)
+        // scenario codes — persisted as SettingsStore.K_SIM_SCENARIO (0..MAX). Seating (side/rear-facing)
         // is a SEPARATE orthogonal toggle (seatPsiDeg), applied to whichever scenario runs.
         const val OFF = 0; const val ALL = 1
         const val ACCELERATE = 2; const val BRAKE = 3; const val TURN_LEFT = 4; const val TURN_RIGHT = 5
         const val UPHILL = 6; const val DOWNHILL = 7
-        const val MAX = DOWNHILL
+        // Combined / conflicting-cue scenarios (tilt vs accel/decel) for GROSS TUNING: drive a real
+        // longitudinal accel AND a real road grade (and, for COMBO, a turn) simultaneously so the
+        // separate accel and hill cues fire at once and can be balanced against each other.
+        const val ACCEL_UPHILL = 8; const val ACCEL_DOWNHILL = 9
+        const val BRAKE_UPHILL = 10; const val BRAKE_DOWNHILL = 11
+        const val COMBO = 12
+        const val MAX = COMBO
 
         private const val G = 9.81f
         private const val DT = 1f / 62f    // synthetic step matches the ~62 Hz drive loop
@@ -72,6 +78,10 @@ class MotionSimulator {
         Phase("Uphill", 3.5f, 0.4f, 0f, 0f, 9f, 0f),
         Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
         Phase("Downhill", 3.5f, -0.4f, 0f, 0f, -9f, 0f),
+        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
+        Phase("Accel + downhill", 3.5f, 2.5f, 0f, 0f, -9f, 0f),  // CONFLICT: accel pushes back, hill leans nose-down
+        Phase("Rest", 1.5f, 0f, 0f, 0f, 0f, 0f),
+        Phase("Combo", 3.5f, 2.0f, 1.8f, 18f, 7f, 0f),          // accel + turn + hill all firing at once
         Phase("Rest", 2.0f, 0f, 0f, 0f, 0f, 0f)                // loop back to #1
     )
     // Seating (side/rear-facing) is an orthogonal toggle (seatPsiDeg) applied to every phase, so each
@@ -184,6 +194,15 @@ class MotionSimulator {
         TURN_RIGHT -> Phase("Turn right", 0f, 0f, -2.8f, -28f, 0f, 0f)
         UPHILL -> Phase("Uphill", 0f, 0.4f, 0f, 0f, 9f, 0f)
         DOWNHILL -> Phase("Downhill", 0f, -0.4f, 0f, 0f, -9f, 0f)
+        // Combined cues — real accel AND a real grade at once, so the longitudinal accel cue and the
+        // hill/pitch cue drive together and can be gross-tuned against each other. "uphill" reinforces
+        // (climb while speeding up / descend while braking); "downhill" conflicts (accel while nosing
+        // down, brake while nosing up). COMBO adds a turn so all channels fire simultaneously.
+        ACCEL_UPHILL -> Phase("Accel + uphill", 0f, 2.5f, 0f, 0f, 9f, 0f)
+        ACCEL_DOWNHILL -> Phase("Accel + downhill", 0f, 2.5f, 0f, 0f, -9f, 0f)
+        BRAKE_UPHILL -> Phase("Brake + uphill", 0f, -3.5f, 0f, 0f, 9f, 0f)
+        BRAKE_DOWNHILL -> Phase("Brake + downhill", 0f, -3.5f, 0f, 0f, -9f, 0f)
+        COMBO -> Phase("Combo (accel+turn+hill)", 0f, 2.0f, 1.8f, 18f, 7f, 0f)
         else -> Phase("Off", 0f, 0f, 0f, 0f, 0f, 0f)
     }
 }

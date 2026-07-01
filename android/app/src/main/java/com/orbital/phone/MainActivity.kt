@@ -399,7 +399,11 @@ class MainActivity : Activity() {
         // real sensors while a running overlay is up). Persisted via K_SIM_SCENARIO (in LIVE_KEYS). ----
         val simNames = listOf(
             "Off (real sensors)", "All scenarios", "Accelerate", "Brake", "Turn left",
-            "Turn right", "Uphill", "Downhill")
+            "Turn right", "Uphill", "Downhill",
+            // Combined / conflicting cues (tilt vs accel/decel) for gross tuning — must stay in the
+            // same order as MotionSimulator's ACCEL_UPHILL..COMBO scenario codes.
+            "Accel + uphill", "Accel + downhill", "Brake + uphill", "Brake + downhill",
+            "Combo (accel+turn+hill)")
         val simAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, simNames)
         simAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spSim.adapter = simAdapter

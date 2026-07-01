@@ -542,7 +542,9 @@ namespace OrbitalOverlay
     // Device is assumed flat, screen up (R = identity): x = right (East),
     // y = forward (North), z = up; resting reading = (0, 0, +G).
     // ---------------------------------------------------------------
-    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill }
+    public enum SimScenario { Off, All, Accelerate, Brake, TurnLeft, TurnRight, Uphill, Downhill,
+        // Combined / conflicting-cue scenarios (tilt vs accel/decel) for gross tuning — several cues at once.
+        AccelUphill, AccelDownhill, BrakeUphill, BrakeDownhill, Combo }
 
     public class MotionSimulator
     {
@@ -607,6 +609,10 @@ namespace OrbitalOverlay
             P("Uphill",         3.5,  0.4,  0,    0,   9,  0),
             P("Rest",           1.5,  0,    0,    0,   0,  0),
             P("Downhill",       3.5, -0.4,  0,    0,  -9,  0),
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Accel + downhill",3.5, 2.5,  0,    0,  -9,  0),   // CONFLICT: accel pushes back, hill leans nose-down
+            P("Rest",           1.5,  0,    0,    0,   0,  0),
+            P("Combo",          3.5,  2.0,  1.8,  18,  7,  0),   // accel + turn + hill all firing at once
             P("Rest",           2.0,  0,    0,    0,   0,  0),
         };
         // Seating (side/rear-facing) is now an orthogonal toggle (SeatPsi) applied to EVERY phase,
@@ -621,6 +627,13 @@ namespace OrbitalOverlay
             SimScenario.TurnRight  => P("Turn right",     0,  0,  -2.8, -28,  0,  0),
             SimScenario.Uphill     => P("Uphill",         0,  0.4, 0,    0,   9,  0),
             SimScenario.Downhill   => P("Downhill",       0, -0.4, 0,    0,  -9,  0),
+            // Combined cues — a real accel AND a real grade at once, so the accel and hill cues fire
+            // together and can be balanced. "uphill" reinforces; "downhill" conflicts. Combo adds a turn.
+            SimScenario.AccelUphill   => P("Accel + uphill",          0,  2.5, 0,    0,   9,  0),
+            SimScenario.AccelDownhill => P("Accel + downhill",        0,  2.5, 0,    0,  -9,  0),
+            SimScenario.BrakeUphill   => P("Brake + uphill",          0, -3.5, 0,    0,   9,  0),
+            SimScenario.BrakeDownhill => P("Brake + downhill",        0, -3.5, 0,    0,  -9,  0),
+            SimScenario.Combo         => P("Combo (accel+turn+hill)", 0,  2.0, 1.8,  18,  7,  0),
             _                      => P("Rest",           0,  0,   0,    0,   0,  0),
         };
 
@@ -2053,9 +2066,12 @@ namespace OrbitalOverlay
             var simScenarios = new[]
             {
                 SimScenario.Off, SimScenario.All, SimScenario.Accelerate, SimScenario.Brake,
-                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill
+                SimScenario.TurnLeft, SimScenario.TurnRight, SimScenario.Uphill, SimScenario.Downhill,
+                SimScenario.AccelUphill, SimScenario.AccelDownhill, SimScenario.BrakeUphill,
+                SimScenario.BrakeDownhill, SimScenario.Combo
             };
-            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill" };
+            var simLabels = new[] { "Off", "All", "Accel", "Brake", "Left", "Right", "Uphill", "Downhill",
+                "Accel+Up", "Accel+Down", "Brake+Up", "Brake+Down", "Combo" };
             var simWrap = new WrapPanel();
             var simBtns = new Button[simScenarios.Length];
             void HighlightSim(int idx)
