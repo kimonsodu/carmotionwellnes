@@ -73,6 +73,16 @@ class VehicleFilter {
     /** Display rotation (Surface.ROTATION_0/90/180/270) of the overlay's screen. Set by
      *  OverlayService; SensorService leaves it 0 (it doesn't render). */
     @Volatile @JvmField var screenRot = 0
+    // DEBUG (BUG 2 triage): last raw screen-forward/right felt-force projections + horizontal-accel
+    // magnitude, BEFORE the band-pass. Read by OverlayService's throttled logger. Remove when fixed.
+    @Volatile @JvmField var dbgRawSX = 0f
+    @Volatile @JvmField var dbgRawSY = 0f
+    @Volatile @JvmField var dbgAHmag = 0f
+    // World-horizontal accel magnitude sqrt(hE^2+hN^2) — the OLD working lon/lat path's signal, computed
+    // via R rows 0/1 (immune to ghat-subtraction). Discriminates the two surviving root causes:
+    //   during a real forward accel -> hmag LARGE but aHmag SMALL => ghat tilted forward, ate aH's forward.
+    //                               -> hmag SMALL and aHmag SMALL => fused linear-accel absorbed forward upstream.
+    @Volatile @JvmField var dbgHmag = 0f
     private var hdgE = 0f; private var hdgN = 1f        // inertial forward-axis unit estimate (ENU); default North
     private var yawLp = 0f                 // rad/s, low-passed
     private var gmag = 0f                  // |gyro| rad/s
@@ -150,6 +160,7 @@ class VehicleFilter {
             hE = lx - dot * ux
             hN = ly - dot * uy
         }
+        dbgHmag = sqrt(hE * hE + hN * hN)   // DEBUG (BUG 2): old-path world-horizontal signal, ghat-immune
 
         // (B2) Resolve a VEHICLE forward axis. Prefer GPS bearing when moving; otherwise estimate
         // forward INERTIALLY from the direction of straight-line accel/brake, so longitudinal is
@@ -265,6 +276,10 @@ class VehicleFilter {
         val aHx = lx - dgg * ghx; val aHy = ly - dgg * ghy; val aHz = lz - dgg * ghz
         val sX = aHx * rhx + aHy * rhy + aHz * rhz          // + = real accel toward screen-RIGHT
         val sY = aHx * fhx + aHy * fhy + aHz * fhz          // + = real accel toward screen-FORWARD
+        // DEBUG (BUG 2 triage): raw felt-force projections BEFORE band-pass/gate/deadband. Compare with
+        // the returned screenX/screenY (post-HPF) in the log: raw sY ~0 during accel => projection bug;
+        // raw sY big but bY ~0 => HPF/deadband is eating it. Remove once the accel cue is confirmed.
+        dbgRawSX = sX; dbgRawSY = sY; dbgAHmag = sqrt(aHx * aHx + aHy * aHy + aHz * aHz)
         // same cleanup as the vehicle path, with its own parallel state
         lpX += (sX - lpX) * A_LP; lpY += (sY - lpY) * A_LP
         baseX += (lpX - baseX) * A_HP; baseY += (lpY - baseY) * A_HP

@@ -104,6 +104,11 @@ class SensorService : Service(), SensorEventListener,
 
         if (mode == "wifi" && host.isEmpty()) return fail("no PC address — open the app and enter it")
         if (mode == "bt" && btMac.isEmpty()) return fail("no Bluetooth device — open the app and pick the PC")
+        // Remote streaming is the paid feature — refuse to start without an active subscription. Covers a
+        // START_STICKY restart after the sub expired, and any start not routed through the app's paywall.
+        // Uses the offline-safe cached entitlement (no billing client needed here). The free on-phone cue
+        // is a separate service (OverlayService) and is never gated.
+        if (!Entitlements.isRemoteUnlocked(this)) return fail("remote streaming needs an active Orbital subscription")
 
         startForegroundNotification()
 

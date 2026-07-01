@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and below (fullBackupContent). The client-side subscription entitlement lives in its
+     own "orbit_ent" prefs and must NOT be backed up/restored — otherwise a cached "active" flag could
+     be cloned onto another device and stream offline for the grace window. Everything else (the user's
+     host/port/settings in "orbit") backs up normally. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="orbit_ent.xml"/>
+</full-backup-content>

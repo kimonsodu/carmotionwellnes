@@ -82,6 +82,12 @@ class MainActivity : Activity() {
     private var pendingOverlayStart = false
     private val ui = Handler(Looper.getMainLooper())
 
+    // Google Play Billing — gates remote streaming (SensorService) behind the subscription.
+    private lateinit var billing: BillingManager
+    private var wasUnlocked = false
+    private var paywall: AlertDialog? = null       // shown paywall, so it can rebuild/dismiss as billing loads
+    private var paywallWasEmpty = false            // the shown paywall rendered the "plans couldn't load" state
+
     private fun prefs() = getSharedPreferences("orbit", Context.MODE_PRIVATE)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -186,8 +192,27 @@ class MainActivity : Activity() {
         }
         btnPick.setOnClickListener { pickDevice() }
         toggle.setOnClickListener { onToggle() }
+
+        wasUnlocked = Entitlements.isRemoteUnlocked(this)
+        billing = BillingManager(this) { onEntitlementChanged() }
+        billing.start()
+
         handleDeepLink(intent)
         tick()
+    }
+
+    /** Play billing pushed a fresh entitlement/plan state (main thread). Nudge the user when a purchase
+     *  just unlocked streaming; tick() reflects the locked/unlocked status otherwise. */
+    private fun onEntitlementChanged() {
+        val unlocked = Entitlements.isRemoteUnlocked(this)
+        if (unlocked && !wasUnlocked) toast("Orbital Premium active — tap Start streaming")
+        wasUnlocked = unlocked
+        // Keep a shown paywall live: dismiss it once purchased, or rebuild it once plans finally load
+        // (so its Retry state doesn't get stuck after billing connects).
+        paywall?.let { dlg ->
+            if (unlocked) dlg.dismiss()
+            else if (paywallWasEmpty && billing.plans().isNotEmpty()) { dlg.dismiss(); showPaywall() }
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -453,6 +478,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (::billing.isInitialized) billing.refreshPurchases()   // re-verify sub on foreground (post-checkout, renewals)
         if (phoneBox.visibility == View.VISIBLE) dotsPreview.start()   // resume the live preview
         if (pendingOverlayStart) {
             pendingOverlayStart = false
@@ -505,6 +531,9 @@ class MainActivity : Activity() {
             stopService(Intent(this, SensorService::class.java))
             return
         }
+        // Remote streaming to the Windows app is the paid feature — gate the start behind the sub.
+        // (The on-phone cue overlay and the Windows app are free and never reach here.)
+        if (!Entitlements.isRemoteUnlocked(this)) { showPaywall(); return }
         val useBt = modeGroup.checkedRadioButtonId == R.id.rbBt
         val p = prefs()
         val i = Intent(this, SensorService::class.java).putExtra("mode", if (useBt) "bt" else "wifi")
@@ -525,12 +554,44 @@ class MainActivity : Activity() {
         startForegroundService(i)
     }
 
+    /** Subscription paywall for remote streaming. Lists the base plans loaded from Play; if they haven't
+     *  loaded (offline / not signed in / product not configured yet), offers a retry. "Restore" just
+     *  re-queries Play (owned subs unlock automatically). */
+    private fun showPaywall() {
+        val plans = billing.plans()
+        paywallWasEmpty = plans.isEmpty()
+        val b = AlertDialog.Builder(this).setTitle("Orbital Premium — remote to Windows")
+        if (plans.isEmpty()) {
+            billing.start()   // kick a (re)connect so plans have a chance to load (onEntitlementChanged rebuilds)
+            b.setMessage(
+                "Streaming your phone's motion to the Windows app is a subscription.\n\n" +
+                    "Plans couldn't load — check your internet, that you're signed in to Google Play, " +
+                    "and try again.\n\nThe on-phone cue overlay and the Windows app are free.")
+                .setPositiveButton("Retry") { _, _ -> billing.start() }   // reload product details, not just purchases
+                .setNegativeButton("Close", null)
+        } else {
+            val labels = plans.map { "${it.label} — ${it.price}" }.toTypedArray()
+            b.setItems(labels) { _, i ->
+                if (!billing.launch(this, plans[i].offerToken)) toast("Couldn't start checkout — try again")
+            }.setNeutralButton("Restore") { _, _ ->
+                billing.refreshPurchases(); toast("Checking your subscription…")
+            }.setNegativeButton("Close", null)
+        }
+        paywall = b.create()
+        paywall!!.setOnDismissListener { paywall = null }
+        paywall!!.show()
+    }
+
     private fun tick() {
         val running = SensorService.running
         toggle.text = if (running) "Stop streaming" else "Start streaming"
         toggle.setBackgroundResource(if (running) R.drawable.btn_secondary else R.drawable.btn_primary)
         toggle.setTextColor(getColor(if (running) R.color.accent else R.color.bg))
-        status.text = if (running) SensorService.statusLine else "stopped"
+        status.text = when {
+            running -> SensorService.statusLine
+            !Entitlements.isRemoteUnlocked(this) -> "stopped · remote streaming is a subscription"
+            else -> "stopped"
+        }
         // While the cue overlay is simulating, show the live scenario phase; else the stream readout.
         val sp = OverlayService.simPhase
         readout.text = if (OverlayService.running && sp.isNotEmpty()) "Simulating: $sp" else SensorService.readout
@@ -558,6 +619,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         dotsPreview.stop()
+        if (::billing.isInitialized) billing.end()
         super.onDestroy()
     }
 }

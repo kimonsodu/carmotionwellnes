@@ -31,6 +31,7 @@ Permissions requested and the reason for each:
 | `SYSTEM_ALERT_WINDOW` | Draw the click-through cue overlay on top of other apps in phone-cue mode. |
 | `POST_NOTIFICATIONS` | Show the persistent control notification for the foreground service. |
 | `WAKE_LOCK` | Keep the sensor stream alive while the screen is off. |
+| `com.android.vending.BILLING` | Purchase/verify the remote-streaming subscription via Google Play. Payment is handled entirely by Google; no payment data reaches the app. |
 
 ### Data handling
 - **Sensor and motion data** are processed in real time on-device and sent only to

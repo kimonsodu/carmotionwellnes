@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (dataExtractionRules). Exclude the subscription entitlement from BOTH cloud backup and
+     device-to-device transfer so it can't be cloned onto another device. See backup_content.xml for the
+     pre-12 equivalent. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="orbit_ent.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="orbit_ent.xml"/>
+    </device-transfer>
+</data-extraction-rules>

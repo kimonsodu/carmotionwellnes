@@ -45,6 +45,9 @@ class OverlayService : Service(), SensorEventListener,
         private const val CHANNEL = "orbit_overlay"
         private const val NOTIF_ID = 8                       // SensorService uses 7
         const val ACTION_STOP = "com.orbital.phone.OVERLAY_STOP"
+        // DEBUG (BUG 2 triage): logcat the raw vs filtered forward/lateral cue. `adb logcat -s OrbitalMotion`.
+        // Set false (or delete feedOut's log block) once the accel cue is confirmed working.
+        private const val DEBUG_MOTION = true
 
         fun start(ctx: Context) = ctx.startForegroundService(Intent(ctx, OverlayService::class.java))
         fun stop(ctx: Context) = ctx.stopService(Intent(ctx, OverlayService::class.java))
@@ -207,7 +210,7 @@ class OverlayService : Service(), SensorEventListener,
             vf.onGyro(s.gyro[0], s.gyro[1], s.gyro[2])
             if (s.reset) vf.reset()                        // rest entry: drop the absorbed gravity so 0-drive produces no reverse cue
             val o = vf.onAccel(s.accel, false, s.R, System.nanoTime())   // raw accel + R from sim (grade+seat), so the hill cue fires like a real rotation-vector phone
-            view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
+            feedOut(o)
             sensorHandler?.postDelayed(this, 16L)          // ~62 Hz self-repost
         }
     }
@@ -266,12 +269,27 @@ class OverlayService : Service(), SensorEventListener,
                 vf.onGyro(e.values[0], e.values[1], e.values[2])
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 val o = vf.onAccel(e.values, true, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
+                feedOut(o)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 val o = vf.onAccel(e.values, false, if (haveR) Rmat else null, e.timestamp)
-                view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
+                feedOut(o)
             }
+        }
+    }
+
+    // Single feed point so the debug logger sees EVERY drive (real accel, real linear-accel, and sim).
+    // Throttled ~1/15 samples (~4 Hz). rawSY = screen-forward felt force BEFORE band-pass; screenY =
+    // after HPF/gate/deadband. On a bus/sim ACCELERATE: rawSY big & screenY ~0 => HPF eats it; both ~0
+    // => projection reads no forward component. gate=sgate is folded into screenY already.
+    private var dbgN = 0
+    private fun feedOut(o: VehicleFilter.Out) {
+        view?.feed(o.screenX, o.screenY, o.gradeX, o.gradeY, o.enable)
+        if (DEBUG_MOTION && (++dbgN % 15 == 0)) {
+            android.util.Log.d("OrbitalMotion",
+                "rawSX=%+.2f rawSY=%+.2f aHmag=%.2f hmag=%.2f | bX=%+.2f bY=%+.2f gY=%+.2f en=%.2f rot=%d".format(
+                    vf.dbgRawSX, vf.dbgRawSY, vf.dbgAHmag, vf.dbgHmag,
+                    o.screenX, o.screenY, o.gradeY, o.enable, vf.screenRot))
         }
     }
 

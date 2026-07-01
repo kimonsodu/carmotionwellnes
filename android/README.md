@@ -33,10 +33,12 @@ The remote-to-Windows streaming is a paid **subscription**. To produce a Play re
    ```
    Release builds run R8 (`minifyEnabled` + `shrinkResources`); rules live in
    `app/proguard-rules.pro`. compile/target SDK is 35 (Play's minimum for new apps).
-3. **Still required before going live:** Google Play **Billing** integration +
-   subscription products in Play Console, and the Play listing must link the privacy
-   policy ([`PRIVACY.md`](../PRIVACY.md), which discloses the sensor/Bluetooth/location
-   permissions). Bump `versionCode` each upload.
+3. **Before going live:** Google Play **Billing** is integrated (streaming to the laptop is the
+   paid subscription; the on-phone cue is free). In Play Console create a **subscription** with
+   product id **`orbital_remote`** and its base plans/offers — see the "Android subscription"
+   section of the root [`BUILD.md`](../BUILD.md). Billing only works for an app installed **from
+   Play** (add license testers on an internal track; a sideloaded APK shows the paywall's Retry
+   state). Link the privacy policy ([`PRIVACY.md`](../PRIVACY.md)) and bump `versionCode` each upload.
 
 ## Use it
 

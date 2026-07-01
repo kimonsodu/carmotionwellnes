@@ -4,6 +4,14 @@ All notable changes to Orbital are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow the app's
 `<Version>` (Windows) / `versionName` (Android).
 
+## [Unreleased]
+
+### Added
+- **Android subscription** — remote streaming to the Windows app is now gated behind a Google Play
+  subscription (`orbital_remote`) via Play Billing v7. The on-phone cue overlay and the Windows app
+  stay free. Client-side entitlement with a 14-day offline grace so a paid rider keeps streaming
+  without a signal. Paywall lists the base plans/offers configured in Play Console.
+
 ## [1.0.0] — 2026-06-30
 
 First public release.

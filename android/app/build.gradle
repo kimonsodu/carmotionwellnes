@@ -57,4 +57,7 @@ android {
 }
 
 dependencies {
+    // Google Play Billing — unlocks the "remote streaming to Windows" subscription.
+    // v7 is Play's required minimum for new/updated apps.
+    implementation 'com.android.billingclient:billing:7.1.1'
 }
